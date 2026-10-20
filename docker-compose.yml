@@ -1,0 +1,160 @@
+name: accurit
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: accurit-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-accurit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-accurit}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    logging: *default-logging
+
+  backend:
+    build:
+      context: ./backend
+    container_name: accurit-backend
+    restart: unless-stopped
+    init: true
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      PORT: "8080"
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      CERTIFICATE_MASTER_KEY: ${CERTIFICATE_MASTER_KEY:?set CERTIFICATE_MASTER_KEY in .env}
+      SERPRO_TOKEN_URL: ${SERPRO_TOKEN_URL:-https://gateway.apiserpro.serpro.gov.br/token}
+      SERPRO_SAPI_AUTH_URL: ${SERPRO_SAPI_AUTH_URL:-https://autenticacao.sapi.serpro.gov.br/authenticate}
+      SERPRO_INTEGRA_TRIAL_URL: ${SERPRO_INTEGRA_TRIAL_URL:-https://gateway.apiserpro.serpro.gov.br/integra-contador-trial/v1}
+      SERPRO_DIVIDA_ATIVA_TRIAL_URL: ${SERPRO_DIVIDA_ATIVA_TRIAL_URL:-https://gateway.apiserpro.serpro.gov.br/consulta-divida-ativa-trial/api/v1}
+      SERPRO_INTEGRA_PROD_URL: ${SERPRO_INTEGRA_PROD_URL:-https://gateway.apiserpro.serpro.gov.br/integra-contador/v1}
+      SERPRO_DIVIDA_ATIVA_PROD_URL: ${SERPRO_DIVIDA_ATIVA_PROD_URL:-}
+      SERPRO_TRIAL_BEARER_TOKEN: ${SERPRO_TRIAL_BEARER_TOKEN:-}
+      SERPRO_CONSUMER_KEY: ${SERPRO_CONSUMER_KEY:-}
+      SERPRO_CONSUMER_SECRET: ${SERPRO_CONSUMER_SECRET:-}
+      SERPRO_OPERATOR_HEADER_ENABLED: ${SERPRO_OPERATOR_HEADER_ENABLED:-true}
+      DIVIDA_ATIVA_FALLBACK_CODIGO_CONTRIBUINTE: ${DIVIDA_ATIVA_FALLBACK_CODIGO_CONTRIBUINTE:-false}
+      SERPRO_HTTP_CONNECT_TIMEOUT_SECS: ${SERPRO_HTTP_CONNECT_TIMEOUT_SECS:-5}
+      SERPRO_HTTP_REQUEST_TIMEOUT_SECS: ${SERPRO_HTTP_REQUEST_TIMEOUT_SECS:-30}
+      SERPRO_PROCURACAO_CACHE_TTL_SECS: ${SERPRO_PROCURACAO_CACHE_TTL_SECS:-300}
+      RUST_LOG: ${RUST_LOG:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - edge
+      - data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *default-logging
+
+  web:
+    build:
+      context: ./web
+    container_name: accurit-web
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    networks:
+      - edge
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *default-logging
+
+  admin:
+    build:
+      context: ./admin
+      args:
+        BASE_HREF: /admin/
+    container_name: accurit-admin
+    restart: unless-stopped
+    networks:
+      - edge
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+
+  client:
+    build:
+      context: ./client
+      args:
+        BASE_HREF: /app/
+    container_name: accurit-client
+    restart: unless-stopped
+    networks:
+      - edge
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+
+  proxy:
+    image: nginx:1.29-alpine
+    container_name: accurit-proxy
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      # - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
+      client:
+        condition: service_healthy
+    networks:
+      - edge
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+
+volumes:
+  postgres_data:
+
+networks:
+  edge:
+    driver: bridge
+  data:
+    driver: bridge
+    internal: true
