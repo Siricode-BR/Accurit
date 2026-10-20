@@ -141,7 +141,8 @@ aprovação de arquitetura.
 
 ## Itens de infraestrutura já resolvidos
 
-- `backend/Diesel.toml` renomeado para `backend/diesel.toml`.
-- `.gitattributes` com `* text=auto eol=lf` e normalização de CRLF.
-- `docs/Serpro/Preços` confirmado no disco com “Preços” UTF-8; nome no git a confirmar após `git add`.
+- `backend/Diesel.toml` renomeado para `backend/diesel.toml` no workspace; será versionado com o
+  scaffold do backend na Fase 1.
+- `.gitattributes` com `* text=auto eol=lf` e normalização de CRLF versionados.
+- `docs/Serpro/Preços` confirmado no git com “Preços” UTF-8.
 - `CERTIFICATE_MASTER_KEY=change-me-32-bytes` deve falhar no startup.
