@@ -4,7 +4,7 @@
 
 **Legenda:** `[ ]` pendente · `[x]` concluído · `[~]` em andamento. A marcação deve refletir o estado real do repositório.
 
-**Estado atual:** a documentação de fundação (`README`, `SPEC`, `ROADMAP`, `INSTRUCTIONS`) está publicada. Nenhum item de implementação abaixo foi concluído.
+**Estado atual:** a Fase 0 (reconciliação documental e configuração) foi concluída. Nenhum item de implementação das fases seguintes foi iniciado.
 
 ---
 
@@ -14,7 +14,7 @@
 - [x] Separar autenticação OAuth2 (Dívida Ativa) da autenticação SAPI (Integra Contador em produção).
 - [x] Registrar D1–D5 e pendências de confirmação em `docs/ADR/0007-modelo-contratacao-serpro.md` e `docs/DECISOES-PENDENTES.md`.
 - [x] Atualizar `.env.example`, `docker-compose.yml`, `nginx/nginx.conf`, `.gitattributes` e renomear `backend/Diesel.toml` para `backend/diesel.toml`.
-- [ ] Validar referências, encoding e ausência de segredos; emitir commits da fase.
+- [x] Validar referências, encoding e ausência de segredos; emitir commits da fase.
 
 ---
 
