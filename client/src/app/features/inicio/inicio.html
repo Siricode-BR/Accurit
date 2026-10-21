@@ -1,0 +1,24 @@
+<main class="pagina">
+  <header class="cabecalho">
+    <span class="marca">Accurit</span>
+    <span class="area">Área do cliente</span>
+  </header>
+
+  <section class="conteudo">
+    <p class="sobretitulo">Bem-vindo</p>
+    <h1>Início</h1>
+    <p class="descricao">
+      Em breve você acompanhará aqui as consultas e os documentos do seu escritório.
+    </p>
+
+    <div class="status" [class]="'status status--' + estado()" aria-live="polite">
+      <span class="ponto" aria-hidden="true"></span>
+      <div>
+        <strong>{{ rotulo() }}</strong>
+        <span>{{ descricao() }}</span>
+      </div>
+    </div>
+  </section>
+
+  <footer class="rodape">Fase 1 &middot; Fundação</footer>
+</main>
