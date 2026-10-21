@@ -1,0 +1,66 @@
+<main class="pagina">
+  <header class="cabecalho">
+    <span class="marca">Accurit Admin</span>
+    <span class="fase">Fase 2A</span>
+  </header>
+
+  <section class="conteudo">
+    <p class="sobretitulo">Painel do escritório</p>
+    <h1>Entrar</h1>
+    <p class="descricao">
+      Acesso restrito à equipe do escritório de contabilidade.
+    </p>
+
+    @if (erro(); as mensagem) {
+      <p class="erro" role="alert">{{ mensagem }}</p>
+    }
+
+    <form (ngSubmit)="entrar()" #formulario="ngForm">
+      <label>
+        <span>Escritório</span>
+        <input
+          name="escritorio"
+          type="text"
+          autocomplete="organization"
+          required
+          [ngModel]="escritorio()"
+          (ngModelChange)="escritorio.set($event)"
+        />
+      </label>
+
+      <label>
+        <span>E-mail</span>
+        <input
+          name="email"
+          type="email"
+          autocomplete="username"
+          required
+          [ngModel]="email()"
+          (ngModelChange)="email.set($event)"
+        />
+      </label>
+
+      <label>
+        <span>Senha</span>
+        <input
+          name="senha"
+          type="password"
+          autocomplete="current-password"
+          required
+          [ngModel]="senha()"
+          (ngModelChange)="senha.set($event)"
+        />
+      </label>
+
+      <button type="submit" [disabled]="enviando() || formulario.invalid">
+        {{ enviando() ? 'Entrando...' : 'Entrar' }}
+      </button>
+    </form>
+
+    <p class="alternativa">
+      É cliente? <a href="/app/login">Acesse o Portal do Cliente</a>.
+    </p>
+  </section>
+
+  <footer class="rodape">Fase 2A &middot; Autenticação</footer>
+</main>
