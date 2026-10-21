@@ -14,10 +14,13 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-accurit}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_APP_USER: ${POSTGRES_APP_USER:-accurit_app}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?set POSTGRES_APP_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-accurit}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - data
     healthcheck:
@@ -31,6 +34,7 @@ services:
   backend:
     build:
       context: ./backend
+      target: runtime
     container_name: accurit-backend
     restart: unless-stopped
     init: true
@@ -40,6 +44,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       CERTIFICATE_MASTER_KEY: ${CERTIFICATE_MASTER_KEY:?set CERTIFICATE_MASTER_KEY in .env}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
       SERPRO_TOKEN_URL: ${SERPRO_TOKEN_URL:-https://gateway.apiserpro.serpro.gov.br/token}
       SERPRO_SAPI_AUTH_URL: ${SERPRO_SAPI_AUTH_URL:-https://autenticacao.sapi.serpro.gov.br/authenticate}
       SERPRO_INTEGRA_TRIAL_URL: ${SERPRO_INTEGRA_TRIAL_URL:-https://gateway.apiserpro.serpro.gov.br/integra-contador-trial/v1}
@@ -119,6 +124,46 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+    logging: *default-logging
+
+  schema-tool:
+    profiles: ["tools"]
+    build:
+      context: ./backend
+      target: diesel-tool
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-accurit}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/accurit_schema_tmp
+      ADMIN_DATABASE_URL: postgres://${POSTGRES_USER:-accurit}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-accurit}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - ./backend:/work
+    working_dir: /work
+    command: ["sh", "scripts/generate-schema.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - data
+    logging: *default-logging
+
+  backend-test:
+    profiles: ["tools"]
+    build:
+      context: ./backend
+      target: tester
+    environment:
+      APP_ENV: development
+      RUST_LOG: ${RUST_LOG:-info}
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
+      TEST_DATABASE_ADMIN_URL: ${TEST_DATABASE_ADMIN_URL:?set TEST_DATABASE_ADMIN_URL in .env}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      CERTIFICATE_MASTER_KEY: ${CERTIFICATE_MASTER_KEY:?set CERTIFICATE_MASTER_KEY in .env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - edge
+      - data
     logging: *default-logging
 
   proxy:
