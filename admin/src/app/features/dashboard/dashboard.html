@@ -1,0 +1,22 @@
+<main class="pagina">
+  <header class="cabecalho">
+    <span class="marca">Accurit Admin</span>
+    <span class="fase">Fase 1</span>
+  </header>
+
+  <section class="conteudo">
+    <p class="sobretitulo">Visão geral</p>
+    <h1>Dashboard</h1>
+    <p class="descricao">Base administrativa do Accurit para a gestão do escritório.</p>
+
+    <div class="status" [class]="'status status--' + estado()" aria-live="polite">
+      <span class="ponto" aria-hidden="true"></span>
+      <div>
+        <strong>{{ rotulo() }}</strong>
+        <span>{{ descricao() }}</span>
+      </div>
+    </div>
+  </section>
+
+  <footer class="rodape">Fase 1 &middot; Fundação</footer>
+</main>
