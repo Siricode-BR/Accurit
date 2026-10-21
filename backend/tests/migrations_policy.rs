@@ -42,8 +42,8 @@ fn nenhuma_migration_altera_tabela_existente() {
     }
 
     assert!(
-        verificadas >= 6,
-        "deve haver pelo menos três migrations completas"
+        verificadas >= 8,
+        "deve haver pelo menos quatro migrations completas"
     );
 }
 

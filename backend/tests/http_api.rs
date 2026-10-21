@@ -33,6 +33,7 @@ impl SaudeBanco for BancoFixo {
 fn app(disponivel: bool, config: &Config) -> Router {
     routes::construir(
         AppState::novo(ConsultarSaude::novo(BancoFixo { disponivel })),
+        None,
         config,
     )
 }

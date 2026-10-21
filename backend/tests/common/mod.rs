@@ -59,7 +59,11 @@ impl Drop for BancoTemporario {
 }
 
 pub fn configuracao(cors_allowed_origins: &str) -> Config {
-    let pares: HashMap<String, String> = HashMap::from([
+    configuracao_com_extras(cors_allowed_origins, &[])
+}
+
+pub fn configuracao_com_extras(cors_allowed_origins: &str, extras: &[(&str, &str)]) -> Config {
+    let mut pares: HashMap<String, String> = HashMap::from([
         ("APP_ENV".into(), "development".into()),
         (
             "DATABASE_URL".into(),
@@ -89,6 +93,10 @@ pub fn configuracao(cors_allowed_origins: &str) -> Config {
             "https://exemplo.test/divida".into(),
         ),
     ]);
+
+    for (chave, valor) in extras {
+        pares.insert((*chave).to_owned(), (*valor).to_owned());
+    }
 
     Config::from_pairs(pares).expect("configuração de teste válida")
 }

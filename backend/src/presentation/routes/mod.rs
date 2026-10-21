@@ -7,18 +7,26 @@ use tracing::Level;
 
 use crate::application::ports::SaudeBanco;
 use crate::infrastructure::config::{BURST_RATE_LIMIT, Config, REQUISICOES_POR_SEGUNDO};
+use crate::presentation::auth::{AuthState, construir as construir_auth};
 use crate::presentation::handlers;
 use crate::presentation::middleware::{cors, rate_limit, request_id, security_headers};
 use crate::presentation::state::AppState;
 
-pub fn construir<S>(estado: AppState<S>, config: &Config) -> Router
+pub fn construir<S>(estado: AppState<S>, auth: Option<AuthState>, config: &Config) -> Router
 where
     S: SaudeBanco + 'static,
 {
     let limite = rate_limit::LimiteRequisicoes::novo(REQUISICOES_POR_SEGUNDO, BURST_RATE_LIMIT);
 
-    let api = Router::new()
+    let mut api = Router::new()
         .route("/health", get(handlers::saude::<S>))
+        .with_state(estado);
+
+    if let Some(auth) = auth {
+        api = api.nest("/auth", construir_auth(auth));
+    }
+
+    let api = api
         .fallback(handlers::nao_encontrado)
         .method_not_allowed_fallback(handlers::metodo_nao_permitido)
         .layer(axum_middleware::from_fn_with_state(
@@ -56,5 +64,4 @@ where
                 ),
         )
         .layer(axum_middleware::from_fn(request_id::middleware))
-        .with_state(estado)
 }

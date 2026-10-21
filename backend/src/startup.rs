@@ -9,6 +9,7 @@ use crate::infrastructure::persistence::migrations::{
 };
 use crate::infrastructure::persistence::pool::{PoolIndisponivel, criar_pool};
 use crate::infrastructure::persistence::saude::PostgresSaudeBanco;
+use crate::presentation::auth::{AuthInitError, AuthState};
 use crate::presentation::routes;
 use crate::presentation::state::AppState;
 
@@ -18,6 +19,8 @@ pub enum StartupError {
     Migracao(#[from] MigrationError),
     #[error(transparent)]
     Pool(#[from] PoolIndisponivel),
+    #[error(transparent)]
+    Auth(#[from] AuthInitError),
     #[error("não foi possível associar a porta {0}")]
     Bind(u16),
     #[error("falha no servidor HTTP")]
@@ -43,8 +46,9 @@ pub async fn run(config: Config) -> Result<(), StartupError> {
         .await
         .map_err(|_| StartupError::Tarefa)??;
 
+    let auth = AuthState::novo(pool.clone(), &config)?;
     let estado = AppState::novo(ConsultarSaude::novo(PostgresSaudeBanco::novo(pool)));
-    let aplicacao = routes::construir(estado, &config);
+    let aplicacao = routes::construir(estado, Some(auth), &config);
 
     let listener = TcpListener::bind(("0.0.0.0", config.port))
         .await

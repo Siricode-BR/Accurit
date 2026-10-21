@@ -80,31 +80,33 @@ fn inserir_usuario(
 }
 
 #[test]
-fn aplica_e_reverte_as_tres_migrations() {
+fn aplica_e_reverte_as_quatro_migrations() {
     let banco = BancoTemporario::novo();
     let conexao = banco.conexao();
 
     let aplicadas =
         aplicar_migrations_com_lock(conexao, MIGRATIONS).expect("migrations devem aplicar");
-    assert_eq!(aplicadas, 3);
+    assert_eq!(aplicadas, 4);
 
     let mut conexao = banco.conexao();
     assert!(tabela_existe(&mut conexao, "escritorios"));
     assert!(tabela_existe(&mut conexao, "usuarios"));
     assert!(tabela_existe(&mut conexao, "auditoria_eventos"));
+    assert!(tabela_existe(&mut conexao, "sessoes"));
     assert_eq!(
         migrations_pendentes(&mut conexao).expect("consulta válida"),
         0
     );
 
     let revertidas = reverter_todas(&mut conexao).expect("migrations devem reverter");
-    assert_eq!(revertidas, 3);
+    assert_eq!(revertidas, 4);
     assert!(!tabela_existe(&mut conexao, "escritorios"));
     assert!(!tabela_existe(&mut conexao, "usuarios"));
     assert!(!tabela_existe(&mut conexao, "auditoria_eventos"));
+    assert!(!tabela_existe(&mut conexao, "sessoes"));
     assert_eq!(
         migrations_pendentes(&mut conexao).expect("consulta válida"),
-        3
+        4
     );
 }
 
@@ -136,7 +138,7 @@ fn aplica_migrations_concorrentes_serializadas_pelo_lock() {
         })
         .sum();
 
-    assert_eq!(total, 3);
+    assert_eq!(total, 4);
 }
 
 #[test]
@@ -326,6 +328,133 @@ fn valida_constraints_do_schema() {
         .expect_err("escritório inexistente deve violar a FK");
 }
 
+#[allow(clippy::too_many_arguments)]
+fn inserir_sessao(
+    conexao: &mut PgConnection,
+    id: Uuid,
+    escritorio_id: Uuid,
+    usuario_id: Uuid,
+    audiencia: &str,
+    refresh_hash: &str,
+    expira_em: &str,
+) -> diesel::QueryResult<usize> {
+    sql_query(
+        "INSERT INTO sessoes \
+         (id, escritorio_id, usuario_id, audiencia, familia_id, refresh_hash, expira_em, ip, user_agent) \
+         VALUES ($1, $2, $3, $4, $5, $6, NOW() + $7::interval, '203.0.113.10', 'teste')",
+    )
+    .bind::<SqlUuid, _>(id)
+    .bind::<SqlUuid, _>(escritorio_id)
+    .bind::<SqlUuid, _>(usuario_id)
+    .bind::<Text, _>(audiencia)
+    .bind::<SqlUuid, _>(Uuid::now_v7())
+    .bind::<Text, _>(refresh_hash)
+    .bind::<Text, _>(expira_em)
+    .execute(conexao)
+}
+
+#[test]
+fn valida_constraints_de_sessoes() {
+    let banco = BancoTemporario::novo();
+    let conexao = banco.conexao();
+    aplicar_migrations_com_lock(conexao, MIGRATIONS).expect("migrations devem aplicar");
+    let mut conexao = banco.conexao();
+
+    let escritorio_id = Uuid::now_v7();
+    inserir_escritorio(&mut conexao, escritorio_id, "sessoes", None).expect("escritório válido");
+    let usuario_id = Uuid::now_v7();
+    inserir_usuario(
+        &mut conexao,
+        usuario_id,
+        escritorio_id,
+        "admin@sessoes.test",
+        Some("12345678901"),
+        "ADMIN",
+    )
+    .expect("usuário válido");
+
+    inserir_sessao(
+        &mut conexao,
+        Uuid::now_v7(),
+        escritorio_id,
+        usuario_id,
+        "ADMIN",
+        &"a".repeat(64),
+        "8 hours",
+    )
+    .expect("sessão válida deve ser inserida");
+
+    assert!(
+        inserir_sessao(
+            &mut conexao,
+            Uuid::now_v7(),
+            escritorio_id,
+            usuario_id,
+            "SUPER",
+            &"b".repeat(64),
+            "8 hours",
+        )
+        .is_err(),
+        "audiência fora de ADMIN/CLIENT deve falhar"
+    );
+
+    assert!(
+        inserir_sessao(
+            &mut conexao,
+            Uuid::now_v7(),
+            escritorio_id,
+            usuario_id,
+            "CLIENT",
+            &"a".repeat(64),
+            "8 hours",
+        )
+        .is_err(),
+        "refresh_hash duplicado deve falhar"
+    );
+
+    assert!(
+        inserir_sessao(
+            &mut conexao,
+            Uuid::now_v7(),
+            escritorio_id,
+            usuario_id,
+            "CLIENT",
+            &"c".repeat(64),
+            "-1 hour",
+        )
+        .is_err(),
+        "expira_em anterior a criado_em deve falhar"
+    );
+
+    assert!(
+        inserir_sessao(
+            &mut conexao,
+            Uuid::now_v7(),
+            Uuid::now_v7(),
+            usuario_id,
+            "ADMIN",
+            &"d".repeat(64),
+            "8 hours",
+        )
+        .is_err(),
+        "escritório inexistente deve violar a FK"
+    );
+
+    assert!(
+        inserir_sessao(
+            &mut conexao,
+            Uuid::now_v7(),
+            escritorio_id,
+            Uuid::now_v7(),
+            "ADMIN",
+            &"e".repeat(64),
+            "8 hours",
+        )
+        .is_err(),
+        "usuário inexistente deve violar a FK"
+    );
+}
+
 #[test]
 fn confirma_que_os_indices_obrigatorios_existem() {
     let banco = BancoTemporario::novo();
@@ -348,6 +477,16 @@ fn confirma_que_os_indices_obrigatorios_existem() {
     .expect("consulta de índice deve funcionar")
     .existe;
     assert!(existe);
+
+    for indice in ["idx_sessoes_escritorio_usuario", "idx_sessoes_familia"] {
+        let existe = sql_query(format!(
+            "SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = '{indice}') AS existe"
+        ))
+        .get_result::<Existe>(&mut conexao)
+        .expect("consulta de índice deve funcionar")
+        .existe;
+        assert!(existe, "índice {indice} deve existir");
+    }
 }
 
 #[test]

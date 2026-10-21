@@ -15,8 +15,11 @@ pub fn camada(origens: &[String]) -> CorsLayer {
             header::AUTHORIZATION,
             header::CONTENT_TYPE,
             header::ACCEPT,
+            header::COOKIE,
             HeaderName::from_static("x-request-id"),
-        ]);
+            HeaderName::from_static("x-requested-with"),
+        ])
+        .allow_credentials(true);
 
     let valores: Vec<HeaderValue> = origens
         .iter()

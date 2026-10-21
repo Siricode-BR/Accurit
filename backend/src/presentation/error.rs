@@ -111,6 +111,46 @@ impl ApiError {
             "Autenticação necessária",
         )
     }
+
+    pub fn credenciais_invalidas() -> Self {
+        Self::nova(
+            StatusCode::UNAUTHORIZED,
+            "AUTH_INVALID_CREDENTIALS",
+            "Credenciais inválidas",
+        )
+    }
+
+    pub fn sessao_expirada() -> Self {
+        Self::nova(
+            StatusCode::UNAUTHORIZED,
+            "AUTH_SESSION_EXPIRED",
+            "Sessão expirada; faça login novamente",
+        )
+    }
+
+    pub fn audiencia_incompativel() -> Self {
+        Self::nova(
+            StatusCode::UNAUTHORIZED,
+            "AUTH_AUDIENCE_MISMATCH",
+            "Token não pertence a esta aplicação",
+        )
+    }
+
+    pub fn csrf_ausente() -> Self {
+        Self::nova(
+            StatusCode::BAD_REQUEST,
+            "AUTH_CSRF_HEADER_MISSING",
+            "Cabeçalho de proteção CSRF ausente ou inválido",
+        )
+    }
+
+    pub fn erro_interno() -> Self {
+        Self::nova(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "ERRO_INTERNO",
+            "Erro interno inesperado",
+        )
+    }
 }
 
 impl IntoResponse for ApiError {

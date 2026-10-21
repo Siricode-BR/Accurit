@@ -16,9 +16,31 @@ const PORTA_PADRAO: u16 = 8080;
 const JWT_SEGREDO_MINIMO_BYTES: usize = 32;
 const CERTIFICADO_CHAVE_BYTES: usize = 32;
 
+pub const AUTH_ACCESS_TTL_SEGUNDOS: u64 = 900;
+pub const AUTH_REFRESH_TTL_ADMIN_SEGUNDOS: u64 = 28_800;
+pub const AUTH_REFRESH_TTL_CLIENT_SEGUNDOS: u64 = 604_800;
+pub const AUTH_MAX_TENTATIVAS: u32 = 5;
+pub const AUTH_BLOQUEIO_SEGUNDOS: u64 = 900;
+pub const ARGON2_MEMORIA_KIB: u32 = 19_456;
+pub const ARGON2_ITERACOES: u32 = 2;
+pub const ARGON2_PARALELISMO: u32 = 1;
+
 #[derive(Debug, Clone)]
 pub struct DatabaseConfig {
     pub url: SecretString,
+}
+
+#[derive(Debug, Clone)]
+pub struct AuthConfig {
+    pub access_ttl_secs: u64,
+    pub refresh_ttl_admin_secs: u64,
+    pub refresh_ttl_client_secs: u64,
+    pub max_failed_attempts: u32,
+    pub lockout_secs: u64,
+    pub cookie_secure: bool,
+    pub argon2_memory_kib: u32,
+    pub argon2_iterations: u32,
+    pub argon2_parallelism: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -47,6 +69,7 @@ pub struct Config {
     pub jwt_secret: SecretString,
     pub certificate_master_key: SecretSlice<u8>,
     pub cors_allowed_origins: Vec<String>,
+    pub auth: AuthConfig,
     pub serpro: SerproConfig,
     pub log_filter: String,
 }
@@ -111,6 +134,54 @@ impl Config {
 
         let cors_allowed_origins = validar_origens_cors(opcional(&mapa, "CORS_ALLOWED_ORIGINS"))?;
 
+        let cookie_secure = booleano(&mapa, "AUTH_COOKIE_SECURE", true)?;
+        if !cookie_secure && app_env != AppEnv::Development {
+            return Err(ConfigError::Invalida(
+                "AUTH_COOKIE_SECURE",
+                "só pode ser false em development",
+            ));
+        }
+
+        let auth = AuthConfig {
+            access_ttl_secs: inteiro_positivo(
+                &mapa,
+                "AUTH_ACCESS_TTL_SECS",
+                AUTH_ACCESS_TTL_SEGUNDOS,
+            )?,
+            refresh_ttl_admin_secs: inteiro_positivo(
+                &mapa,
+                "AUTH_REFRESH_TTL_ADMIN_SECS",
+                AUTH_REFRESH_TTL_ADMIN_SEGUNDOS,
+            )?,
+            refresh_ttl_client_secs: inteiro_positivo(
+                &mapa,
+                "AUTH_REFRESH_TTL_CLIENT_SECS",
+                AUTH_REFRESH_TTL_CLIENT_SEGUNDOS,
+            )?,
+            max_failed_attempts: inteiro_positivo_u32(
+                &mapa,
+                "AUTH_MAX_FAILED_ATTEMPTS",
+                AUTH_MAX_TENTATIVAS,
+            )?,
+            lockout_secs: inteiro_positivo(&mapa, "AUTH_LOCKOUT_SECS", AUTH_BLOQUEIO_SEGUNDOS)?,
+            cookie_secure,
+            argon2_memory_kib: inteiro_positivo_u32(
+                &mapa,
+                "AUTH_ARGON2_MEMORY_KIB",
+                ARGON2_MEMORIA_KIB,
+            )?,
+            argon2_iterations: inteiro_positivo_u32(
+                &mapa,
+                "AUTH_ARGON2_ITERATIONS",
+                ARGON2_ITERACOES,
+            )?,
+            argon2_parallelism: inteiro_positivo_u32(
+                &mapa,
+                "AUTH_ARGON2_PARALLELISM",
+                ARGON2_PARALELISMO,
+            )?,
+        };
+
         let serpro = SerproConfig {
             token_url: url_https_obrigatoria(&mapa, "SERPRO_TOKEN_URL")?,
             sapi_auth_url: url_https_obrigatoria(&mapa, "SERPRO_SAPI_AUTH_URL")?,
@@ -153,6 +224,7 @@ impl Config {
             jwt_secret: SecretString::from(jwt_secret),
             certificate_master_key,
             cors_allowed_origins,
+            auth,
             serpro,
             log_filter,
         })
@@ -280,6 +352,16 @@ fn booleano(
     }
 }
 
+fn inteiro_positivo_u32(
+    mapa: &HashMap<String, String>,
+    nome: &'static str,
+    padrao: u32,
+) -> Result<u32, ConfigError> {
+    let valor = inteiro_positivo(mapa, nome, u64::from(padrao))?;
+    u32::try_from(valor)
+        .map_err(|_| ConfigError::Invalida(nome, "deve caber em um inteiro de 32 bits"))
+}
+
 fn inteiro_positivo(
     mapa: &HashMap<String, String>,
     nome: &'static str,
@@ -350,6 +432,34 @@ mod tests {
         assert_eq!(cfg.serpro.http_request_timeout_secs, 30);
         assert!(cfg.serpro.operator_header_enabled);
         assert!(cfg.serpro.divida_ativa_prod_url.is_none());
+        assert_eq!(cfg.auth.access_ttl_secs, AUTH_ACCESS_TTL_SEGUNDOS);
+        assert_eq!(
+            cfg.auth.refresh_ttl_admin_secs,
+            AUTH_REFRESH_TTL_ADMIN_SEGUNDOS
+        );
+        assert_eq!(
+            cfg.auth.refresh_ttl_client_secs,
+            AUTH_REFRESH_TTL_CLIENT_SEGUNDOS
+        );
+        assert!(cfg.auth.cookie_secure);
+    }
+
+    #[test]
+    fn rejeita_cookie_inseguro_fora_de_development() {
+        let mut mapa = base();
+        mapa.insert("APP_ENV".into(), "production".into());
+        mapa.insert("AUTH_COOKIE_SECURE".into(), "false".into());
+        assert_eq!(
+            config(mapa).expect_err("deve falhar"),
+            ConfigError::Invalida("AUTH_COOKIE_SECURE", "só pode ser false em development")
+        );
+    }
+
+    #[test]
+    fn aceita_cookie_inseguro_em_development() {
+        let mut mapa = base();
+        mapa.insert("AUTH_COOKIE_SECURE".into(), "false".into());
+        assert!(!config(mapa).expect("config válida").auth.cookie_secure);
     }
 
     #[test]
