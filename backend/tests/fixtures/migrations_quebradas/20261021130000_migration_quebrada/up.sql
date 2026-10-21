@@ -1,0 +1,5 @@
+CREATE TABLE tabela_quebrada (
+    id UUID PRIMARY KEY
+);
+
+ESTE SQL NAO EXISTE;

@@ -2,29 +2,61 @@
 
 FROM rust:1.98-alpine AS builder
 
-RUN apk add --no-cache musl-dev
+RUN apk add --no-cache musl-dev pkgconf postgresql-dev
+
+ENV RUSTFLAGS="-C target-feature=-crt-static"
 
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
 
-RUN mkdir src \
+RUN mkdir -p src \
+    && printf '' > src/lib.rs \
     && printf 'fn main() {}\n' > src/main.rs
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    cargo build --release \
-    && rm -rf src target/release/backend target/release/deps/backend-*
+    cargo build --release --locked \
+    && rm -rf src \
+        target/release/backend \
+        target/release/backend.d \
+        target/release/deps/backend-* \
+        target/release/deps/libaccurit_backend-* \
+        target/release/deps/accurit_backend-* \
+        target/release/deps/libbackend-* \
+        target/release/deps/backend*.d
 
 COPY src ./src
 COPY migrations ./migrations
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    touch src/main.rs \
-    && cargo build --release
+    touch src/main.rs src/lib.rs \
+    && cargo build --release --locked
 
-FROM alpine:3.22 AS runtime
+FROM builder AS tester
 
-RUN apk add --no-cache ca-certificates tzdata libgcc \
+COPY tests ./tests
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    cargo test --no-run --locked
+
+CMD ["cargo", "test", "--locked"]
+
+FROM rust:1.98-alpine AS diesel-tool
+
+RUN apk add --no-cache musl-dev pkgconf postgresql-dev postgresql-client
+
+ENV RUSTFLAGS="-C target-feature=-crt-static"
+
+RUN cargo install diesel_cli --no-default-features --features postgres \
+    && rustup component add rustfmt
+
+WORKDIR /work
+
+CMD ["diesel", "--version"]
+
+FROM alpine:3.24 AS runtime
+
+RUN apk add --no-cache ca-certificates tzdata libgcc libpq \
     && addgroup -S accurit \
     && adduser -S -G accurit accurit
 
