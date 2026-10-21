@@ -21,19 +21,26 @@
 ## Fase 1 — Fundação, infraestrutura e base multi-tenant
 
 ### 1. Banco de Dados
-- [ ] Configurar PostgreSQL 16 (`postgres:16-alpine`), volume persistente, healthcheck e usuário de aplicação com privilégios mínimos.
+- [ ] Configurar PostgreSQL 16 (`postgres:16-alpine`), volume persistente, healthcheck e usuário de aplicação não-superuser (`POSTGRES_APP_USER`).
 - [ ] Criar migrations iniciais para `escritorios`, `usuarios` e tabelas de suporte.
-- [ ] Adicionar `escritorios.modo_trial_serpro BOOLEAN NOT NULL DEFAULT TRUE`.
+- [ ] Criar `modo_trial_serpro BOOLEAN NOT NULL DEFAULT TRUE` no `CREATE TABLE escritorios` (sem `ALTER`).
 - [ ] Criar índices e constraints de isolamento por `escritorio_id`.
 - [ ] Criar migration de `auditoria_eventos` para ações administrativas.
+- [ ] Validar automaticamente a política "sem `ALTER`" e o par `up.sql`/`down.sql` das migrations.
 
 ### 2. Backend (Rust / DDD)
 - [ ] Preparar as camadas `domain/`, `application/`, `infrastructure/` e `presentation/` com regras de dependência.
+- [ ] Publicar `lib.rs` com os módulos e consumir `accurit_backend` a partir de `main.rs`.
 - [ ] Configurar Axum 0.8, Tokio, pool Diesel 2.2+ e `diesel_migrations::embed_migrations!`.
 - [ ] Executar migrations automaticamente no startup, com retry/backoff e advisory lock para múltiplas réplicas.
 - [ ] Expor `GET /api/v1/health` com status do banco.
 - [ ] Configurar variáveis via `.env.example`, `tracing`/`request-id` e sem credenciais reais.
-- [ ] Implementar middlewares de request-id, CORS restrito e rate limit por escritório.
+- [ ] Implementar validação fail-fast da configuração (`JWT_SECRET` ≥ 32 bytes, `CERTIFICATE_MASTER_KEY` = base64 de 32 bytes, URLs/booleanos/inteiros válidos).
+- [ ] Implementar middlewares de request-id, CORS restrito, headers de segurança e rate limit por IP (chave abstrata até a Fase 2).
+- [ ] Versionar `schema.rs` em `src/infrastructure/persistence/schema.rs`, gerado fora do runtime por target `diesel-tool`.
+- [ ] Validar a linkagem dinâmica com `libpq` no Alpine e a imagem de runtime.
+- [ ] Executar testes de integração em container (`backend-test`, profile `tools`).
+- [ ] Executar smoke test da stack completa pelo proxy.
 
 ### 3. Frontend (Angular / Next.js)
 - [ ] Configurar Admin Angular 21 e Client Angular 21 com Signals, Standalone Components e organização por features.

@@ -107,10 +107,17 @@ Pré-requisitos: Docker Engine 24+ e Docker Compose v2.20+.
 ```bash
 git clone https://github.com/Siricode-BR/Accurit.git
 cd Accurit
-cp .env.example .env
-# Edite .env com as credenciais do seu ambiente.
+./scripts/init-env.sh          # PowerShell: .\scripts\init-env.ps1
 docker compose up --build
 ```
+
+O `scripts/init-env` cria o `.env` a partir do `.env.example` com senhas hexadecimais,
+`JWT_SECRET` (base64 de 48 bytes) e `CERTIFICATE_MASTER_KEY` (base64 de 32 bytes) gerados, sem
+imprimir os segredos e sem sobrescrever um `.env` existente. Alternativamente, gere manualmente com
+`openssl rand -base64 48` (`JWT_SECRET`) e `openssl rand -base64 32` (`CERTIFICATE_MASTER_KEY`).
+
+> **Placeholders não sobem.** O backend recusa `JWT_SECRET=change-me` e
+> `CERTIFICATE_MASTER_KEY=change-me-32-bytes` no startup, com mensagem clara e sem revelar valores.
 
 > **Um passo, zero Diesel CLI.** No startup, o backend aguarda o PostgreSQL ficar saudável e executa automaticamente todas as migrations embutidas no binário. **Não é necessário instalar `diesel_cli` no host nem rodar comandos manuais de migration.**
 

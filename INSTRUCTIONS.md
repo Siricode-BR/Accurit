@@ -31,10 +31,15 @@ Instalação (referências oficiais):
 ```bash
 git clone https://github.com/Siricode-BR/Accurit.git
 cd Accurit
-cp .env.example .env
-# Edite .env com as credenciais do ambiente.
+./scripts/init-env.sh          # PowerShell: .\scripts\init-env.ps1
 docker compose up --build
 ```
+
+O script cria o `.env` com senhas hexadecimais e segredos aleatórios, recusa sobrescrever um `.env`
+existente e não imprime os valores. Também é possível gerar manualmente:
+`openssl rand -base64 48` para `JWT_SECRET` e `openssl rand -base64 32` para
+`CERTIFICATE_MASTER_KEY`. O backend **não sobe** com os placeholders `change-me` e
+`change-me-32-bytes`.
 
 No startup, o container `accurit-backend`:
 
@@ -70,11 +75,14 @@ Copie `.env.example` para `.env` e preencha os valores. Nunca versione `.env`, c
 
 | Variável | Obrigatória | Descrição |
 |---|---:|---|
-| `DATABASE_URL` | Sim | `postgres://usuario:senha@postgres:5432/accurit` |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Sim | Credenciais do container PostgreSQL |
+| `DATABASE_URL` | Sim | Conexão da aplicação, usando `POSTGRES_APP_USER` (não-superuser): `postgres://accurit_app:senha@postgres:5432/accurit` |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Sim | Superusuário do container, usado só para administração e testes |
+| `POSTGRES_APP_USER` / `POSTGRES_APP_PASSWORD` | Sim | Usuário de aplicação não-superuser, criado pelo init do Postgres |
+| `TEST_DATABASE_ADMIN_URL` | Tools | Conexão de superusuário usada por `schema-tool` e `backend-test`; não sobe no `up` padrão |
 | `APP_ENV` | Sim | `development`, `staging` ou `production` |
-| `JWT_SECRET` | Sim | Segredo de assinatura dos tokens de sessão |
-| `CERTIFICATE_MASTER_KEY` | Sim | Chave AES-256-GCM de 32 bytes para certificados A1, credenciais e tokens; valor de exemplo deve falhar no startup |
+| `JWT_SECRET` | Sim | Segredo de assinatura dos tokens de sessão (≥ 32 bytes) |
+| `CERTIFICATE_MASTER_KEY` | Sim | Chave AES-256-GCM: base64 que decodifica para exatamente 32 bytes; valor de exemplo deve falhar no startup |
+| `CORS_ALLOWED_ORIGINS` | Não | Lista separada por vírgula; vazia não permite nenhuma origem (same-origin via proxy) |
 | `SERPRO_TOKEN_URL` | Sim | `https://gateway.apiserpro.serpro.gov.br/token` |
 | `SERPRO_SAPI_AUTH_URL` | Produção | `https://autenticacao.sapi.serpro.gov.br/authenticate` |
 | `SERPRO_INTEGRA_TRIAL_URL` | Sim | Base Trial do Integra Contador |
@@ -94,14 +102,17 @@ Exemplo seguro de `.env.example` (sem valores reais):
 
 ```dotenv
 APP_ENV=development
-DATABASE_URL=postgres://accurit:accurit@postgres:5432/accurit
+DATABASE_URL=postgres://accurit_app:change-me-app@postgres:5432/accurit
 POSTGRES_USER=accurit
 POSTGRES_PASSWORD=change-me
+POSTGRES_APP_USER=accurit_app
+POSTGRES_APP_PASSWORD=change-me-app
 POSTGRES_DB=accurit
 
 JWT_SECRET=change-me
-# Substitua por 32 bytes aleatórios; o valor de exemplo falha no startup.
+# Substitua por base64 de 32 bytes; o valor de exemplo falha no startup.
 CERTIFICATE_MASTER_KEY=change-me-32-bytes
+CORS_ALLOWED_ORIGINS=
 
 SERPRO_TOKEN_URL=https://gateway.apiserpro.serpro.gov.br/token
 SERPRO_SAPI_AUTH_URL=https://autenticacao.sapi.serpro.gov.br/authenticate
@@ -122,8 +133,9 @@ RUST_LOG=info
 ```
 
 A chave de trial é configuração de ambiente e **não** deve ser embutida no código, no bundle Angular ou no repositório. O mesmo vale para `Consumer Secret`, tokens e certificados A1.
-`CERTIFICATE_MASTER_KEY` deve ter exatamente 32 bytes; o placeholder `change-me-32-bytes` deve ser
-rejeitado no startup com mensagem clara.
+`CERTIFICATE_MASTER_KEY` deve ser base64 que decodifica para exatamente 32 bytes; o placeholder
+`change-me-32-bytes` é rejeitado no startup com mensagem clara. `JWT_SECRET` precisa ter pelo menos
+32 bytes. Prefira sempre `scripts/init-env.sh`/`scripts/init-env.ps1` para gerar o `.env`.
 
 ---
 
@@ -200,8 +212,15 @@ DROP TABLE exemplo;
 
 ### Regras obrigatórias
 
-- Sempre incluir `up.sql` e `down.sql` quando a reversão for segura.
-- Nunca editar uma migration já aplicada em ambiente compartilhado; crie uma nova.
+- Sempre incluir `up.sql` e `down.sql`.
+- **Pré-MVP (Fases 1 a 6):** é proibido `ALTER` (`ALTER TABLE`, `ADD COLUMN`, `DROP COLUMN`, `RENAME`,
+  `ALTER TYPE`, `ALTER INDEX` etc.) em `up.sql` e `down.sql`. Tabela nova vira migration com
+  `CREATE TABLE`; mudança em tabela existente edita o `CREATE TABLE` da migration que a criou.
+  `down.sql` contém apenas `DROP`. A regra é checada por `backend/tests/migrations_policy.rs`.
+- Para aplicar uma mudança de `CREATE TABLE` no ambiente local, recrie o banco:
+  `docker compose down -v && docker compose up --build`.
+- Depois do MVP, valem a imutabilidade de migrations aplicadas e o expand/contract: não editar uma
+  migration já aplicada em ambiente compartilhado.
 - Revisar constraints, índices e isolamento por `escritorio_id`.
 - Evitar operações destrutivas sem plano de migração e backup.
 - Se a migration falhar, o backend deve encerrar com erro claro — nunca iniciar parcialmente.
@@ -215,11 +234,12 @@ pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
     diesel_migrations::embed_migrations!("migrations");
 ```
 
-O startup usa `MigrationHarness::run_pending_migrations` (ou API equivalente da versão do Diesel) após aguardar o banco com retry limitado.
+O startup usa `MigrationHarness::run_pending_migrations` após aguardar o banco com retry limitado.
 
-O arquivo de configuração do Diesel é `backend/diesel.toml` (minúsculo). `backend/schema.rs` é
-versionado, gerado em tarefa de desenvolvimento com container descartável (`diesel print-schema`) e
-verificado contra drift no CI; runtime e deploy não executam `diesel_cli`.
+O arquivo de configuração do Diesel é `backend/diesel.toml` (minúsculo).
+`backend/src/infrastructure/persistence/schema.rs` é versionado e gerado em tarefa de
+desenvolvimento com container descartável (`docker compose --profile tools run --rm schema-tool`);
+runtime e deploy não executam `diesel_cli`.
 
 ---
 
@@ -409,6 +429,7 @@ chore/<tema>     # infraestrutura, build, CI
 ### 10.3 Antes de abrir Pull Request
 
 - [ ] Migrations incluídas, revisadas e testadas (`up`/`down`).
+- [ ] Nenhuma migration usa `ALTER` enquanto o MVP não estiver concluído (política pré-MVP).
 - [ ] Testes de unidade e integração atualizados.
 - [ ] Testes de isolamento de tenant e IDOR para rotas novas.
 - [ ] Nenhum segredo, certificado, token ou dado pessoal em logs/repositório.

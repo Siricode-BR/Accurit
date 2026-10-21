@@ -139,9 +139,19 @@ O exemplo é ilustrativo; a implementação real deve:
 - Revisar constraints, índices, locks e impacto em tabelas grandes.
 - Preferir a estratégia expand/contract para mudanças incompatíveis em produção.
 - Não usar `diesel_cli` como parte do fluxo normal; o fluxo suportado é reconstruir a imagem e reiniciar o backend.
-- `backend/schema.rs` é versionado e gerado por uma tarefa de desenvolvimento com container
+- `backend/src/infrastructure/persistence/schema.rs` é versionado e gerado por uma tarefa de desenvolvimento com container
   descartável (`diesel print-schema`); o CI regenera o schema contra um banco limpo e falha em caso
   de drift. Runtime e deploy não executam `diesel_cli`.
+- **Regra pré-MVP (Fases 1 a 6):** é proibido usar `ALTER` (`ALTER TABLE`, `ADD COLUMN`, `DROP COLUMN`,
+  `RENAME`, `ALTER TYPE`, `ALTER INDEX` etc.) em qualquer `up.sql` ou `down.sql`. Enquanto o MVP não
+  estiver concluído e aceito:
+  - tabela nova exige nova migration com `CREATE TABLE`;
+  - alteração em tabela existente exige editar o `CREATE TABLE` da migration que a criou e recriar o
+    banco local com `docker compose down -v && docker compose up --build`;
+  - `down.sql` contém apenas `DROP`.
+  A imutabilidade de migrations aplicadas, o expand/contract e a criação de novas migrations para
+  mudanças passam a valer somente após o encerramento do MVP. A regra é verificada automaticamente
+  por `backend/tests/migrations_policy.rs`.
 - O arquivo de configuração do Diesel fica em `backend/diesel.toml` (minúsculo).
 
 ### 5. Múltiplas réplicas e concorrência
@@ -201,8 +211,10 @@ O exemplo é ilustrativo; a implementação real deve:
 4. **Ordem de startup:** conectar com retry, adquirir lock, executar migrations, liberar lock, criar pool, iniciar Axum.
 5. **Fail-fast:** falha de migration impede o servidor de iniciar; o processo encerra com erro claro.
 6. **Concorrência:** múltiplas réplicas usam advisory lock para evitar execução simultânea.
-7. **Imutabilidade:** migrations já aplicadas em ambiente compartilhado não são editadas; correções exigem nova migration.
-8. **Reversão:** `down.sql` é mantido quando seguro; rollback automático não faz parte do startup.
+7. **Regra pré-MVP:** até o fim do MVP (Fases 1 a 6 aceitas), nenhuma migration usa `ALTER`; mudanças
+   em tabela existente editam o `CREATE TABLE` da migration de origem e exigem recriar o banco local.
+   Após o MVP, valem a imutabilidade de migrations aplicadas e o expand/contract.
+8. **Reversão:** `down.sql` existe em toda migration e contém apenas `DROP` durante o pré-MVP; rollback automático não faz parte do startup.
 9. **Isolamento:** migrations de tabelas de negócio incluem `escritorio_id`, constraints e índices coerentes com o modelo multi-tenant.
 10. **Saúde:** `/api/v1/health` só reporta saudável após migrations e pool prontos.
 11. **Deploy:** a imagem é reconstruída a cada mudança de migration; o Compose depende de PostgreSQL saudável.
