@@ -1,7 +1,10 @@
 <main class="pagina">
   <header class="cabecalho">
     <span class="marca">Accurit</span>
-    <span class="area">Área do cliente</span>
+    <span class="sessao">
+      <span class="email">{{ email() }}</span>
+      <button type="button" class="sair" (click)="sair()">Sair</button>
+    </span>
   </header>
 
   <section class="conteudo">
@@ -20,5 +23,5 @@
     </div>
   </section>
 
-  <footer class="rodape">Fase 1 &middot; Fundação</footer>
+  <footer class="rodape">Fase 2A &middot; Autenticação</footer>
 </main>
