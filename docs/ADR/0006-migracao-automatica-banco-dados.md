@@ -29,7 +29,13 @@ As migrations permanecem em `backend/migrations/`, no formato aceito pelo Diesel
 
 ```text
 backend/migrations/
-└── 20261020120000_create_escritorios/
+├── 20261021120000_create_escritorios/
+│   ├── up.sql
+│   └── down.sql
+├── 20261021120100_create_usuarios/
+│   ├── up.sql
+│   └── down.sql
+└── 20261021120200_create_auditoria_eventos/
     ├── up.sql
     └── down.sql
 ```
@@ -59,66 +65,36 @@ O startup do backend segue esta ordem:
 8. Expor GET /api/v1/health com o estado do banco.
 ```
 
-Exemplo de referência:
+Exemplo de referência (pseudocódigo da implementação real):
 
 ```rust
-use diesel::pg::PgConnection;
-use diesel::Connection;
-use diesel::RunQueryDsl;
-use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use std::time::Duration;
-
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
-fn connect_with_retry(database_url: &str, max_attempts: u32) -> PgConnection {
-    let mut attempt = 1;
+// Result em vez de panic: o startup encerra com erro claro após 15 tentativas.
+let aplicadas = tokio::task::spawn_blocking(move || {
+    let conexao = conectar_com_retry(&database_url, 15)?;
+    aplicar_migrations_com_lock(conexao, MIGRATIONS) // guard RAII libera o lock
+}).await??;
 
-    loop {
-        match PgConnection::establish(database_url) {
-            Ok(conn) => return conn,
-            Err(err) if attempt >= max_attempts => {
-                panic!("PostgreSQL indisponível após {attempt} tentativas: {err}");
-            }
-            Err(_) => {
-                std::thread::sleep(Duration::from_secs(2_u64.pow(attempt.min(4))));
-                attempt += 1;
-            }
-        }
-    }
-}
-
-fn run_migrations(
-    database_url: &str,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut conn = connect_with_retry(database_url, 15);
-
-    diesel::sql_query("SELECT pg_advisory_lock(727001)").execute(&mut conn)?;
-    let result = conn.run_pending_migrations(MIGRATIONS);
-    diesel::sql_query("SELECT pg_advisory_unlock(727001)").execute(&mut conn)?;
-
-    result.map_err(|e| format!("falha ao executar migrations: {e}"))?;
-    Ok(())
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let database_url = std::env::var("DATABASE_URL")?;
-
-    run_migrations(&database_url)?;
-
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
-    let app = axum::Router::new(); // estado, rotas e middlewares reais
-    axum::serve(listener, app).await?;
-    Ok(())
-}
+let pool = criar_pool(&database_url)?;
+let app = rotas(AppState::new(pool));
+axum::serve(listener, app)
+    .with_graceful_shutdown(encerrar_em_sigterm_ou_sigint())
+    .await?;
 ```
 
 O exemplo é ilustrativo; a implementação real deve:
 
 - usar o pool Diesel após as migrations;
+- executar o harness em `tokio::task::spawn_blocking`, sem bloquear o runtime;
 - garantir liberação do advisory lock mesmo em erro (RAII/guard ou bloco de cleanup);
 - registrar logs estruturados de início, quantidade de migrations aplicadas e falha;
 - encerrar o processo com código de erro se qualquer migration falhar.
+
+A implementação da Fase 1 está em `backend/src/startup.rs` e
+`backend/src/infrastructure/persistence/{migrations,pool}.rs`; os testes de integração em
+`backend/tests/{migrations.rs,migrations_policy.rs}` cobrem reversão, lock, falha e política de
+migrations.
 
 ### 3. Docker Compose e ordem de inicialização
 

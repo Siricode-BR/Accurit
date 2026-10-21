@@ -1,6 +1,6 @@
 # INSTRUCTIONS.md — Setup, Migrations, Troubleshooting e Contribuição
 
-> Guia operacional da plataforma **Accurit** para desenvolvedores, DevOps e contribuidores. Stack: Rust 2024/Axum 0.8, Diesel 2.2+, PostgreSQL 16, Angular 21, Next.js 16 e Docker Compose.
+> Guia operacional da plataforma **Accurit** para desenvolvedores, DevOps e contribuidores. Stack: Rust 2024/Axum 0.8, Diesel 2.3+, PostgreSQL 16, Angular 21, Next.js 16 e Docker Compose.
 
 ---
 
@@ -43,9 +43,9 @@ existente e não imprime os valores. Também é possível gerar manualmente:
 
 No startup, o container `accurit-backend`:
 
-1. aguarda o PostgreSQL (`accurit-postgres`) ficar saudável, com retry/backoff;
-2. executa as migrations embutidas no binário (`diesel_migrations::embed_migrations!`);
-3. inicia o servidor Axum na porta interna `8080`.
+1. aguarda o PostgreSQL (`accurit-postgres`) ficar saudável, com retry/backoff limitado;
+2. adquire o advisory lock `727001` e executa as migrations embutidas no binário (`diesel_migrations::embed_migrations!`);
+3. cria o pool Diesel e inicia o servidor Axum na porta interna `8080`, com graceful shutdown em `SIGTERM`/`SIGINT`.
 
 Acessos locais:
 
@@ -75,11 +75,12 @@ Copie `.env.example` para `.env` e preencha os valores. Nunca versione `.env`, c
 
 | Variável | Obrigatória | Descrição |
 |---|---:|---|
+| `APP_ENV` | Sim | `development`, `staging` ou `production` |
+| `HTTP_PORT` | Não | Porta pública do proxy no host (padrão 80) |
 | `DATABASE_URL` | Sim | Conexão da aplicação, usando `POSTGRES_APP_USER` (não-superuser): `postgres://accurit_app:senha@postgres:5432/accurit` |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Sim | Superusuário do container, usado só para administração e testes |
 | `POSTGRES_APP_USER` / `POSTGRES_APP_PASSWORD` | Sim | Usuário de aplicação não-superuser, criado pelo init do Postgres |
-| `TEST_DATABASE_ADMIN_URL` | Tools | Conexão de superusuário usada por `schema-tool` e `backend-test`; não sobe no `up` padrão |
-| `APP_ENV` | Sim | `development`, `staging` ou `production` |
+| `TEST_DATABASE_ADMIN_URL` | Tools | Conexão de superusuário usada por `backend-test`; `schema-tool` monta a conexão administrativa a partir de `POSTGRES_*` |
 | `JWT_SECRET` | Sim | Segredo de assinatura dos tokens de sessão (≥ 32 bytes) |
 | `CERTIFICATE_MASTER_KEY` | Sim | Chave AES-256-GCM: base64 que decodifica para exatamente 32 bytes; valor de exemplo deve falhar no startup |
 | `CORS_ALLOWED_ORIGINS` | Não | Lista separada por vírgula; vazia não permite nenhuma origem (same-origin via proxy) |
@@ -98,16 +99,22 @@ Copie `.env.example` para `.env` e preencha os valores. Nunca versione `.env`, c
 | `SERPRO_PROCURACAO_CACHE_TTL_SECS` | Não | TTL do cache de procuração (padrão 300) |
 | `RUST_LOG` | Não | Nível de log (`info`, `debug`, `warn`) |
 
+> O Compose usa `APP_ENV=production` quando a variável não está definida. O `.env` gerado pelo
+> `init-env` usa `development` para o ambiente local. `DATABASE_URL` deve apontar para
+> `POSTGRES_APP_USER`; nunca use o superusuário `POSTGRES_USER` na aplicação.
+
 Exemplo seguro de `.env.example` (sem valores reais):
 
 ```dotenv
 APP_ENV=development
+HTTP_PORT=80
 DATABASE_URL=postgres://accurit_app:change-me-app@postgres:5432/accurit
 POSTGRES_USER=accurit
 POSTGRES_PASSWORD=change-me
 POSTGRES_APP_USER=accurit_app
 POSTGRES_APP_PASSWORD=change-me-app
 POSTGRES_DB=accurit
+TEST_DATABASE_ADMIN_URL=postgres://accurit:change-me@postgres:5432/accurit
 
 JWT_SECRET=change-me
 # Substitua por base64 de 32 bytes; o valor de exemplo falha no startup.
@@ -149,6 +156,8 @@ A chave de trial é configuração de ambiente e **não** deve ser embutida no c
 | `admin` | `accurit-admin` | 80 | Angular + Nginx interno |
 | `client` | `accurit-client` | 80 | Angular + Nginx interno |
 | `proxy` | `accurit-proxy` | 80/443 | Ponto de entrada público |
+| `schema-tool` | efêmero | — | Profile `tools`; gera `schema.rs` |
+| `backend-test` | efêmero | — | Profile `tools`; executa testes Rust contra o Postgres |
 
 Roteamento no proxy:
 
@@ -160,19 +169,28 @@ Roteamento no proxy:
 | `/login` | `301` para `/app/login` |
 | `/api/` | `backend:8080` |
 
-Em produção, apenas o proxy publica portas. Backend, banco e frontends ficam em rede interna.
+Em produção, apenas o proxy publica portas. Backend, banco e frontends ficam em rede interna
+(`data` interna e `edge` para o proxy). Os serviços do profile `tools` usam as duas redes: `data`
+para o banco e `edge` para baixar dependências durante o teste.
 
 ---
 
 ## 5. Como criar migrations SQL
 
-As migrations ficam em `backend/migrations/` e são embutidas no binário Rust em tempo de compilação por `diesel_migrations::embed_migrations!`.
+As migrations ficam em `backend/migrations/` e são embutidas no binário Rust em tempo de compilação por `diesel_migrations::embed_migrations!`. A Fase 1 entrega:
+
+```text
+backend/migrations/
+├── 20261021120000_create_escritorios/
+├── 20261021120100_create_usuarios/
+└── 20261021120200_create_auditoria_eventos/
+```
 
 Crie manualmente uma pasta versionada no padrão aceito pelo Diesel, com `up.sql` e `down.sql`:
 
 ```text
 backend/migrations/
-└── 20261020120000_create_exemplo/
+└── 20261021130000_create_exemplo/
     ├── up.sql
     └── down.sql
 ```
@@ -238,8 +256,17 @@ O startup usa `MigrationHarness::run_pending_migrations` após aguardar o banco 
 
 O arquivo de configuração do Diesel é `backend/diesel.toml` (minúsculo).
 `backend/src/infrastructure/persistence/schema.rs` é versionado e gerado em tarefa de
-desenvolvimento com container descartável (`docker compose --profile tools run --rm schema-tool`);
-runtime e deploy não executam `diesel_cli`.
+desenvolvimento com container descartável:
+
+```bash
+docker compose --profile tools run --rm schema-tool
+```
+
+O script cria um banco temporário `accurit_schema_tmp`, aplica as migrations embutidas, executa
+`diesel print-schema` e formata o resultado com `rustfmt --edition 2024`. O banco temporário é
+removido ao final. Runtime e deploy não executam `diesel_cli`; o alvo `diesel-tool` existe apenas
+para desenvolvimento. Após alterar uma migration, rode o comando novamente e confira o diff de
+`schema.rs` antes de commitar.
 
 ---
 
@@ -251,7 +278,7 @@ Docker Compose é o caminho recomendado. Para desenvolver um serviço isoladamen
 # Banco e dependências
 docker compose up -d postgres
 
-# Backend local (Rust 1.85+ e .env configurados)
+# Backend local (Rust 1.98+ e .env configurados)
 cd backend
 cargo run
 ```
@@ -259,9 +286,13 @@ cargo run
 Frontends:
 
 ```bash
-cd admin    # ou client / web
+cd admin    # ou client
 npm ci
 npm run start
+
+cd ../web
+npm ci
+npm run dev
 ```
 
 - Configure as URLs de API e CORS para o ambiente local.
@@ -362,30 +393,66 @@ Convenções:
 | Porta 80/5432 ocupada | Outro serviço no host | Liberar a porta ou ajustar o mapeamento no Compose |
 | Certificado não decifra | `CERTIFICATE_MASTER_KEY` alterada ou ausente | Restaurar a chave correta; recadastrar o A1 se necessário |
 | Segredo aparece no bundle | Variável exposta ao build Angular/Next.js | Mover para o backend e usar apenas variáveis públicas quando indispensável |
+| `backend-test` falha ao baixar crates | Serviço sem acesso à internet na rede `data` | Confirmar que `backend-test` está nas redes `edge` e `data` no Compose |
+| `docker compose up` não mostra `backend-test`/`schema-tool` | Serviços usam o profile `tools` | Executar com `--profile tools run --rm <serviço>` |
+| Backend falha ao conectar com a role da aplicação | Volume antigo criado antes de `POSTGRES_APP_USER` | Recriar o banco com `docker compose down -v && docker compose up --build` |
+| `schema.rs` desatualizado após migration | Schema não foi regenerado | Rodar `docker compose --profile tools run --rm schema-tool` e revisar o diff |
+| Porta do proxy ocupada | `HTTP_PORT` já está em uso | Ajustar `HTTP_PORT` no `.env` ou encerrar o serviço conflitante |
 
 ---
 
 ## 9. Testes e qualidade
 
 ```bash
-# Backend
+# Backend no container (recomendado; sobe Postgres e usa banco descartável por teste)
+docker compose --profile tools run --rm backend-test
+
+# Backend no host (exige Postgres acessível e variáveis de teste)
 cd backend
 cargo fmt --check
-cargo clippy -- -D warnings
-cargo test
+cargo clippy --all-targets -- -D warnings
+cargo test --locked
 cargo audit
 
-# Frontends
-cd admin    # repetir em client e web
+# Schema gerado (não deve produzir diff)
+docker compose --profile tools run --rm schema-tool
+
+# Angular (admin e client)
+cd admin
+npm ci
+npm test -- --watch=false
+npm run build
+
+# Next.js
+cd ../web
 npm ci
 npm run lint
-npm test
 npm run build
+```
+
+Smoke ponta a ponta pelo proxy, com a stack saudável:
+
+```powershell
+.\scripts\smoke.ps1
+```
+
+```bash
+./scripts/smoke.sh
+```
+
+No Windows sem `bash`, execute o smoke POSIX em um container conectado ao namespace do proxy:
+
+```bash
+docker run --rm --network container:accurit-proxy -v "$(pwd):/app" -w /app alpine:3.24 \
+  sh -c "apk add --no-cache curl >/dev/null 2>&1 && sh scripts/smoke.sh"
 ```
 
 Checklist mínimo:
 
 - Testes de isolamento multi-tenant e IDOR em rotas novas.
+- Testes de migrations (`up`/`down`), política sem `ALTER`, índices e constraints.
+- Contrato de `/api/v1/health` (200/503), request-id, CORS, rate limit e headers de segurança.
+- Smoke das rotas públicas pelo proxy após `docker compose up --build`.
 - Mocks de SERPRO para token OAuth2, SAPI, envelopes, procuração, Trial, Dívida Ativa e `202`/`204`/`304`.
 - Testes de sanitização (CPF/CNPJ/moeda) e fallback por Código de Contribuinte desabilitado por padrão.
 - Testes de assinatura XML (namespace default, sem `ds:`) e validação ICP-Brasil.
@@ -434,6 +501,8 @@ chore/<tema>     # infraestrutura, build, CI
 - [ ] Testes de isolamento de tenant e IDOR para rotas novas.
 - [ ] Nenhum segredo, certificado, token ou dado pessoal em logs/repositório.
 - [ ] `cargo fmt`, Clippy, testes Rust, lint/testes/build dos frontends aprovados.
+- [ ] `docker compose --profile tools run --rm backend-test` e smoke pelo proxy aprovados.
+- [ ] `schema.rs` regenerado sem diff após mudanças de migration.
 - [ ] `SPEC.md`, `ROADMAP.md`, `README.md` e `INSTRUCTIONS.md` atualizados quando houver mudança arquitetural, contratual ou de setup.
 - [ ] Trial e Produção testados separadamente, sem fallback silencioso.
 - [ ] Mudanças de segurança (A1, mTLS, `x-cpf-usuario`, XMLDSig) revisadas por um segundo contribuidor.

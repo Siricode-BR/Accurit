@@ -1,7 +1,7 @@
 # Decisões Pendentes e Itens Não Confirmados
 
-- **Atualizado em:** 2026-10-20
-- **Escopo:** Fase 0 — reconciliação documental
+- **Atualizado em:** 2026-10-21
+- **Escopo:** Fase 0 (reconciliação documental) e Fase 1 (fundação técnica)
 - **Regra:** nenhum item abaixo pode ser tratado como contrato oficial até confirmação. O código
   deve isolar o comportamento em porta/flag e falhar de forma explícita quando a configuração não
   existir.
@@ -21,6 +21,21 @@
 | P4 | `versaoSistema` dos demais serviços | **Não confirmado** | Alto | Habilitar serviço a serviço |
 | P5 | Produção do Integra Contador (SAPI) | Parcialmente confirmado | Alto | Validar mTLS/e-CNPJ em homologação |
 | P6 | Ativação do modelo B | Não decidido | Alto | Exige necessidade + revisão jurídica |
+
+## Decisões de implementação da Fase 1
+
+Estas decisões estão **fechadas** para a fundação e registradas em
+[ADR-0008](ADR/0008-decisoes-implementacao-fase-1.md). Não são pendências externas; mudanças exigem
+nova decisão arquitetural.
+
+| ID | Decisão | Efeito |
+|---|---|---|
+| F1 | Diesel síncrono + pool `r2d2`, acesso via traits e `spawn_blocking` | Sem `diesel-async` na Fase 1; porta de repositório preserva evolução |
+| F2 | `POSTGRES_USER` superusuário só para administração/testes; `POSTGRES_APP_USER` não-superuser com DDL em `public` | `DATABASE_URL` nunca usa superusuário; split migrator/runtime adiado |
+| F3 | Linkagem dinâmica com `libpq` no Alpine (`-crt-static` desabilitado) | Runtime instala `libpq`; build estático rejeitado |
+| F4 | Crate `accurit_backend` + binário `backend`, edition 2024 | `main.rs` fino; testes usam a biblioteca |
+| F5 | Rate limit com chave abstrata; Fase 1 usa IP de `X-Real-IP` | Fase 2 troca para `escritorio_id` sem reescrever o middleware |
+| F6 | Testes de integração no serviço `backend-test` (profile `tools`) | Banco descartável por teste; sem dependência de toolchain no host |
 
 ## D1 — Modelo de contratação SERPRO
 
@@ -141,8 +156,13 @@ aprovação de arquitetura.
 
 ## Itens de infraestrutura já resolvidos
 
-- `backend/Diesel.toml` renomeado para `backend/diesel.toml` no workspace; será versionado com o
+- `backend/Diesel.toml` renomeado para `backend/diesel.toml` no workspace; versionado com o
   scaffold do backend na Fase 1.
 - `.gitattributes` com `* text=auto eol=lf` e normalização de CRLF versionados.
 - `docs/Serpro/Preços` confirmado no git com “Preços” UTF-8.
 - `CERTIFICATE_MASTER_KEY=change-me-32-bytes` deve falhar no startup.
+- Três migrations da Fase 1 criadas e validadas (`escritorios`, `usuarios`, `auditoria_eventos`).
+- `POSTGRES_APP_USER` criado pelo init do Postgres como role não-superuser.
+- `schema.rs` gerado por `schema-tool` e formatado com `rustfmt`, sem `diesel_cli` no runtime.
+- `backend-test` executa a suíte no container com banco descartável por teste.
+- Smoke `.ps1`/`.sh` cobre as rotas públicas, health, redirect de login, envelope 404 e request-id.

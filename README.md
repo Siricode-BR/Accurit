@@ -81,7 +81,7 @@ O produto foi desenhado para eliminar erro operacional e retrabalho: os payloads
 
 | Camada | Tecnologia | Responsabilidade |
 |---|---|---|
-| Backend | Rust 2024, Axum 0.8, Tokio, Diesel 2.2+ | API REST, regras de negócio, integrações SERPRO |
+| Backend | Rust 2024, Axum 0.8, Tokio, Diesel 2.3+ | API REST, regras de negócio, integrações SERPRO |
 | Banco | PostgreSQL 16 (`postgres:16-alpine`) | Persistência multi-tenant e migrations |
 | Web | Next.js (App Router, SSG/SSR) atrás do proxy Nginx | Site institucional, SEO e captação de leads |
 | Admin | Angular 21 (Signals, Standalone) | Painel do escritório: clientes, configurações e Trial |
@@ -144,6 +144,23 @@ docker compose down
 | Portal do cliente | `http://localhost/app/` |
 | Health check da API | `http://localhost/api/v1/health` |
 
+### Validar a stack
+
+```powershell
+docker compose ps
+.\scripts\smoke.ps1
+docker compose --profile tools run --rm backend-test
+docker compose --profile tools run --rm schema-tool
+```
+
+Em shell POSIX, use `./scripts/smoke.sh`. O smoke cobre as rotas públicas, o health check, o
+redirect de `/login`, o envelope 404 e a propagação de `X-Request-Id` pelo proxy.
+
+```bash
+docker run --rm --network container:accurit-proxy -v "$(pwd):/app" -w /app alpine:3.24 \
+  sh -c "apk add --no-cache curl >/dev/null 2>&1 && sh scripts/smoke.sh"
+```
+
 ## Configuração SERPRO
 
 A seleção de ambiente é persistida por escritório em `escritorios.modo_trial_serpro` e resolvida no backend a cada requisição.
@@ -167,65 +184,72 @@ A seleção de ambiente é persistida por escritório em `escritorios.modo_trial
 Accurit/
 ├── docs/                           # referências oficiais SERPRO (cópias de trabalho)
 │   ├── ADR/                        # decisões arquiteturais
-│   └── Serpro/
-│       ├── Divida-Ativa/
-│       ├── Integra-Contador/
-│       └── Preços/
+│   ├── Serpro/
+│   │   ├── Divida-Ativa/
+│   │   ├── Integra-Contador/
+│   │   └── Preços/
+│   └── DECISOES-PENDENTES.md
 ├── backend/                        # Rust 2024 · Axum · Diesel · DDD
 │   ├── Cargo.toml
 │   ├── Cargo.lock
 │   ├── diesel.toml
-│   ├── Dockerfile
+│   ├── Dockerfile                  # builder, tester, diesel-tool e runtime
 │   ├── migrations/
-│   │   └── 20261020120000_create_escritorios/
-│   │       ├── up.sql
-│   │       └── down.sql
+│   │   ├── 20261021120000_create_escritorios/
+│   │   ├── 20261021120100_create_usuarios/
+│   │   └── 20261021120200_create_auditoria_eventos/
+│   ├── scripts/
+│   │   └── generate-schema.sh      # schema.rs via container descartável
+│   ├── tests/                      # migrations, política e HTTP
 │   └── src/
-│       ├── main.rs                 # bootstrap, migrations e servidor Axum
+│       ├── main.rs                 # bootstrap fino sobre accurit_backend
 │       ├── lib.rs
+│       ├── startup.rs              # retry, advisory lock, pool e graceful shutdown
 │       ├── domain/
 │       │   ├── auth/
-│       │   ├── tenancy/
-│       │   ├── clientes/
-│       │   ├── certificados/
-│       │   ├── procuracoes/
-│       │   ├── divida_ativa/
-│       │   ├── integra_contador/
-│       │   └── serpro/
-│       ├── application/            # casos de uso e orquestração
+│       │   └── tenancy/
+│       ├── application/            # portas e caso de uso de saúde
 │       ├── infrastructure/
-│       │   ├── persistence/        # repositórios Diesel
-│       │   ├── serpro/             # clientes HTTP, OAuth2 e mTLS
-│       │   └── crypto/             # AES-256-GCM para A1/tokens
+│       │   ├── config/             # configuração tipada e fail-fast
+│       │   ├── observability.rs
+│       │   └── persistence/        # pool, migrations, schema e saúde
 │       └── presentation/
 │           ├── routes/
 │           ├── handlers/
 │           ├── dto/
-│           └── middleware/         # auth, tenancy, request-id, rate limit
+│           ├── error.rs
+│           ├── state.rs
+│           └── middleware/         # request-id, CORS, headers e rate limit
 ├── admin/                          # Angular 21 · painel do escritório
 │   ├── Dockerfile
 │   ├── package.json
 │   └── src/app/
-│       ├── core/
-│       ├── features/
-│       │   ├── auth/
-│       │   ├── clientes/
-│       │   ├── configuracoes/
-│       │   └── trial/
-│       └── shared/
+│       ├── core/api.config.ts
+│       ├── data/saude.service.ts
+│       ├── features/dashboard/
+│       └── app.ts / app.config.ts / app.routes.ts
 ├── client/                         # Angular 21 · portal do cliente
 │   ├── Dockerfile
 │   ├── package.json
 │   └── src/app/
-│       ├── core/
-│       ├── features/
-│       └── shared/
+│       ├── core/api.config.ts
+│       ├── data/saude.service.ts
+│       ├── features/inicio/
+│       └── app.ts / app.config.ts / app.routes.ts
 ├── web/                            # Next.js · App Router
 │   ├── Dockerfile
 │   ├── package.json
 │   └── src/app/
+│       ├── layout.tsx
+│       ├── page.tsx
+│       └── globals.css
 ├── nginx/
 │   └── nginx.conf                  # roteamento /, /admin, /app, /login, /api
+├── docker/postgres/init/
+│   └── 01-app-role.sh              # cria POSTGRES_APP_USER não-superuser
+├── scripts/
+│   ├── init-env.sh / init-env.ps1  # gera .env sem imprimir segredos
+│   └── smoke.sh / smoke.ps1        # validação ponta a ponta pelo proxy
 ├── docker-compose.yml
 ├── .env.example
 ├── README.md

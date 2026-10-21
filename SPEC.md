@@ -775,14 +775,19 @@ Todas as tabelas de negócio são isoladas por `escritorio_id`. Índices compost
 ```sql
 CREATE TABLE escritorios (
     id UUID PRIMARY KEY,
+    slug VARCHAR(40) NOT NULL UNIQUE CHECK (slug ~ '^[a-z0-9-]{3,40}$'),
     nome TEXT NOT NULL,
-    cnpj VARCHAR(14) UNIQUE,
+    cnpj VARCHAR(14) UNIQUE CHECK (cnpj IS NULL OR cnpj ~ '^[0-9]{14}$'),
     modo_trial_serpro BOOLEAN NOT NULL DEFAULT TRUE,
-    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    versao BIGINT NOT NULL DEFAULT 1,
     atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    versao BIGINT NOT NULL DEFAULT 1
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
+
+O `slug` é o identificador público estável do escritório, normalizado na aplicação e validado pelo
+`CHECK`. O CNPJ é opcional no cadastro inicial, mas, quando informado, contém exatamente 14 dígitos.
+`versao` é reservado para concorrência otimista nas fases seguintes.
 
 ### 9.2 `usuarios`
 
@@ -791,22 +796,27 @@ CREATE TABLE usuarios (
     id UUID PRIMARY KEY,
     escritorio_id UUID NOT NULL REFERENCES escritorios(id),
     email TEXT NOT NULL,
+    cpf VARCHAR(11),
     senha_hash TEXT NOT NULL,
-    cpf VARCHAR(11) NOT NULL,
     papel VARCHAR(32) NOT NULL CHECK (papel IN ('ADMIN', 'OPERADOR', 'CLIENTE')),
     ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    ultimo_login_em TIMESTAMPTZ,
+    falhas_consecutivas INTEGER NOT NULL DEFAULT 0,
+    bloqueado_ate TIMESTAMPTZ,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CHECK (cpf ~ '^[0-9]{11}$'),
+    CHECK (cpf IS NULL OR cpf ~ '^[0-9]{11}$'),
+    CHECK (papel = 'CLIENTE' OR cpf IS NOT NULL),
     UNIQUE (escritorio_id, email),
     UNIQUE (escritorio_id, cpf)
 );
 CREATE INDEX idx_usuarios_escritorio ON usuarios(escritorio_id);
 ```
 
-O CPF do usuário operador é obrigatório, normalizado para 11 dígitos, validado pelos dígitos
-verificadores na aplicação e **nunca** incluído no JWT, em logs ou em respostas da API. Ele é
-carregado do banco por requisição (com cache curto) e injetado apenas na camada
-`infrastructure/serpro` para o header operacional.
+O CPF é obrigatório para `ADMIN` e `OPERADOR` e opcional para `CLIENTE`; quando presente, é
+normalizado para 11 dígitos e validado pelos dígitos verificadores na aplicação. O CPF do operador
+**nunca** é incluído no JWT, em logs ou em respostas da API. Ele é carregado do banco por requisição
+(com cache curto) e injetado apenas na camada `infrastructure/serpro` para o header operacional.
+`falhas_consecutivas` e `bloqueado_ate` preparam o bloqueio temporário de login da Fase 2.
 
 ### 9.3 `clientes`
 
@@ -969,6 +979,10 @@ CREATE INDEX idx_auditoria_escritorio_criado
     ON auditoria_eventos(escritorio_id, criado_em DESC);
 ```
 
+`usuario_id` e `entidade_id` são referências lógicas sem `FOREIGN KEY`, para preservar o histórico
+de auditoria mesmo se o usuário ou a entidade forem removidos. O acesso continua isolado por
+`escritorio_id` e o índice composto atende a consulta cronológica do tenant.
+
 ### 9.10 Retenção e minimização
 
 - Não registrar CPF/CNPJ completo, certificados, tokens ou payloads sensíveis sem política explícita.
@@ -1030,69 +1044,85 @@ Todos os endpoints de domínio validam o tenant no repositório e ignoram qualqu
 - Mapear 401/403 do SERPRO para códigos distintos (`SERPRO_UNAUTHORIZED`, `SERPRO_PROXY_DENIED`).
 - Paginação usa `page`/`pageSize` com limite máximo e ordenação determinística.
 
+### 10.4 Health check
+
+`GET /api/v1/health` é público, não exige autenticação e é isento de rate limit. Com o banco
+saudável:
+
+```json
+{"status":"ok","service":"accurit-backend","db":"ok"}
+```
+
+Com o banco indisponível, retorna `503` e mantém o mesmo envelope de erro, acrescido do estado do
+serviço:
+
+```json
+{
+  "error": {
+    "code": "BANCO_INDISPONIVEL",
+    "message": "Banco de dados indisponível.",
+    "requestId": "01J9Z8Y6Q4W3T2S1R0P9N8M7K6",
+    "details": []
+  },
+  "status": "unavailable",
+  "service": "accurit-backend",
+  "db": "unavailable"
+}
+```
+
+- O `requestId` aceita apenas `^[0-9A-Za-z_-]{8,64}$`; caso contrário, gera UUIDv7 e sempre ecoa o valor efetivo.
+- Respostas da API usam `Cache-Control: no-store` e `X-Content-Type-Options: nosniff`.
+- O rate limit padrão é 30 requisições/s com burst 60, chaveado por IP (`X-Real-IP`) na Fase 1; a abstração `RateLimitKey` permite trocar a chave para `escritorio_id` na Fase 2.
+- `404`, `405`, `429` e `503` usam o envelope de erro da seção 10.3; `429` inclui `Retry-After: 1`.
+
 ---
 
 ## 11. Startup, migrations e operação
 
-As migrations são SQL versionado em `backend/migrations/` e embutidas no binário por `diesel_migrations::embed_migrations!`. O startup aguarda o PostgreSQL, executa as migrations pendentes e só então inicia o Axum.
+As migrations são SQL versionado em `backend/migrations/` e embutidas no binário por `diesel_migrations::embed_migrations!`. O startup aguarda o PostgreSQL com retry limitado, executa as migrations pendentes sob advisory lock e só então cria o pool e inicia o Axum.
 
 ```rust
-use diesel::pg::PgConnection;
-use diesel::Connection;
-use diesel::RunQueryDsl;
-use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use std::time::Duration;
-
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
-fn connect_with_retry(database_url: &str, max_attempts: u32) -> PgConnection {
-    let mut attempt = 1;
-    loop {
-        match PgConnection::establish(database_url) {
-            Ok(conn) => return conn,
-            Err(err) if attempt >= max_attempts => {
-                panic!("PostgreSQL indisponível após {attempt} tentativas: {err}");
-            }
-            Err(_) => {
-                std::thread::sleep(Duration::from_secs(2_u64.pow(attempt.min(4))));
-                attempt += 1;
-            }
-        }
-    }
-}
+// startup.rs (resumo da ordem real)
+let config = Config::from_env()?;
+let database_url = config.database.url.expose_secret().to_owned();
 
-fn run_migrations(database_url: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut conn = connect_with_retry(database_url, 15);
+let aplicadas = tokio::task::spawn_blocking(move || {
+    let conexao = conectar_com_retry(&database_url, 15)?; // 1s, backoff exponencial, teto 5s
+    aplicar_migrations_com_lock(conexao, MIGRATIONS)      // guard RAII dentro da função
+}).await??;
 
-    // Evita execução concorrente em múltiplas réplicas.
-    diesel::sql_query("SELECT pg_advisory_lock(727001)").execute(&mut conn)?;
-    let result = conn.run_pending_migrations(MIGRATIONS);
-    diesel::sql_query("SELECT pg_advisory_unlock(727001)").execute(&mut conn)?;
+let database_url = config.database.url.expose_secret().to_owned();
+let pool = tokio::task::spawn_blocking(move || criar_pool(&database_url)).await??;
 
-    result.map_err(|e| format!("falha ao executar migrations: {e}"))?;
-    Ok(())
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let database_url = std::env::var("DATABASE_URL")?;
-    run_migrations(&database_url)?;
-
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
-    let app = axum::Router::new(); // estado, rotas e middlewares reais
-    axum::serve(listener, app).await?;
-    Ok(())
-}
+let app = rotas(AppState::new(pool));
+let listener = TcpListener::bind(("0.0.0.0", config.port)).await?;
+axum::serve(listener, app)
+    .with_graceful_shutdown(encerrar_em_sigterm_ou_sigint())
+    .await?;
 ```
+
+Ordem obrigatória:
+
+1. Carregar e validar a configuração (`APP_ENV`, `DATABASE_URL`, segredos, CORS, timeouts).
+2. Conectar ao PostgreSQL com retry/backoff limitado; falha após 15 tentativas encerra com erro, sem `panic`.
+3. Adquirir `pg_advisory_lock(727001)` em uma conexão dedicada. O guard libera o lock ao sair do escopo, inclusive em erro.
+4. Executar `run_pending_migrations` em `spawn_blocking` para não bloquear o runtime Tokio.
+5. Registrar a quantidade de migrations aplicadas e liberar o lock.
+6. Criar o pool Diesel `r2d2`.
+7. Iniciar o Axum em `0.0.0.0:PORT` com graceful shutdown para `SIGTERM`/`SIGINT`.
+8. Expor `GET /api/v1/health` somente depois que migrations e pool estiverem prontos.
 
 Observações de produção:
 
-- Ajustar o caminho de `embed_migrations!("migrations")` ao diretório real relativo ao crate backend e habilitar o recurso PostgreSQL do `diesel_migrations`.
-- O pool Diesel é criado após as migrations; o exemplo usa conexão direta para o harness.
-- Cada migration contém `up.sql` e `down.sql`; migration aplicada em ambiente compartilhado nunca é editada.
-- Em múltiplas réplicas, o advisory lock evita corrida; a estratégia de deploy deve ser compatível com migrations longas.
+- O pool Diesel é criado após as migrations e é a única fonte de conexões da aplicação.
+- Cada migration contém `up.sql` e `down.sql`; durante o pré-MVP, `down.sql` contém apenas `DROP`.
+- O advisory lock serializa múltiplas réplicas; a estratégia de deploy deve ser compatível com migrations longas.
 - Se uma migration falhar, o processo encerra com erro claro — nunca inicia parcialmente.
 - `docker compose up --build` é o caminho suportado; `diesel_cli` não é necessário no host.
+- O usuário de aplicação `POSTGRES_APP_USER` é não-superuser e recebe apenas os privilégios de DDL em `public` necessários às migrations. O superusuário `POSTGRES_USER` é usado somente por administração e pelos serviços do profile `tools` (`schema-tool`, `backend-test`).
+- `backend/src/infrastructure/persistence/schema.rs` é gerado fora do runtime com `docker compose --profile tools run --rm schema-tool` e formatado por `rustfmt`; o build de runtime não executa `diesel_cli`.
 
 ---
 

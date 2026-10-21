@@ -4,7 +4,9 @@
 
 **Legenda:** `[ ]` pendente · `[x]` concluído · `[~]` em andamento. A marcação deve refletir o estado real do repositório.
 
-**Estado atual:** a Fase 0 (reconciliação documental e configuração) foi concluída. Nenhum item de implementação das fases seguintes foi iniciado.
+**Estado atual:** a Fase 0 (reconciliação documental e configuração) foi concluída. A Fase 1
+(fundação, infraestrutura e base multi-tenant) foi implementada e validada tecnicamente; o aceite
+formal está pendente e a Fase 2 não foi iniciada.
 
 ---
 
@@ -21,34 +23,34 @@
 ## Fase 1 — Fundação, infraestrutura e base multi-tenant
 
 ### 1. Banco de Dados
-- [ ] Configurar PostgreSQL 16 (`postgres:16-alpine`), volume persistente, healthcheck e usuário de aplicação não-superuser (`POSTGRES_APP_USER`).
-- [ ] Criar migrations iniciais para `escritorios`, `usuarios` e tabelas de suporte.
-- [ ] Criar `modo_trial_serpro BOOLEAN NOT NULL DEFAULT TRUE` no `CREATE TABLE escritorios` (sem `ALTER`).
-- [ ] Criar índices e constraints de isolamento por `escritorio_id`.
-- [ ] Criar migration de `auditoria_eventos` para ações administrativas.
-- [ ] Validar automaticamente a política "sem `ALTER`" e o par `up.sql`/`down.sql` das migrations.
+- [x] Configurar PostgreSQL 16 (`postgres:16-alpine`), volume persistente, healthcheck e usuário de aplicação não-superuser (`POSTGRES_APP_USER`).
+- [x] Criar migrations iniciais para `escritorios`, `usuarios` e tabelas de suporte.
+- [x] Criar `modo_trial_serpro BOOLEAN NOT NULL DEFAULT TRUE` no `CREATE TABLE escritorios` (sem `ALTER`).
+- [x] Criar índices e constraints de isolamento por `escritorio_id`.
+- [x] Criar migration de `auditoria_eventos` para ações administrativas.
+- [x] Validar automaticamente a política "sem `ALTER`" e o par `up.sql`/`down.sql` das migrations.
 
 ### 2. Backend (Rust / DDD)
-- [ ] Preparar as camadas `domain/`, `application/`, `infrastructure/` e `presentation/` com regras de dependência.
-- [ ] Publicar `lib.rs` com os módulos e consumir `accurit_backend` a partir de `main.rs`.
-- [ ] Configurar Axum 0.8, Tokio, pool Diesel 2.2+ e `diesel_migrations::embed_migrations!`.
-- [ ] Executar migrations automaticamente no startup, com retry/backoff e advisory lock para múltiplas réplicas.
-- [ ] Expor `GET /api/v1/health` com status do banco.
-- [ ] Configurar variáveis via `.env.example`, `tracing`/`request-id` e sem credenciais reais.
-- [ ] Implementar validação fail-fast da configuração (`JWT_SECRET` ≥ 32 bytes, `CERTIFICATE_MASTER_KEY` = base64 de 32 bytes, URLs/booleanos/inteiros válidos).
-- [ ] Implementar middlewares de request-id, CORS restrito, headers de segurança e rate limit por IP (chave abstrata até a Fase 2).
-- [ ] Versionar `schema.rs` em `src/infrastructure/persistence/schema.rs`, gerado fora do runtime por target `diesel-tool`.
-- [ ] Validar a linkagem dinâmica com `libpq` no Alpine e a imagem de runtime.
-- [ ] Executar testes de integração em container (`backend-test`, profile `tools`).
-- [ ] Executar smoke test da stack completa pelo proxy.
+- [x] Preparar as camadas `domain/`, `application/`, `infrastructure/` e `presentation/` com regras de dependência.
+- [x] Publicar `lib.rs` com os módulos e consumir `accurit_backend` a partir de `main.rs`.
+- [x] Configurar Axum 0.8, Tokio, pool Diesel 2.3+ e `diesel_migrations::embed_migrations!`.
+- [x] Executar migrations automaticamente no startup, com retry/backoff e advisory lock para múltiplas réplicas.
+- [x] Expor `GET /api/v1/health` com status do banco.
+- [x] Configurar variáveis via `.env.example`, `tracing`/`request-id` e sem credenciais reais.
+- [x] Implementar validação fail-fast da configuração (`JWT_SECRET` ≥ 32 bytes, `CERTIFICATE_MASTER_KEY` = base64 de 32 bytes, URLs/booleanos/inteiros válidos).
+- [x] Implementar middlewares de request-id, CORS restrito, headers de segurança e rate limit por IP (chave abstrata até a Fase 2).
+- [x] Versionar `schema.rs` em `src/infrastructure/persistence/schema.rs`, gerado fora do runtime por target `diesel-tool`.
+- [x] Validar a linkagem dinâmica com `libpq` no Alpine e a imagem de runtime.
+- [x] Executar testes de integração em container (`backend-test`, profile `tools`).
+- [x] Executar smoke test da stack completa pelo proxy.
 
 ### 3. Frontend (Angular / Next.js)
-- [ ] Configurar Admin Angular 21 e Client Angular 21 com Signals, Standalone Components e organização por features.
-- [ ] Configurar o app Next.js 16 (`web`) com App Router, SSG/SSR e build standalone.
-- [ ] Preparar Nginx para `/`, `/admin/`, `/app/`, `/login` e `/api/`.
-- [ ] Validar a subida completa com `docker compose up --build`.
+- [x] Configurar Admin Angular 21 e Client Angular 21 com Signals, Standalone Components e organização por features.
+- [x] Configurar o app Next.js 16 (`web`) com App Router, SSG/SSR e build standalone.
+- [x] Preparar Nginx para `/`, `/admin/`, `/app/`, `/login` e `/api/`.
+- [x] Validar a subida completa com `docker compose up --build`.
 
-**Aceite:** banco saudável, migrations executadas pelo backend sem `diesel_cli`, health check HTTP 200 e todas as rotas públicas respondendo pelo proxy.
+**Aceite:** banco saudável, migrations executadas pelo backend sem `diesel_cli`, health check HTTP 200 e todas as rotas públicas respondendo pelo proxy. Itens verificados; aceite formal do usuário pendente.
 
 ---
 
@@ -59,7 +61,7 @@
 - [ ] Restringir `tipo` a `PF`/`PJ` e regimes a `MEI`, `SIMPLES_NACIONAL`, `LUCRO_PRESUMIDO`, `LUCRO_REAL`.
 - [ ] Criar `UNIQUE (escritorio_id, cpf_cnpj)` e índices `(escritorio_id, tipo)` e `(escritorio_id, porte_regime)`.
 - [ ] Criar `certificados_a1`, `credenciais_serpro`, `procuracoes`, `tokens_serpro` e `consultas_fiscais` conforme o modelo.
-- [ ] Adicionar `usuarios.cpf VARCHAR(11) NOT NULL` com CHECK de 11 dígitos e `UNIQUE (escritorio_id, cpf)`.
+- [ ] Consolidar a regra de CPF de usuário: obrigatório para `ADMIN`/`OPERADOR` na Fase 1; definir o requisito de CPF para `CLIENTE` no fluxo de cadastro da Fase 2.
 - [ ] Definir política de retenção e minimização de dados fiscais.
 
 ### 2. Backend (Rust / DDD)
@@ -197,7 +199,7 @@
 - [ ] Testes unitários de domínio e testes de integração Axum/Diesel.
 - [ ] Testes de isolamento multi-tenant e IDOR em todas as rotas relevantes.
 - [ ] Testes com mocks SERPRO para token OAuth2, SAPI, envelopes, procuração, Trial, Dívida Ativa, `202`/`204`/`304` e assinatura XML.
-- [ ] `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test` e `cargo audit`.
+- [ ] `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test --locked` e `cargo audit`.
 - [ ] Hardening de mTLS, ICP-Brasil, rotação de certificados, segredos, CORS restrito, rate limits e logs redigidos.
 - [ ] Validar comportamento quando uma migration falha e quando há múltiplas réplicas.
 - [ ] Configurar observabilidade, request-id, métricas e alertas sem PII.
