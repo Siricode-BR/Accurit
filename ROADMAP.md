@@ -6,7 +6,9 @@
 
 **Estado atual:** a Fase 0 (reconciliação documental e configuração) foi concluída. A Fase 1
 (fundação, infraestrutura e base multi-tenant) foi implementada e validada tecnicamente; o aceite
-formal está pendente e a Fase 2 não foi iniciada.
+formal está pendente. A Fase 2A (login por aplicação, no painel e no portal do cliente) foi
+implementada na branch `feat/fase-2a-login-por-app` e aguarda aceite formal; a Fase 2B (clientes,
+certificados e procurações) não foi iniciada.
 
 ---
 
@@ -56,7 +58,12 @@ formal está pendente e a Fase 2 não foi iniciada.
 
 ## Fase 2 — Autenticação, escritórios e clientes
 
+O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/login` → `/app/login`) está
+implementado e registrado no [ADR-0009](docs/ADR/0009-autenticacao-por-aplicacao.md); o restante da
+fase (2B) segue pendente.
+
 ### 1. Banco de Dados
+- [x] Criar `sessoes` com audiência (`ADMIN`/`CLIENT`), família de refresh, hash SHA-256 único, expiração, revogação e índices, sem `ALTER` (Fase 2A).
 - [ ] Criar `clientes` com `escritorio_id`, `tipo` (`PF`/`PJ`), `porte_regime`, `cpf_cnpj`, nome/razão social, contatos e timestamps.
 - [ ] Restringir `tipo` a `PF`/`PJ` e regimes a `MEI`, `SIMPLES_NACIONAL`, `LUCRO_PRESUMIDO`, `LUCRO_REAL`.
 - [ ] Criar `UNIQUE (escritorio_id, cpf_cnpj)` e índices `(escritorio_id, tipo)` e `(escritorio_id, porte_regime)`.
@@ -65,7 +72,9 @@ formal está pendente e a Fase 2 não foi iniciada.
 - [ ] Definir política de retenção e minimização de dados fiscais.
 
 ### 2. Backend (Rust / DDD)
-- [ ] Implementar login JWT com claims `escritorio_id`, `usuario_id` e `role`.
+- [x] Implementar login JWT por audiência com claims `sub`, `escritorio_id`, `role` e `aud` (`admin`/`client`); token de uma audiência é rejeitado na outra (Fase 2A).
+- [x] Implementar refresh opaco com rotação e família, reuso revogando a sessão, logout, lockout por tentativas, rate limit de login e auditoria (`AUTH_LOGIN_SUCESSO`, `AUTH_LOGIN_FALHA`, `AUTH_LOGOUT`, `AUTH_REFRESH_REUSO`) (Fase 2A).
+- [x] Entregar o bootstrap do primeiro usuário (`bootstrap-user`) sem cadastro público (Fase 2A).
 - [ ] Aplicar middleware de tenancy e enforcement nos repositórios Diesel.
 - [ ] Implementar CRUD de clientes PF/PJ com validação de dígitos verificadores de CPF/CNPJ.
 - [ ] Implementar filtros da API: `Todos`, `CPF`, `CNPJ - MEI`, `CNPJ - Simples Nacional`, `CNPJ - Lucro Presumido`, `CNPJ - Lucro Real`.
@@ -74,13 +83,14 @@ formal está pendente e a Fase 2 não foi iniciada.
 - [ ] Cobrir IDOR e isolamento multi-tenant com testes.
 
 ### 3. Frontend (Angular / Next.js)
-- [ ] Implementar login, guards por papel e tratamento consistente de 401/403.
+- [x] Implementar login por aplicação (`/admin/login` e `/app/login`), guards de sessão, renovação automática no 401, `returnUrl` validado e rota de acesso negado (Fase 2A).
+- [ ] Implementar guards por papel nos fluxos de clientes e tratamento consistente de 403.
 - [ ] Criar telas de cadastro, edição, detalhes e listagem de clientes.
 - [ ] Disponibilizar todos os filtros tributários e sincronizá-los com query params.
 - [ ] Implementar estados de loading, erro, vazio, validação e paginação.
 - [ ] Criar páginas institucionais e formulários de lead no app Next.js (`web`).
 
-**Aceite:** cliente PF/PJ cadastrado, filtrado e editado com isolamento por escritório; usuário nunca acessa dados de outro tenant.
+**Aceite (2A):** login independente no painel e no portal, com refresh rotativo, logout revogando a sessão e token de uma audiência rejeitado na outra; itens implementados, aceite formal pendente. **Aceite (2B):** cliente PF/PJ cadastrado, filtrado e editado com isolamento por escritório; usuário nunca acessa dados de outro tenant.
 
 ---
 

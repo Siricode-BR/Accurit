@@ -103,8 +103,8 @@ Request
 | Aplicação | Rota | Renderização | Arquitetura |
 |---|---|---|---|
 | Web | `/` | Next.js App Router (SSG/SSR) | SEO, conteúdo institucional e formulário de lead |
-| Admin | `/admin` | Angular 21 SPA/CSR | Signals, Standalone Components, Clean Arch por feature |
-| Cliente | `/app` e `/login` | Angular 21 SPA/CSR | Signals, Standalone Components, Clean Arch por feature |
+| Admin | `/admin` e `/admin/login` | Angular 21 SPA/CSR | Signals, Standalone Components, Clean Arch por feature |
+| Cliente | `/app`, `/app/login` e `/login` (301) | Angular 21 SPA/CSR | Signals, Standalone Components, Clean Arch por feature |
 
 ```text
 src/app/
@@ -124,6 +124,14 @@ Convenções:
 - Estado de tela usa `signal()`; valores derivados usam `computed()`.
 - Guards por papel tratam 401/403 de forma consistente.
 - O toggle de Trial é apenas apresentação; a autoridade é sempre o backend.
+
+O login é por aplicação (Fase 2A, [ADR-0009](docs/ADR/0009-autenticacao-por-aplicacao.md)): o painel
+autentica em `/admin/login` contra a audiência `admin` e o portal em `/app/login` contra a audiência
+`client`; `/login` responde `301` para `/app/login`. Cada app consome somente o seu grupo de rotas
+(`/api/v1/auth/admin/*` ou `/api/v1/auth/client/*`) e um token emitido para uma audiência é rejeitado
+na outra. O access token fica apenas em memória (`signal`); a renovação usa cookie `HttpOnly` com
+rotação e o interceptor renova uma única vez antes de repetir a requisição. Falha de renovação leva
+ao login com `returnUrl` interno validado e o acesso proibido tem a rota dedicada `/acesso-negado`.
 
 ### 2.3 Infraestrutura e rede
 
@@ -983,7 +991,34 @@ CREATE INDEX idx_auditoria_escritorio_criado
 de auditoria mesmo se o usuário ou a entidade forem removidos. O acesso continua isolado por
 `escritorio_id` e o índice composto atende a consulta cronológica do tenant.
 
-### 9.10 Retenção e minimização
+### 9.10 `sessoes`
+
+```sql
+CREATE TABLE sessoes (
+    id UUID PRIMARY KEY,
+    escritorio_id UUID NOT NULL REFERENCES escritorios(id),
+    usuario_id UUID NOT NULL REFERENCES usuarios(id),
+    audiencia VARCHAR(8) NOT NULL CHECK (audiencia IN ('ADMIN', 'CLIENT')),
+    familia_id UUID NOT NULL,
+    refresh_hash CHAR(64) NOT NULL UNIQUE,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expira_em TIMESTAMPTZ NOT NULL,
+    revogada_em TIMESTAMPTZ,
+    ip INET,
+    user_agent TEXT,
+    CHECK (expira_em > criado_em)
+);
+CREATE INDEX idx_sessoes_escritorio_usuario ON sessoes(escritorio_id, usuario_id);
+CREATE INDEX idx_sessoes_familia ON sessoes(familia_id);
+```
+
+`refresh_hash` guarda apenas o SHA-256 do refresh token opaco — nenhum token em claro é persistido.
+`familia_id` agrupa a cadeia de rotações: cada renovação cria uma linha nova e revoga a anterior, e o
+reuso de um token já rotacionado revoga toda a família e audita `AUTH_REFRESH_REUSO`. `revogada_em`
+marca logout e revogações; a sessão vale de `criado_em` até `expira_em`, conforme a audiência (painel
+8 h, portal 7 dias). O isolamento continua por `escritorio_id`.
+
+### 9.11 Retenção e minimização
 
 - Não registrar CPF/CNPJ completo, certificados, tokens ou payloads sensíveis sem política explícita.
 - `request_redigido`/`response_redigido` guardam apenas o necessário para auditoria e suporte.
@@ -998,8 +1033,14 @@ de auditoria mesmo se o usuário ou a entidade forem removidos. O acesso continu
 
 | Método | Rota | Descrição |
 |---|---|---|
-| `POST` | `/api/v1/auth/login` | Autenticação e emissão de JWT |
-| `GET` | `/api/v1/auth/me` | Contexto do usuário autenticado |
+| `POST` | `/api/v1/auth/admin/login` | Login do painel (audiência `admin`; papéis `ADMIN`/`OPERADOR`) |
+| `POST` | `/api/v1/auth/admin/refresh` | Renovação rotativa via cookie do painel |
+| `POST` | `/api/v1/auth/admin/logout` | Revoga a sessão do painel e limpa o cookie |
+| `GET` | `/api/v1/auth/admin/me` | Contexto do usuário autenticado no painel |
+| `POST` | `/api/v1/auth/client/login` | Login do portal (audiência `client`; papel `CLIENTE`) |
+| `POST` | `/api/v1/auth/client/refresh` | Renovação rotativa via cookie do portal |
+| `POST` | `/api/v1/auth/client/logout` | Revoga a sessão do portal e limpa o cookie |
+| `GET` | `/api/v1/auth/client/me` | Contexto do usuário autenticado no portal |
 | `GET` | `/api/v1/clientes?filtro=...` | Listagem paginada com filtro tributário |
 | `POST` | `/api/v1/clientes` | Cadastro PF/PJ |
 | `GET` | `/api/v1/clientes/{id}` | Detalhe do cliente |
@@ -1012,6 +1053,8 @@ de auditoria mesmo se o usuário ou a entidade forem removidos. O acesso continu
 | `GET` | `/api/v1/admin/serpro/configuracao` | Estado atual do ambiente SERPRO |
 | `PATCH` | `/api/v1/admin/serpro/trial` | Alternância do modo Trial |
 | `GET` | `/api/v1/health` | Health check |
+
+Autenticação (Fase 2A, [ADR-0009](docs/ADR/0009-autenticacao-por-aplicacao.md)): o login recebe `{ escritorio, email, senha }` e responde `{ accessToken, expiresIn, usuario }` com `Set-Cookie` do refresh; `/me` exige `Authorization: Bearer` com a claim `aud` da audiência e o papel correspondente (`ADMIN`/`OPERADOR` no painel, `CLIENTE` no portal). `refresh` e `logout` usam somente o cookie `HttpOnly` (`SameSite=Strict`, `Path=/api/v1/auth/{admin|client}`) com `Content-Type: application/json` e `X-Requested-With: accurit`; a rotação invalida o token anterior e o reuso revoga a família. Credencial inválida responde sempre `401 AUTH_INVALID_CREDENTIALS` (sem enumeração), com lockout após 5 falhas por 900 s e rate limit de 10 r/m (burst 5) por IP+caminho+slug. A auditoria registra `AUTH_LOGIN_SUCESSO`, `AUTH_LOGIN_FALHA`, `AUTH_LOGOUT` e `AUTH_REFRESH_REUSO`.
 
 Todos os endpoints de domínio validam o tenant no repositório e ignoram qualquer `escritorio_id` enviado pelo usuário.
 

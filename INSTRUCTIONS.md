@@ -82,6 +82,14 @@ Copie `.env.example` para `.env` e preencha os valores. Nunca versione `.env`, c
 | `POSTGRES_APP_USER` / `POSTGRES_APP_PASSWORD` | Sim | Usuário de aplicação não-superuser, criado pelo init do Postgres |
 | `TEST_DATABASE_ADMIN_URL` | Tools | Conexão de superusuário usada por `backend-test`; `schema-tool` monta a conexão administrativa a partir de `POSTGRES_*` |
 | `JWT_SECRET` | Sim | Segredo de assinatura dos tokens de sessão (≥ 32 bytes) |
+| `AUTH_ACCESS_TTL_SECS` | Não | Validade do access token em segundos (padrão 900) |
+| `AUTH_REFRESH_TTL_ADMIN_SECS` | Não | Validade do refresh do painel em segundos (padrão 28800) |
+| `AUTH_REFRESH_TTL_CLIENT_SECS` | Não | Validade do refresh do portal em segundos (padrão 604800) |
+| `AUTH_MAX_FAILED_ATTEMPTS` | Não | Falhas consecutivas antes do bloqueio (padrão 5) |
+| `AUTH_LOCKOUT_SECS` | Não | Duração do bloqueio de login em segundos (padrão 900) |
+| `AUTH_COOKIE_SECURE` | Não | `true` por padrão no Compose; `false` só com `APP_ENV=development` |
+| `AUTH_ARGON2_MEMORY_KIB` / `AUTH_ARGON2_ITERATIONS` / `AUTH_ARGON2_PARALLELISM` | Não | Ajuste opcional do Argon2id (padrões OWASP: 19456/2/1) |
+| `BOOTSTRAP_USER_PASSWORD` | Tools | Senha do primeiro usuário criado por `bootstrap-user` (≥ 8 caracteres); nunca versionar |
 | `CERTIFICATE_MASTER_KEY` | Sim | Chave AES-256-GCM: base64 que decodifica para exatamente 32 bytes; valor de exemplo deve falhar no startup |
 | `CORS_ALLOWED_ORIGINS` | Não | Lista separada por vírgula; vazia não permite nenhuma origem (same-origin via proxy) |
 | `SERPRO_TOKEN_URL` | Sim | `https://gateway.apiserpro.serpro.gov.br/token` |
@@ -121,6 +129,21 @@ JWT_SECRET=change-me
 CERTIFICATE_MASTER_KEY=change-me-32-bytes
 CORS_ALLOWED_ORIGINS=
 
+# --- Autenticação (Fase 2A) ---
+# Sessão: access token (JWT HS256) e refresh token opaco por audiência.
+AUTH_ACCESS_TTL_SECS=900
+AUTH_REFRESH_TTL_ADMIN_SECS=28800
+AUTH_REFRESH_TTL_CLIENT_SECS=604800
+AUTH_MAX_FAILED_ATTEMPTS=5
+AUTH_LOCKOUT_SECS=900
+# `false` só é aceito com APP_ENV=development (HTTP local). Em produção use
+# `true` para que o cookie de refresh só trafegue em HTTPS.
+AUTH_COOKIE_SECURE=false
+# Ajuste opcional do Argon2id; os padrões abaixo seguem a recomendação OWASP.
+# AUTH_ARGON2_MEMORY_KIB=19456
+# AUTH_ARGON2_ITERATIONS=2
+# AUTH_ARGON2_PARALLELISM=1
+
 SERPRO_TOKEN_URL=https://gateway.apiserpro.serpro.gov.br/token
 SERPRO_SAPI_AUTH_URL=https://autenticacao.sapi.serpro.gov.br/authenticate
 SERPRO_INTEGRA_TRIAL_URL=https://gateway.apiserpro.serpro.gov.br/integra-contador-trial/v1
@@ -143,6 +166,20 @@ A chave de trial é configuração de ambiente e **não** deve ser embutida no c
 `CERTIFICATE_MASTER_KEY` deve ser base64 que decodifica para exatamente 32 bytes; o placeholder
 `change-me-32-bytes` é rejeitado no startup com mensagem clara. `JWT_SECRET` precisa ter pelo menos
 32 bytes. Prefira sempre `scripts/init-env.sh`/`scripts/init-env.ps1` para gerar o `.env`.
+
+`AUTH_COOKIE_SECURE` usa `true` por padrão no Compose (produção); o `.env.example` local usa `false`,
+aceito apenas com `APP_ENV=development`. Depois de subir a stack, crie o primeiro usuário — não existe
+cadastro público:
+
+```bash
+docker compose run --rm -e BOOTSTRAP_USER_PASSWORD='troque-esta-senha' backend \
+  bootstrap-user --escritorio-slug demo --escritorio-nome "Escritório Demo" \
+  --email admin@exemplo.com --cpf 00011122233 --papel ADMIN
+```
+
+O comando cria o escritório (se necessário) e o usuário com senha Argon2id; `--papel` aceita `ADMIN`,
+`OPERADOR` ou `CLIENTE` e o `--cpf` é obrigatório exceto para `CLIENTE`. O login do painel é
+`/admin/login` e o do portal, `/app/login`; veja `bootstrap-user --help` para a ajuda completa.
 
 ---
 
@@ -168,6 +205,10 @@ Roteamento no proxy:
 | `/app/` | `client:80` |
 | `/login` | `301` para `/app/login` |
 | `/api/` | `backend:8080` |
+| `/api/v1/auth/admin/login` e `/api/v1/auth/client/login` | `backend:8080` com rate limit de 10 r/m (burst 5) |
+
+O proxy aplica `login_limit` (10 r/m, burst 5) apenas nas rotas de login e repassa `Set-Cookie`/`Cookie`
+sem alteração — inclusive o `Path=/api/v1/auth/{admin|client}` do refresh.
 
 Em produção, apenas o proxy publica portas. Backend, banco e frontends ficam em rede interna
 (`data` interna e `edge` para o proxy). Os serviços do profile `tools` usam as duas redes: `data`
@@ -177,13 +218,14 @@ para o banco e `edge` para baixar dependências durante o teste.
 
 ## 5. Como criar migrations SQL
 
-As migrations ficam em `backend/migrations/` e são embutidas no binário Rust em tempo de compilação por `diesel_migrations::embed_migrations!`. A Fase 1 entrega:
+As migrations ficam em `backend/migrations/` e são embutidas no binário Rust em tempo de compilação por `diesel_migrations::embed_migrations!`. As Fases 1 e 2A entregam:
 
 ```text
 backend/migrations/
 ├── 20261021120000_create_escritorios/
 ├── 20261021120100_create_usuarios/
-└── 20261021120200_create_auditoria_eventos/
+├── 20261021120200_create_auditoria_eventos/
+└── 20261021130000_create_sessoes/
 ```
 
 Crie manualmente uma pasta versionada no padrão aceito pelo Diesel, com `up.sql` e `down.sql`:
@@ -398,6 +440,9 @@ Convenções:
 | Backend falha ao conectar com a role da aplicação | Volume antigo criado antes de `POSTGRES_APP_USER` | Recriar o banco com `docker compose down -v && docker compose up --build` |
 | `schema.rs` desatualizado após migration | Schema não foi regenerado | Rodar `docker compose --profile tools run --rm schema-tool` e revisar o diff |
 | Porta do proxy ocupada | `HTTP_PORT` já está em uso | Ajustar `HTTP_PORT` no `.env` ou encerrar o serviço conflitante |
+| Login responde `401 AUTH_INVALID_CREDENTIALS` mesmo com a senha correta | Usuário inativo (`ativo = FALSE`) ou bloqueado por tentativas | Conferir `usuarios.ativo` e a auditoria `AUTH_LOGIN_FALHA` (campo `motivo`: `USUARIO_INATIVO`, `USUARIO_BLOQUEADO`) |
+| Cookie de refresh não chega ao backend | `AUTH_COOKIE_SECURE=true` em HTTP local ou proxy removendo `Set-Cookie`/`Cookie` | Usar `false` apenas em `APP_ENV=development` e conferir o repasse de cabeçalhos no Nginx |
+| `400 AUTH_CSRF_HEADER_MISSING` em `refresh`/`logout` | Requisição sem `Content-Type: application/json` ou sem `X-Requested-With: accurit` | Enviar os dois cabeçalhos (os frontends já o fazem via interceptor/serviço) |
 
 ---
 
@@ -419,6 +464,11 @@ docker compose --profile tools run --rm schema-tool
 
 # Angular (admin e client)
 cd admin
+npm ci
+npm test -- --watch=false
+npm run build
+
+cd ../client
 npm ci
 npm test -- --watch=false
 npm run build
@@ -450,6 +500,8 @@ docker run --rm --network container:accurit-proxy -v "$(pwd):/app" -w /app alpin
 Checklist mínimo:
 
 - Testes de isolamento multi-tenant e IDOR em rotas novas.
+- Autenticação por audiência: login, cookie seguro, CSRF, rotação e reuso de refresh, logout,
+  lockout e bloqueio cruzado entre painel e portal (`backend/tests/http_auth.rs`).
 - Testes de migrations (`up`/`down`), política sem `ALTER`, índices e constraints.
 - Contrato de `/api/v1/health` (200/503), request-id, CORS, rate limit e headers de segurança.
 - Smoke das rotas públicas pelo proxy após `docker compose up --build`.

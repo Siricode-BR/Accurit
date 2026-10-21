@@ -1,7 +1,7 @@
 # Decisões Pendentes e Itens Não Confirmados
 
 - **Atualizado em:** 2026-10-21
-- **Escopo:** Fase 0 (reconciliação documental) e Fase 1 (fundação técnica)
+- **Escopo:** Fase 0 (reconciliação documental), Fase 1 (fundação técnica) e Fase 2A (autenticação por aplicação)
 - **Regra:** nenhum item abaixo pode ser tratado como contrato oficial até confirmação. O código
   deve isolar o comportamento em porta/flag e falhar de forma explícita quando a configuração não
   existir.
@@ -36,6 +36,21 @@ nova decisão arquitetural.
 | F4 | Crate `accurit_backend` + binário `backend`, edition 2024 | `main.rs` fino; testes usam a biblioteca |
 | F5 | Rate limit com chave abstrata; Fase 1 usa IP de `X-Real-IP` | Fase 2 troca para `escritorio_id` sem reescrever o middleware |
 | F6 | Testes de integração no serviço `backend-test` (profile `tools`) | Banco descartável por teste; sem dependência de toolchain no host |
+
+## Decisões de implementação da Fase 2A
+
+Estas decisões estão **fechadas** para a autenticação por aplicação e registradas em
+[ADR-0009](ADR/0009-autenticacao-por-aplicacao.md). Não são pendências externas; mudanças exigem nova
+decisão arquitetural.
+
+| ID | Decisão | Efeito |
+|---|---|---|
+| G1 | Rotas de auth por audiência (`/api/v1/auth/{admin,client}/*`) com claim `aud` e papel fixo por audiência | Token do painel não vale no portal; `CLIENTE` não acessa o painel e vice-versa |
+| G2 | Access JWT HS256 de 900 s + refresh opaco 256 bits com hash SHA-256, rotação e família | Reuso de refresh revoga a família e audita `AUTH_REFRESH_REUSO`; logout revoga no servidor |
+| G3 | Refresh em cookie `HttpOnly`/`SameSite=Strict` com `Path` por audiência; CSRF por `X-Requested-With: accurit` + `Content-Type` JSON | `AUTH_COOKIE_SECURE=true` por padrão; `false` só em `APP_ENV=development` |
+| G4 | Argon2id, `401 AUTH_INVALID_CREDENTIALS` uniforme, lockout 5/900 s e rate limit 10 r/m (burst 5) no login | Sem enumeração de usuário; motivos auditados (`USUARIO_INEXISTENTE`, `USUARIO_INATIVO`, `USUARIO_BLOQUEADO`) |
+| G5 | Primeiro usuário via `bootstrap-user` (subcomando do binário `backend`, senha em `BOOTSTRAP_USER_PASSWORD`) | Sem endpoint público de cadastro na fase |
+| G6 | Numeração: autenticação por aplicação = ADR-0009 | O "ADR-0008" previsto originalmente foi consumido pelas decisões de implementação da Fase 1 |
 
 ## D1 — Modelo de contratação SERPRO
 
@@ -166,3 +181,7 @@ aprovação de arquitetura.
 - `schema.rs` gerado por `schema-tool` e formatado com `rustfmt`, sem `diesel_cli` no runtime.
 - `backend-test` executa a suíte no container com banco descartável por teste.
 - Smoke `.ps1`/`.sh` cobre as rotas públicas, health, redirect de login, envelope 404 e request-id.
+- Quatro migrations validadas (`escritorios`, `usuarios`, `auditoria_eventos`, `sessoes`) com a
+  política "sem `ALTER`" (`backend/tests/migrations_policy.rs` exige ≥ 8 migrations verificadas).
+- Suíte `backend/tests/http_auth.rs` cobre login por audiência, cookie seguro, CSRF, rotação e reuso
+  de refresh, logout, lockout e bloqueio cruzado entre painel e portal.

@@ -38,6 +38,7 @@ O produto foi desenhado para eliminar erro operacional e retrabalho: os payloads
 - **Modo Trial SERPRO:** toggle reativo no painel `/admin`, persistido por escritório em `escritorios.modo_trial_serpro`.
 - **Gestão de clientes:** cadastro PF/PJ, validação de CPF/CNPJ e filtros por regime tributário.
 - **Multi-tenancy:** todo dado de negócio é isolado por `escritorio_id`, derivado do contexto autenticado.
+- **Autenticação por aplicação:** painel do escritório em `/admin/login` (papéis `ADMIN`/`OPERADOR`) e portal do cliente em `/app/login` (`CLIENTE`), com access token JWT de vida curta, refresh rotativo em cookie `HttpOnly`, logout com revogação no servidor e auditoria; um token de uma audiência nunca vale na outra.
 - **Migrations automáticas:** SQL versionado embutido no binário Rust com `diesel_migrations::embed_migrations!` e aplicado no startup.
 - **Auditoria:** registro de consultas, alternância de ambiente e ações administrativas sem armazenar payload fiscal excessivo.
 
@@ -98,6 +99,7 @@ O produto foi desenhado para eliminar erro operacional e retrabalho: os payloads
 | `/app/` | `client:80` | `accurit-client` | SPA Angular com fallback para `index.html` |
 | `/login` | `client:80` (redirect) | `accurit-client` | `301` para `/app/login` |
 | `/api/` | `backend:8080` | `accurit-backend` | `proxy_pass` sem cache; repassa `Authorization`, remove `x-cpf-usuario` do cliente e valida `X-Request-Id` |
+| `/api/v1/auth/admin/login` e `/api/v1/auth/client/login` | `backend:8080` | `accurit-backend` | Rate limit de 10 r/m (burst 5) por IP, sem cache |
 | `/api/v1/health` | `backend:8080` | `accurit-backend` | Health check usado pelo Compose |
 
 ## Quickstart
@@ -134,14 +136,28 @@ Para encerrar preservando os volumes do banco:
 docker compose down
 ```
 
+### Primeiro usuário (bootstrap)
+
+Não existe cadastro público. Crie o escritório e o primeiro usuário com o subcomando do próprio backend:
+
+```bash
+docker compose run --rm -e BOOTSTRAP_USER_PASSWORD='troque-esta-senha' backend \
+  bootstrap-user --escritorio-slug demo --escritorio-nome "Escritório Demo" \
+  --email admin@exemplo.com --cpf 00011122233 --papel ADMIN
+```
+
+O comando cria o escritório se ainda não existir e grava a senha com Argon2id; `--papel` aceita
+`ADMIN`, `OPERADOR` ou `CLIENTE` (`--cpf` é obrigatório exceto para `CLIENTE`). Use
+`bootstrap-user --help` para a ajuda completa.
+
 ### Acessos locais
 
 | Serviço | URL |
 |---|---|
 | Web (site institucional) | `http://localhost/` |
-| Painel administrativo | `http://localhost/admin/` |
-| Login do cliente | `http://localhost/login` |
+| Painel administrativo (login do escritório) | `http://localhost/admin/login` |
 | Portal do cliente | `http://localhost/app/` |
+| Login do cliente | `http://localhost/app/login` (`/login` redireciona com `301`) |
 | Health check da API | `http://localhost/api/v1/health` |
 
 ### Validar a stack
@@ -197,23 +213,27 @@ Accurit/
 │   ├── migrations/
 │   │   ├── 20261021120000_create_escritorios/
 │   │   ├── 20261021120100_create_usuarios/
-│   │   └── 20261021120200_create_auditoria_eventos/
+│   │   ├── 20261021120200_create_auditoria_eventos/
+│   │   └── 20261021130000_create_sessoes/
 │   ├── scripts/
 │   │   └── generate-schema.sh      # schema.rs via container descartável
-│   ├── tests/                      # migrations, política e HTTP
+│   ├── tests/                      # migrations, política, autenticação e HTTP
 │   └── src/
-│       ├── main.rs                 # bootstrap fino sobre accurit_backend
+│       ├── main.rs                 # servidor Axum e subcomando bootstrap-user
 │       ├── lib.rs
 │       ├── startup.rs              # retry, advisory lock, pool e graceful shutdown
+│       ├── bootstrap.rs            # criação do primeiro usuário (CLI)
 │       ├── domain/
 │       │   ├── auth/
 │       │   └── tenancy/
-│       ├── application/            # portas e caso de uso de saúde
+│       ├── application/            # portas, saúde e casos de uso de autenticação
 │       ├── infrastructure/
+│       │   ├── auth/               # Argon2id, JWT, refresh opaco e sessões
 │       │   ├── config/             # configuração tipada e fail-fast
 │       │   ├── observability.rs
 │       │   └── persistence/        # pool, migrations, schema e saúde
 │       └── presentation/
+│           ├── auth/               # rotas, handlers, cookies e rate limit de login
 │           ├── routes/
 │           ├── handlers/
 │           ├── dto/
@@ -225,7 +245,10 @@ Accurit/
 │   ├── package.json
 │   └── src/app/
 │       ├── core/api.config.ts
+│       ├── core/auth/              # sessão, interceptor e guards
 │       ├── data/saude.service.ts
+│       ├── features/auth/login/    # /admin/login
+│       ├── features/acesso-negado/
 │       ├── features/dashboard/
 │       └── app.ts / app.config.ts / app.routes.ts
 ├── client/                         # Angular 21 · portal do cliente
@@ -233,7 +256,10 @@ Accurit/
 │   ├── package.json
 │   └── src/app/
 │       ├── core/api.config.ts
+│       ├── core/auth/              # sessão, interceptor e guards
 │       ├── data/saude.service.ts
+│       ├── features/auth/login/    # /app/login
+│       ├── features/acesso-negado/
 │       ├── features/inicio/
 │       └── app.ts / app.config.ts / app.routes.ts
 ├── web/                            # Next.js · App Router
@@ -269,6 +295,9 @@ Accurit/
 ## Segurança e limites operacionais
 
 - Todas as consultas e mutações de domínio são limitadas ao `escritorio_id` obtido do contexto autenticado.
+- Login por aplicação: o access token (JWT HS256, 900 s) fica apenas em memória no frontend; o refresh é opaco, em cookie `HttpOnly`/`SameSite=Strict` com rotação e detecção de reuso; `refresh` e `logout` exigem `Content-Type: application/json` e `X-Requested-With: accurit` (proteção CSRF).
+- Falha de login responde sempre `401 AUTH_INVALID_CREDENTIALS` (sem enumeração), com lockout após 5 falhas/900 s e rate limit de 10 r/m; a auditoria registra `AUTH_LOGIN_SUCESSO`, `AUTH_LOGIN_FALHA`, `AUTH_LOGOUT` e `AUTH_REFRESH_REUSO` sem senha nem token.
+- O primeiro usuário é criado via `bootstrap-user`; não há endpoint público de cadastro.
 - O header `x-cpf-usuario` é operacional e **não consta na documentação oficial**; é enviado apenas
   quando `SERPRO_OPERATOR_HEADER_ENABLED=true`, a partir de `usuarios.cpf`, e nunca é aceito do
   cliente. O comportamento real do SERPRO é validado por teste live (D3).
