@@ -19,7 +19,7 @@ export default function Home() {
           <span className="text-lg font-bold tracking-tight">Accurit</span>
           <a
             className="rounded-full border border-slate-300 px-4 py-2 text-sm font-medium transition-colors hover:border-slate-900 hover:text-slate-950"
-            href="/login"
+            href="/app/login"
           >
             Acessar plataforma
           </a>
@@ -42,15 +42,15 @@ export default function Home() {
             <div className="mt-8 flex flex-wrap gap-3">
               <a
                 className="rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
-                href="/login"
+                href="/admin/login"
               >
-                Acessar plataforma
+                Sou do escritório
               </a>
               <a
                 className="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold transition-colors hover:border-slate-900"
-                href="#base"
+                href="/app/login"
               >
-                Conhecer a base
+                Sou cliente
               </a>
             </div>
           </div>
