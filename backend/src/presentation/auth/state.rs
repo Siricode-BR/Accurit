@@ -3,8 +3,10 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use crate::application::auth::{
-    EncerrarSessao, LoginUsuario, ObterUsuarioAtual, PoliticaAuth, RenovarSessao, SenhaError,
-    SenhaService, TokenService,
+    AdministradorRepositorio, EncerrarSessao, EncerrarSessaoAdmin, LoginAdministrador,
+    LoginUsuario, ObterAdministradorAtual, ObterUsuarioAtual, PoliticaAuth, RenovarSessao,
+    RenovarSessaoAdmin, SenhaError, SenhaService, SessaoAdminRepositorio, TokenService,
+    UsuarioRepositorio,
 };
 use crate::infrastructure::auth::{HashArgon2, JwtService, RefreshSha256, RepositorioDiesel};
 use crate::infrastructure::config::Config;
@@ -25,6 +27,10 @@ pub struct AuthState {
     pub renovar: Arc<RenovarSessao>,
     pub logout: Arc<EncerrarSessao>,
     pub usuario_atual: Arc<ObterUsuarioAtual>,
+    pub login_admin: Arc<LoginAdministrador>,
+    pub renovar_admin: Arc<RenovarSessaoAdmin>,
+    pub logout_admin: Arc<EncerrarSessaoAdmin>,
+    pub administrador_atual: Arc<ObterAdministradorAtual>,
     pub tokens: Arc<dyn TokenService>,
     pub cookie: CookieSettings,
     pub limite_login: LimiteLogin,
@@ -33,8 +39,10 @@ pub struct AuthState {
 impl AuthState {
     pub fn novo(pool: DbPool, config: &Config) -> Result<Self, AuthInitError> {
         let repositorio = Arc::new(RepositorioDiesel::novo(pool));
-        let usuarios = repositorio.clone();
+        let usuarios: Arc<dyn UsuarioRepositorio> = repositorio.clone();
         let sessoes = repositorio.clone();
+        let administradores: Arc<dyn AdministradorRepositorio> = repositorio.clone();
+        let sessoes_admin: Arc<dyn SessaoAdminRepositorio> = repositorio.clone();
         let auditoria = repositorio;
 
         let senha: Arc<dyn SenhaService> = Arc::new(HashArgon2::novo(&config.auth)?);
@@ -56,7 +64,7 @@ impl AuthState {
             usuarios.clone(),
             sessoes.clone(),
             auditoria.clone(),
-            senha,
+            senha.clone(),
             tokens.clone(),
             refresh.clone(),
             politica.clone(),
@@ -66,16 +74,48 @@ impl AuthState {
             auditoria.clone(),
             tokens.clone(),
             refresh.clone(),
+            politica.clone(),
+        ));
+        let logout = Arc::new(EncerrarSessao::novo(
+            sessoes,
+            auditoria.clone(),
+            refresh.clone(),
+        ));
+        let usuario_atual = Arc::new(ObterUsuarioAtual::novo(usuarios));
+
+        let login_admin = Arc::new(LoginAdministrador::novo(
+            administradores.clone(),
+            sessoes_admin.clone(),
+            auditoria.clone(),
+            senha,
+            tokens.clone(),
+            refresh.clone(),
+            politica.clone(),
+        ));
+        let renovar_admin = Arc::new(RenovarSessaoAdmin::novo(
+            sessoes_admin.clone(),
+            administradores.clone(),
+            auditoria.clone(),
+            tokens.clone(),
+            refresh.clone(),
             politica,
         ));
-        let logout = Arc::new(EncerrarSessao::novo(sessoes, auditoria, refresh));
-        let usuario_atual = Arc::new(ObterUsuarioAtual::novo(usuarios));
+        let logout_admin = Arc::new(EncerrarSessaoAdmin::novo(
+            sessoes_admin,
+            auditoria,
+            refresh.clone(),
+        ));
+        let administrador_atual = Arc::new(ObterAdministradorAtual::novo(administradores));
 
         Ok(Self {
             login,
             renovar,
             logout,
             usuario_atual,
+            login_admin,
+            renovar_admin,
+            logout_admin,
+            administrador_atual,
             tokens,
             cookie: CookieSettings {
                 secure: config.auth.cookie_secure,

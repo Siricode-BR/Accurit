@@ -13,7 +13,8 @@ path = "src/main.rs"
 
 [dependencies]
 argon2 = "0.5.3"
-axum = "0.8"
+axum = { version = "0.8", features = ["macros"] }
+ipnet = "2.9"
 base64 = "0.23.1"
 chrono = { version = "0.4.45", features = ["serde"] }
 cookie = "0.18.1"

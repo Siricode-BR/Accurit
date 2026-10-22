@@ -4,11 +4,10 @@ export interface Usuario {
   id: string;
   email: string;
   papel: Papel;
-  escritorioId: string;
+  escritorioId: string | null;
 }
 
 export interface Credenciais {
-  escritorio: string;
   email: string;
   senha: string;
 }

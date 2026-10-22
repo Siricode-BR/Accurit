@@ -60,20 +60,20 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 
 ### 1. Banco de Dados
 - [x] Criar `sessoes` com audiência (`CLIENT`), família de refresh, hash SHA-256 único, expiração, revogação e índices, sem `ALTER` (Fase 2A).
-- [ ] Criar tabela `administradores` e `sessoes_admin` para o gestor de tenants SaaS (ADR-0010).
+- [x] Criar tabela `administradores` e `sessoes_admin` para o gestor de tenants SaaS (ADR-0010).
 - [ ] Criar `clientes` com `escritorio_id`, `tipo` (`PF`/`PJ`), `porte_regime`, `cpf_cnpj`, nome/razão social, contatos e timestamps.
 - [ ] Restringir `tipo` a `PF`/`PJ` e regimes a `MEI`, `SIMPLES_NACIONAL`, `LUCRO_PRESUMIDO`, `LUCRO_REAL`.
 - [ ] Criar `UNIQUE (escritorio_id, cpf_cnpj)` e índices `(escritorio_id, tipo)` e `(escritorio_id, porte_regime)`.
 - [ ] Criar `certificados_a1`, `credenciais_serpro`, `procuracoes`, `tokens_serpro` e `consultas_fiscais` conforme o modelo.
-- [ ] Consolidar a regra de CPF de usuário: obrigatório (`NOT NULL`) com 11 dígitos para todos os papéis (`ADMIN`, `CLIENTE`, `OPERADOR`), fechando o requisito (ADR-0010).
+- [x] Consolidar a regra de CPF de usuário: obrigatório (`NOT NULL`) com 11 dígitos para todos os papéis (`ADMIN`, `CLIENTE`, `OPERADOR`), fechando o requisito (ADR-0010).
 - [ ] Definir política de retenção e minimização de dados fiscais.
 
 ### 2. Backend (Rust / DDD)
 - [x] Implementar login JWT por audiência com claims `sub`, `role` e `aud` (`admin`/`client`), rejeitando token cruzado (Fase 2A).
-- [ ] Ajustar autenticação da audiência `admin` para consultar `administradores` e `sessoes_admin` (sem `escritorio_id` no JWT).
-- [ ] Ajustar autenticação da audiência `client` para aceitar papéis `CLIENTE` e `OPERADOR` na plataforma do escritório.
+- [x] Ajustar autenticação da audiência `admin` para consultar `administradores` e `sessoes_admin` (sem `escritorio_id` no JWT).
+- [x] Ajustar autenticação da audiência `client` para aceitar papéis `CLIENTE` e `OPERADOR` na plataforma do escritório.
 - [x] Implementar refresh opaco com rotação e família, reuso revogando a sessão, logout, lockout por tentativas, rate limit de login e auditoria (Fase 2A).
-- [ ] Entregar o bootstrap do primeiro administrador (`bootstrap-admin`) e o provisionamento de tenants.
+- [x] Entregar o bootstrap do primeiro administrador (`bootstrap-admin`) e o provisionamento de tenants (`bootstrap-tenant`).
 - [ ] Aplicar middleware de tenancy e enforcement nos repositórios Diesel.
 - [ ] Implementar CRUD de clientes PF/PJ com validação de dígitos verificadores de CPF/CNPJ.
 - [ ] Implementar filtros da API: `Todos`, `CPF`, `CNPJ - MEI`, `CNPJ - Simples Nacional`, `CNPJ - Lucro Presumido`, `CNPJ - Lucro Real`.

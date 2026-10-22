@@ -47,7 +47,7 @@ pub async fn run(config: Config) -> Result<(), StartupError> {
         .map_err(|_| StartupError::Tarefa)??;
 
     let auth = AuthState::novo(pool.clone(), &config)?;
-    let estado = AppState::novo(ConsultarSaude::novo(PostgresSaudeBanco::novo(pool)));
+    let estado = AppState::novo(ConsultarSaude::novo(PostgresSaudeBanco::novo(pool.clone())), pool);
     let aplicacao = routes::construir(estado, Some(auth), &config);
 
     let listener = TcpListener::bind(("0.0.0.0", config.port))

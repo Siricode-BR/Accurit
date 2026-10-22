@@ -135,7 +135,7 @@ impl RenovarSessao {
         ip: Option<std::net::IpAddr>,
     ) {
         if let Err(erro) = self.auditoria.registrar(&EventoAuditoria {
-            escritorio_id,
+            escritorio_id: Some(escritorio_id),
             usuario_id,
             acao,
             entidade: "sessoes",

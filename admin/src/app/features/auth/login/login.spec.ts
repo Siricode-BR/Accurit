@@ -21,12 +21,13 @@ describe('Login', () => {
     expect(fixture.componentInstance).toBeTruthy();
   });
 
-  it('should render the office login form', async () => {
+  it('should render the backoffice login form without office field', async () => {
     const fixture = TestBed.createComponent(Login);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('form')).not.toBeNull();
-    expect(compiled.textContent).toContain('Painel do escritório');
+    expect(compiled.textContent).toContain('Backoffice SaaS');
     expect(compiled.querySelector('a')?.getAttribute('href')).toBe('/app/login');
+    expect(compiled.querySelector('input[name="escritorio"]')).toBeNull();
   });
 });

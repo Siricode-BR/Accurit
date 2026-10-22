@@ -2,7 +2,7 @@ CREATE TABLE sessoes (
     id UUID PRIMARY KEY,
     escritorio_id UUID NOT NULL REFERENCES escritorios(id),
     usuario_id UUID NOT NULL REFERENCES usuarios(id),
-    audiencia VARCHAR(8) NOT NULL CHECK (audiencia IN ('ADMIN', 'CLIENT')),
+    audiencia VARCHAR(8) NOT NULL CHECK (audiencia IN ('CLIENT')),
     familia_id UUID NOT NULL,
     refresh_hash CHAR(64) NOT NULL UNIQUE,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),

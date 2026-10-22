@@ -19,7 +19,6 @@ export class Login {
   private readonly router = inject(Router);
   private readonly rota = inject(ActivatedRoute);
 
-  protected readonly escritorio = signal(this.sessao.slug() ?? '');
   protected readonly email = signal('');
   protected readonly senha = signal('');
   protected readonly enviando = signal(false);
@@ -35,7 +34,6 @@ export class Login {
 
     this.auth
       .login({
-        escritorio: this.escritorio(),
         email: this.email(),
         senha: this.senha(),
       })
@@ -60,7 +58,7 @@ export class Login {
         return 'Muitas tentativas de login. Aguarde um instante e tente novamente.';
       }
       if (erro.status === 401) {
-        return 'Credenciais inválidas. Confira escritório, e-mail e senha.';
+        return 'Credenciais inválidas. Confira e-mail e senha.';
       }
       if (erro.status === 503) {
         return 'Serviço temporariamente indisponível. Tente novamente em instantes.';

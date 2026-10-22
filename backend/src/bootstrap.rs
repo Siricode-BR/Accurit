@@ -14,7 +14,8 @@ use crate::infrastructure::persistence::migrations::{
 };
 use crate::infrastructure::persistence::pool::{DbPool, PoolIndisponivel, criar_pool};
 
-const VARIAVEL_SENHA: &str = "BOOTSTRAP_USER_PASSWORD";
+const VARIAVEL_SENHA_ADMIN: &str = "BOOTSTRAP_ADMIN_PASSWORD";
+const VARIAVEL_SENHA_TENANT: &str = "BOOTSTRAP_USER_PASSWORD";
 const SENHA_MINIMA: usize = 8;
 
 #[derive(Debug, Error)]
@@ -33,22 +34,45 @@ pub enum BootstrapError {
     Banco,
     #[error("tarefa de inicialização falhou")]
     Tarefa,
+    #[error("já existe um administrador com este e-mail")]
+    AdministradorExistente,
     #[error("escritório já possui usuário com este e-mail")]
     UsuarioExistente,
 }
 
-pub struct Opcoes {
+pub enum Alvo {
+    Administrador(AdministradorOpcoes),
+    Tenant(TenantOpcoes),
+}
+
+pub struct AdministradorOpcoes {
+    email: String,
+    cpf: Cpf,
+    senha: String,
+}
+
+pub struct TenantOpcoes {
     escritorio_slug: String,
     escritorio_nome: String,
     email: String,
-    cpf: Option<Cpf>,
+    cpf: Cpf,
     papel: Papel,
     senha: String,
 }
 
-impl std::fmt::Debug for Opcoes {
+impl std::fmt::Debug for AdministradorOpcoes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Opcoes")
+        f.debug_struct("AdministradorOpcoes")
+            .field("email", &self.email)
+            .field("cpf", &self.cpf)
+            .field("senha", &"REDACTED")
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for TenantOpcoes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TenantOpcoes")
             .field("escritorio_slug", &self.escritorio_slug)
             .field("escritorio_nome", &self.escritorio_nome)
             .field("email", &self.email)
@@ -59,12 +83,39 @@ impl std::fmt::Debug for Opcoes {
     }
 }
 
-pub const AJUDA: &str = "\
-Uso: bootstrap-user --escritorio-slug <slug> --escritorio-nome <nome> \
---email <email> --papel <ADMIN|OPERADOR|CLIENTE> [--cpf <cpf>]
+impl std::fmt::Debug for Alvo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Alvo::Administrador(opcoes) => f
+                .debug_struct("bootstrap-admin")
+                .field("email", &opcoes.email)
+                .field("cpf", &opcoes.cpf)
+                .field("senha", &"REDACTED")
+                .finish(),
+            Alvo::Tenant(opcoes) => f
+                .debug_struct("bootstrap-tenant")
+                .field("escritorio_slug", &opcoes.escritorio_slug)
+                .field("escritorio_nome", &opcoes.escritorio_nome)
+                .field("email", &opcoes.email)
+                .field("cpf", &opcoes.cpf)
+                .field("papel", &opcoes.papel)
+                .field("senha", &"REDACTED")
+                .finish(),
+        }
+    }
+}
 
-Cria o escritório (quando inexistente) e o primeiro usuário.
-A senha é lida da variável de ambiente BOOTSTRAP_USER_PASSWORD.";
+pub const AJUDA: &str = "\
+Uso:
+  bootstrap-admin --email <email> --cpf <cpf>
+      Cria o primeiro gestor de tenants (backoffice /admin).
+      A senha é lida da variável BOOTSTRAP_ADMIN_PASSWORD.
+
+  bootstrap-tenant --escritorio-slug <slug> --escritorio-nome <nome> \
+--email <email> --cpf <cpf> --papel <CLIENTE|OPERADOR>
+      Cria o escritório (quando inexistente) e um usuário da plataforma do \
+escritório (caminho de reserva; o provisionamento normal é feito no /admin).
+      A senha é lida da variável BOOTSTRAP_USER_PASSWORD.";
 
 fn valor(args: &[String], indice: usize) -> Result<&str, BootstrapError> {
     args.get(indice)
@@ -73,12 +124,89 @@ fn valor(args: &[String], indice: usize) -> Result<&str, BootstrapError> {
         .ok_or_else(|| BootstrapError::Opcoes(format!("valor ausente para {}", args[indice - 1])))
 }
 
-impl Opcoes {
-    pub fn parse(args: &[String], senha: String) -> Result<Self, BootstrapError> {
+fn email_valido(email: &str) -> bool {
+    let mut partes = email.split('@');
+    let (Some(local), Some(dominio), None) = (partes.next(), partes.next(), partes.next()) else {
+        return false;
+    };
+    !local.is_empty() && dominio.contains('.') && email.len() <= 254
+}
+
+fn slug_valido(slug: &str) -> bool {
+    let tamanho = slug.len();
+    (3..=40).contains(&tamanho)
+        && slug
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+}
+
+fn parse_email(args: &[String]) -> Result<String, BootstrapError> {
+    let mut email = None;
+    let mut indice = 0;
+    while indice < args.len() {
+        match args[indice].as_str() {
+            "--email" => {
+                email = Some(valor(args, indice + 1)?.to_owned());
+                indice += 2;
+            }
+            _ => indice += 1,
+        }
+    }
+    let email = email
+        .ok_or_else(|| BootstrapError::Opcoes("--email é obrigatório".into()))?
+        .trim()
+        .to_ascii_lowercase();
+    if !email_valido(&email) {
+        return Err(BootstrapError::Opcoes("--email inválido".into()));
+    }
+    Ok(email)
+}
+
+fn parse_cpf(args: &[String], label: &str) -> Result<Cpf, BootstrapError> {
+    let mut bruto = None;
+    let mut indice = 0;
+    while indice < args.len() {
+        match args[indice].as_str() {
+            "--cpf" => {
+                bruto = Some(valor(args, indice + 1)?.to_owned());
+                indice += 2;
+            }
+            _ => indice += 1,
+        }
+    }
+
+    let valor_cpf =
+        bruto.ok_or_else(|| BootstrapError::Opcoes(format!("{label} é obrigatório")))?;
+    Cpf::novo(&valor_cpf).map_err(|_| BootstrapError::Opcoes(format!("{label} inválido")))
+}
+
+fn validar_senha(senha: &str, variavel: &str) -> Result<(), BootstrapError> {
+    if senha.len() < SENHA_MINIMA {
+        return Err(BootstrapError::Opcoes(format!(
+            "{variavel} deve ter pelo menos {SENHA_MINIMA} caracteres"
+        )));
+    }
+    Ok(())
+}
+
+impl AdministradorOpcoes {
+    fn parse(args: &[String], senha: String) -> Result<Self, BootstrapError> {
+        validar_senha(&senha, VARIAVEL_SENHA_ADMIN)?;
+
+        Ok(Self {
+            email: parse_email(args)?,
+            cpf: parse_cpf(args, "--cpf")?,
+            senha,
+        })
+    }
+}
+
+impl TenantOpcoes {
+    fn parse(args: &[String], senha: String) -> Result<Self, BootstrapError> {
+        validar_senha(&senha, VARIAVEL_SENHA_TENANT)?;
+
         let mut escritorio_slug = None;
         let mut escritorio_nome = None;
-        let mut email = None;
-        let mut cpf = None;
         let mut papel = None;
 
         let mut indice = 0;
@@ -92,23 +220,11 @@ impl Opcoes {
                     escritorio_nome = Some(valor(args, indice + 1)?.to_owned());
                     indice += 2;
                 }
-                "--email" => {
-                    email = Some(valor(args, indice + 1)?.to_owned());
-                    indice += 2;
-                }
-                "--cpf" => {
-                    cpf = Some(valor(args, indice + 1)?.to_owned());
-                    indice += 2;
-                }
                 "--papel" => {
                     papel = Some(valor(args, indice + 1)?.to_owned());
                     indice += 2;
                 }
-                outro => {
-                    return Err(BootstrapError::Opcoes(format!(
-                        "opção desconhecida: {outro}"
-                    )));
-                }
+                _ => indice += 1,
             }
         }
 
@@ -130,62 +246,24 @@ impl Opcoes {
             return Err(BootstrapError::Opcoes("--escritorio-nome inválido".into()));
         }
 
-        let email = email
-            .ok_or_else(|| BootstrapError::Opcoes("--email é obrigatório".into()))?
-            .trim()
-            .to_ascii_lowercase();
-        if !email_valido(&email) {
-            return Err(BootstrapError::Opcoes("--email inválido".into()));
-        }
-
         let papel = papel.ok_or_else(|| BootstrapError::Opcoes("--papel é obrigatório".into()))?;
-        let papel = Papel::from_str(&papel.to_ascii_uppercase()).map_err(|_| {
-            BootstrapError::Opcoes("--papel deve ser ADMIN, OPERADOR ou CLIENTE".into())
-        })?;
-
-        let cpf = match cpf {
-            Some(valor) => Some(
-                Cpf::novo(&valor).map_err(|_| BootstrapError::Opcoes("--cpf inválido".into()))?,
-            ),
-            None => None,
-        };
-        if papel != Papel::Cliente && cpf.is_none() {
+        let papel = Papel::from_str(&papel.to_ascii_uppercase())
+            .map_err(|_| BootstrapError::Opcoes("--papel deve ser CLIENTE ou OPERADOR".into()))?;
+        if papel == Papel::Admin {
             return Err(BootstrapError::Opcoes(
-                "--cpf é obrigatório para ADMIN e OPERADOR".into(),
+                "--papel ADMIN é exclusivo do backoffice; use bootstrap-admin".into(),
             ));
-        }
-
-        if senha.len() < SENHA_MINIMA {
-            return Err(BootstrapError::Opcoes(format!(
-                "{VARIAVEL_SENHA} deve ter pelo menos {SENHA_MINIMA} caracteres"
-            )));
         }
 
         Ok(Self {
             escritorio_slug,
             escritorio_nome,
-            email,
-            cpf,
+            email: parse_email(args)?,
+            cpf: parse_cpf(args, "--cpf")?,
             papel,
             senha,
         })
     }
-}
-
-fn slug_valido(slug: &str) -> bool {
-    let tamanho = slug.len();
-    (3..=40).contains(&tamanho)
-        && slug
-            .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
-}
-
-fn email_valido(email: &str) -> bool {
-    let mut partes = email.split('@');
-    let (Some(local), Some(dominio), None) = (partes.next(), partes.next(), partes.next()) else {
-        return false;
-    };
-    !local.is_empty() && dominio.contains('.') && email.len() <= 254
 }
 
 #[derive(QueryableByName)]
@@ -194,15 +272,34 @@ struct IdRow {
     id: Uuid,
 }
 
-pub async fn executar(args: &[String]) -> Result<(), BootstrapError> {
+pub async fn executar(alvo: &str, args: &[String]) -> Result<(), BootstrapError> {
     if args.iter().any(|arg| arg == "--help" || arg == "-h") {
         println!("{AJUDA}");
         return Ok(());
     }
 
-    let senha = std::env::var(VARIAVEL_SENHA)
-        .map_err(|_| BootstrapError::Opcoes(format!("{VARIAVEL_SENHA} é obrigatória")))?;
-    let opcoes = Opcoes::parse(args, senha)?;
+    if alvo == "bootstrap-admin" {
+        let senha = std::env::var(VARIAVEL_SENHA_ADMIN)
+            .map_err(|_| BootstrapError::Opcoes(format!("{VARIAVEL_SENHA_ADMIN} é obrigatória")))?;
+        let opcoes = AdministradorOpcoes::parse(args, senha)?;
+        let config = Config::from_env()?;
+        let database_url = secrecy::ExposeSecret::expose_secret(&config.database.url).to_owned();
+        let argon2 = HashArgon2::novo(&config.auth).map_err(|_| BootstrapError::Senha)?;
+
+        return tokio::task::spawn_blocking(move || {
+            let conexao = conectar_com_retry(&database_url)?;
+            aplicar_migrations_com_lock(conexao, MIGRATIONS)?;
+
+            let pool = criar_pool(&database_url)?;
+            bootstrap_administrador(&pool, &argon2, opcoes)
+        })
+        .await
+        .map_err(|_| BootstrapError::Tarefa)?;
+    }
+
+    let senha = std::env::var(VARIAVEL_SENHA_TENANT)
+        .map_err(|_| BootstrapError::Opcoes(format!("{VARIAVEL_SENHA_TENANT} é obrigatória")))?;
+    let opcoes = TenantOpcoes::parse(args, senha)?;
     let config = Config::from_env()?;
     let database_url = secrecy::ExposeSecret::expose_secret(&config.database.url).to_owned();
     let argon2 = HashArgon2::novo(&config.auth).map_err(|_| BootstrapError::Senha)?;
@@ -212,16 +309,53 @@ pub async fn executar(args: &[String]) -> Result<(), BootstrapError> {
         aplicar_migrations_com_lock(conexao, MIGRATIONS)?;
 
         let pool = criar_pool(&database_url)?;
-        bootstrap_usuario(&pool, &argon2, opcoes)
+        bootstrap_tenant(&pool, &argon2, opcoes)
     })
     .await
     .map_err(|_| BootstrapError::Tarefa)?
 }
 
-fn bootstrap_usuario(
+fn bootstrap_administrador(
     pool: &DbPool,
     argon2: &HashArgon2,
-    opcoes: Opcoes,
+    opcoes: AdministradorOpcoes,
+) -> Result<(), BootstrapError> {
+    let mut conexao = pool.get().map_err(|_| BootstrapError::Banco)?;
+
+    let existente =
+        diesel::sql_query("SELECT id FROM administradores WHERE lower(email) = lower($1)")
+            .bind::<Text, _>(&opcoes.email)
+            .get_result::<IdRow>(&mut conexao);
+
+    match existente {
+        Ok(_) => return Err(BootstrapError::AdministradorExistente),
+        Err(diesel::result::Error::NotFound) => {}
+        Err(_) => return Err(BootstrapError::Banco),
+    }
+
+    let senha_hash = argon2
+        .gerar_hash(&opcoes.senha)
+        .map_err(|_| BootstrapError::Senha)?;
+
+    diesel::sql_query(
+        "INSERT INTO administradores (id, email, cpf, senha_hash) VALUES ($1, $2, $3, $4)",
+    )
+    .bind::<SqlUuid, _>(Uuid::now_v7())
+    .bind::<Text, _>(&opcoes.email)
+    .bind::<Text, _>(opcoes.cpf.como_str())
+    .bind::<Text, _>(senha_hash)
+    .execute(&mut conexao)
+    .map_err(|_| BootstrapError::Banco)?;
+
+    tracing::info!("administrador de inicialização criado");
+
+    Ok(())
+}
+
+fn bootstrap_tenant(
+    pool: &DbPool,
+    argon2: &HashArgon2,
+    opcoes: TenantOpcoes,
 ) -> Result<(), BootstrapError> {
     let mut conexao = pool.get().map_err(|_| BootstrapError::Banco)?;
 
@@ -259,7 +393,6 @@ fn bootstrap_usuario(
     let senha_hash = argon2
         .gerar_hash(&opcoes.senha)
         .map_err(|_| BootstrapError::Senha)?;
-    let cpf = opcoes.cpf.as_ref().map(|cpf| cpf.como_str().to_owned());
 
     diesel::sql_query(
         "INSERT INTO usuarios (id, escritorio_id, email, cpf, senha_hash, papel) \
@@ -268,7 +401,7 @@ fn bootstrap_usuario(
     .bind::<SqlUuid, _>(Uuid::now_v7())
     .bind::<SqlUuid, _>(escritorio_id)
     .bind::<Text, _>(&opcoes.email)
-    .bind::<Nullable<Text>, _>(cpf.as_deref())
+    .bind::<Nullable<Text>, _>(opcoes.cpf.como_str())
     .bind::<Text, _>(senha_hash)
     .bind::<Text, _>(opcoes.papel.como_str())
     .execute(&mut conexao)
@@ -292,27 +425,27 @@ mod tests {
     }
 
     #[test]
-    fn exige_cpf_para_papeis_do_escritorio() {
-        let erro = Opcoes::parse(
-            &args(&[
-                "--escritorio-slug",
-                "demo",
-                "--escritorio-nome",
-                "Demo",
-                "--email",
-                "admin@demo.test",
-                "--papel",
-                "ADMIN",
-            ]),
+    fn admin_exige_email_cpf_e_senha_forte() {
+        let erro =
+            AdministradorOpcoes::parse(&args(&["--email", "gestor@accurit.test"]), "curta".into())
+                .expect_err("deve exigir senha forte");
+        assert!(erro.to_string().contains(VARIAVEL_SENHA_ADMIN));
+
+        let erro = AdministradorOpcoes::parse(&args(&[]), "senha-forte-123".into())
+            .expect_err("deve exigir email");
+        assert!(erro.to_string().contains("--email"));
+
+        let opcoes = AdministradorOpcoes::parse(
+            &args(&["--email", "gestor@accurit.test", "--cpf", "52998224725"]),
             "senha-forte-123".into(),
         )
-        .expect_err("deve exigir cpf");
-        assert!(erro.to_string().contains("--cpf"));
+        .expect("opções válidas");
+        assert_eq!(opcoes.email, "gestor@accurit.test");
     }
 
     #[test]
-    fn aceita_cliente_sem_cpf() {
-        let opcoes = Opcoes::parse(
+    fn tenant_exige_cpf_para_todos_os_papeis() {
+        let erro = TenantOpcoes::parse(
             &args(&[
                 "--escritorio-slug",
                 "demo",
@@ -321,12 +454,52 @@ mod tests {
                 "--email",
                 "cliente@demo.test",
                 "--papel",
-                "cliente",
+                "CLIENTE",
+            ]),
+            "senha-forte-123".into(),
+        )
+        .expect_err("deve exigir cpf");
+        assert!(erro.to_string().contains("--cpf"));
+
+        let erro_admin = TenantOpcoes::parse(
+            &args(&[
+                "--escritorio-slug",
+                "demo",
+                "--escritorio-nome",
+                "Demo",
+                "--email",
+                "admin@demo.test",
+                "--cpf",
+                "52998224725",
+                "--papel",
+                "ADMIN",
+            ]),
+            "senha-forte-123".into(),
+        )
+        .expect_err("ADMIN é exclusivo do backoffice");
+        assert!(erro_admin.to_string().contains("bootstrap-admin"));
+    }
+
+    #[test]
+    fn tenant_aceita_operador_e_papel_minusculo() {
+        let opcoes = TenantOpcoes::parse(
+            &args(&[
+                "--escritorio-slug",
+                "demo",
+                "--escritorio-nome",
+                "Demo",
+                "--email",
+                "operador@demo.test",
+                "--cpf",
+                "52998224725",
+                "--papel",
+                "operador",
             ]),
             "senha-forte-123".into(),
         )
         .expect("opções válidas");
         assert_eq!(opcoes.escritorio_slug, "demo");
+        assert_eq!(opcoes.papel, Papel::Operador);
     }
 
     #[test]

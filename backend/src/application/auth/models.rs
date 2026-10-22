@@ -41,6 +41,13 @@ impl From<&Usuario> for UsuarioPublico {
     }
 }
 
+/// Perfil público do gestor de tenants — sempre papel `ADMIN`, sem escritório.
+#[derive(Debug, Clone)]
+pub struct AdministradorPublico {
+    pub id: Uuid,
+    pub email: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct SessaoEmitida {
     pub access_token: String,
@@ -51,11 +58,29 @@ pub struct SessaoEmitida {
 }
 
 #[derive(Debug, Clone)]
+pub struct SessaoAdminEmitida {
+    pub access_token: String,
+    pub expires_in: u64,
+    pub refresh_token: String,
+    pub refresh_ttl_secs: u64,
+    pub administrador: AdministradorPublico,
+}
+
+#[derive(Debug, Clone)]
 pub struct LoginCommand {
     pub escritorio: String,
     pub email: String,
     pub senha: String,
     pub audiencia: Audiencia,
+    pub ip: Option<IpAddr>,
+    pub user_agent: Option<String>,
+}
+
+/// Login do backoffice: sem slug de escritório (ADR-0010).
+#[derive(Debug, Clone)]
+pub struct LoginAdminCommand {
+    pub email: String,
+    pub senha: String,
     pub ip: Option<IpAddr>,
     pub user_agent: Option<String>,
 }
@@ -69,9 +94,22 @@ pub struct RenovarCommand {
 }
 
 #[derive(Debug, Clone)]
+pub struct RenovarAdminCommand {
+    pub refresh_token: String,
+    pub ip: Option<IpAddr>,
+    pub user_agent: Option<String>,
+}
+
+#[derive(Debug, Clone)]
 pub struct LogoutCommand {
     pub refresh_token: String,
     pub audiencia: Audiencia,
+    pub ip: Option<IpAddr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct LogoutAdminCommand {
+    pub refresh_token: String,
     pub ip: Option<IpAddr>,
 }
 
@@ -80,6 +118,11 @@ pub struct UsuarioAtualCommand {
     pub escritorio_id: Uuid,
     pub usuario_id: Uuid,
     pub audiencia: Audiencia,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct AdministradorAtualCommand {
+    pub administrador_id: Uuid,
 }
 
 pub(crate) fn normalizar_slug(valor: &str) -> String {

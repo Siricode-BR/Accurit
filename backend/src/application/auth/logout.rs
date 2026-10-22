@@ -38,7 +38,7 @@ impl EncerrarSessao {
         self.sessoes.revogar_familia(encontrada.sessao.familia_id)?;
 
         if let Err(erro) = self.auditoria.registrar(&EventoAuditoria {
-            escritorio_id: encontrada.sessao.escritorio_id,
+            escritorio_id: Some(encontrada.sessao.escritorio_id),
             usuario_id: Some(encontrada.usuario.id),
             acao: "AUTH_LOGOUT",
             entidade: "sessoes",

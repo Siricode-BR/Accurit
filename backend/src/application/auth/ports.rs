@@ -4,7 +4,10 @@ use serde_json::Value;
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::domain::auth::{Audiencia, Escritorio, Papel, Sessao, SessaoComUsuario, Usuario};
+use crate::domain::auth::{
+    Administrador, Audiencia, Escritorio, Papel, Sessao, SessaoAdmin, SessaoAdminComAdministrador,
+    SessaoComUsuario, Usuario,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum RepositorioError {
@@ -43,9 +46,20 @@ pub struct ClaimsAccess {
     pub jti: Uuid,
 }
 
+/// Claims do token do backoffice: sem `escritorio_id`, pois o gestor de tenants
+/// não pertence a nenhum escritório (ADR-0010, D3).
+#[derive(Debug, Clone)]
+pub struct ClaimsAdminAccess {
+    pub administrador_id: Uuid,
+    pub audiencia: Audiencia,
+    pub jti: Uuid,
+}
+
+/// Evento de auditoria. `escritorio_id` é `Option`: eventos que não pertencem a
+/// nenhum tenant (sessões do backoffice) são gravados com `NULL` (ADR-0010, D7).
 #[derive(Debug, Clone)]
 pub struct EventoAuditoria {
-    pub escritorio_id: Uuid,
+    pub escritorio_id: Option<Uuid>,
     pub usuario_id: Option<Uuid>,
     pub acao: &'static str,
     pub entidade: &'static str,
@@ -95,6 +109,39 @@ pub trait SessaoRepositorio: Send + Sync {
     fn revogar_familia(&self, familia_id: Uuid) -> Result<u64, RepositorioError>;
 }
 
+/// Repositório do gestor de tenants (`administradores`), fora de `usuarios`.
+pub trait AdministradorRepositorio: Send + Sync {
+    fn buscar_por_email(&self, email: &str) -> Result<Option<Administrador>, RepositorioError>;
+
+    fn buscar_por_id(
+        &self,
+        administrador_id: Uuid,
+    ) -> Result<Option<Administrador>, RepositorioError>;
+
+    fn registrar_falha(
+        &self,
+        administrador_id: Uuid,
+        max_tentativas: u32,
+        bloqueio_secs: u64,
+    ) -> Result<(), RepositorioError>;
+
+    fn registrar_sucesso(&self, administrador_id: Uuid) -> Result<(), RepositorioError>;
+}
+
+/// Sessões de refresh do backoffice (`sessoes_admin`), espelhando `SessaoRepositorio`.
+pub trait SessaoAdminRepositorio: Send + Sync {
+    fn criar(&self, sessao: &SessaoAdmin) -> Result<(), RepositorioError>;
+
+    fn buscar_por_hash(
+        &self,
+        refresh_hash: &str,
+    ) -> Result<Option<SessaoAdminComAdministrador>, RepositorioError>;
+
+    fn revogar(&self, sessao_id: Uuid) -> Result<bool, RepositorioError>;
+
+    fn revogar_familia(&self, familia_id: Uuid) -> Result<u64, RepositorioError>;
+}
+
 pub trait AuditoriaRepositorio: Send + Sync {
     fn registrar(&self, evento: &EventoAuditoria) -> Result<(), RepositorioError>;
 }
@@ -111,6 +158,24 @@ pub trait TokenService: Send + Sync {
     fn emitir(&self, usuario: &Usuario, audiencia: Audiencia) -> Result<TokenEmitido, TokenError>;
 
     fn validar(&self, token: &str, audiencia: Audiencia) -> Result<ClaimsAccess, TokenError>;
+
+    /// Token do backoffice: sempre papel `ADMIN` e sem `escritorio_id`.
+    fn emitir_admin(
+        &self,
+        administrador: &Administrador,
+        audiencia: Audiencia,
+    ) -> Result<TokenEmitido, TokenError>;
+
+    fn validar_admin(
+        &self,
+        token: &str,
+        audiencia: Audiencia,
+    ) -> Result<ClaimsAdminAccess, TokenError>;
+
+    /// Leitura indulgente (assinatura verificada, expiração ignorada) da
+    /// audiência declarada no token — usada para classificar tokens usados na
+    /// audiência errada sem expô-los como "sessão expirada".
+    fn ler_audiencia(&self, token: &str) -> Option<Audiencia>;
 }
 
 pub trait RefreshTokenService: Send + Sync {

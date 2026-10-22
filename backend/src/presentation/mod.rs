@@ -1,4 +1,6 @@
+pub mod admin;
 pub mod auth;
+pub mod clientes;
 pub mod dto;
 pub mod error;
 pub mod handlers;

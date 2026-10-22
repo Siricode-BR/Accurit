@@ -32,15 +32,10 @@ export class AuthService {
   }
 
   login(credenciais: Credenciais): Observable<Usuario> {
-    return this.http
-      .post<SessaoResposta>(`${this.baseUrl}/auth/admin/login`, credenciais)
-      .pipe(
-        tap((resposta) => {
-          this.sessao.definirSlug(credenciais.escritorio.trim().toLowerCase());
-          this.sessao.definirSessao(resposta);
-        }),
-        map((resposta) => resposta.usuario),
-      );
+    return this.http.post<SessaoResposta>(`${this.baseUrl}/auth/admin/login`, credenciais).pipe(
+      tap((resposta) => this.sessao.definirSessao(resposta)),
+      map((resposta) => resposta.usuario),
+    );
   }
 
   renovar(): Observable<void> {

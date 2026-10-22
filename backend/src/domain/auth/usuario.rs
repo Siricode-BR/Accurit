@@ -65,7 +65,7 @@ mod tests {
             escritorio_id: Uuid::now_v7(),
             email: "teste@exemplo.test".into(),
             senha_hash: "hash".into(),
-            papel: Papel::Admin,
+            papel: Papel::Operador,
             ativo: true,
             bloqueado_ate,
         }
@@ -84,7 +84,7 @@ mod tests {
             id: Uuid::now_v7(),
             escritorio_id: Uuid::now_v7(),
             usuario_id: Uuid::now_v7(),
-            audiencia: Audiencia::Admin,
+            audiencia: Audiencia::Client,
             familia_id: Uuid::now_v7(),
             refresh_hash: "hash".into(),
             criado_em: Utc::now(),

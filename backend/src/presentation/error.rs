@@ -3,6 +3,9 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 
+use crate::application::admin::ProvisionarError;
+use crate::application::clientes::ClienteError;
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ErrorEnvelope {
@@ -151,6 +154,62 @@ impl ApiError {
             "Erro interno inesperado",
         )
     }
+
+    pub fn proibido() -> Self {
+        Self::nova(
+            StatusCode::FORBIDDEN,
+            "PROIBIDO",
+            "Acesso negado",
+        )
+    }
+
+    pub fn indisponivel() -> Self {
+        Self::nova(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "INDISPONIVEL",
+            "Serviço indisponível",
+        )
+    }
+
+    pub fn conflito(message: impl Into<String>) -> Self {
+        Self::nova(
+            StatusCode::CONFLICT,
+            "CONFLITO",
+            message,
+        )
+    }
+
+    pub fn validacao(message: impl Into<String>) -> Self {
+        Self::nova(
+            StatusCode::BAD_REQUEST,
+            "VALIDACAO",
+            message,
+        )
+    }
+
+    pub fn nao_encontrado(entidade: &str) -> Self {
+        Self::nova(
+            StatusCode::NOT_FOUND,
+            "NAO_ENCONTRADO",
+            format!("{} não encontrado", entidade),
+        )
+    }
+
+    pub fn filtro_invalido() -> Self {
+        Self::nova(
+            StatusCode::BAD_REQUEST,
+            "FILTRO_INVALIDO",
+            "Filtro inválido",
+        )
+    }
+
+    pub fn paginacao_invalida() -> Self {
+        Self::nova(
+            StatusCode::BAD_REQUEST,
+            "PAGINACAO_INVALIDA",
+            "Paginação inválida",
+        )
+    }
 }
 
 impl IntoResponse for ApiError {
@@ -163,5 +222,45 @@ impl IntoResponse for ApiError {
 impl From<axum::extract::rejection::JsonRejection> for ApiError {
     fn from(_: axum::extract::rejection::JsonRejection) -> Self {
         Self::invalid_json()
+    }
+}
+
+impl From<ProvisionarError> for ApiError {
+    fn from(erro: ProvisionarError) -> Self {
+        match erro {
+            ProvisionarError::Repositorio(e) => match e {
+                crate::application::admin::RepositorioError::Indisponivel => Self::indisponivel(),
+                crate::application::admin::RepositorioError::Dados => Self::erro_interno(),
+                crate::application::admin::RepositorioError::EscritorioExistente => {
+                    Self::conflito("Escritório com este slug já existe")
+                }
+                crate::application::admin::RepositorioError::UsuarioExistente => {
+                    Self::conflito("Usuário com este e-mail já existe neste escritório")
+                }
+            },
+            ProvisionarError::Validacao(msg) => Self::validacao(msg),
+            ProvisionarError::Senha => Self::erro_interno(),
+        }
+    }
+}
+
+impl From<ClienteError> for ApiError {
+    fn from(erro: ClienteError) -> Self {
+        match erro {
+            ClienteError::Dominio(e) => Self::validacao(e.to_string()),
+            ClienteError::CpfCnpj(e) => Self::validacao(e.to_string()),
+            ClienteError::Repositorio(e) => match e {
+                crate::application::clientes::RepositorioError::Indisponivel => Self::indisponivel(),
+                crate::application::clientes::RepositorioError::Dados => Self::erro_interno(),
+                crate::application::clientes::RepositorioError::NaoEncontrado => {
+                    Self::nao_encontrado("cliente")
+                }
+                crate::application::clientes::RepositorioError::Duplicado => {
+                    Self::conflito("CPF/CNPJ já cadastrado neste escritório")
+                }
+            },
+            ClienteError::Validacao(msg) => Self::validacao(msg),
+            ClienteError::AcessoNegado => Self::proibido(),
+        }
     }
 }

@@ -5,10 +5,10 @@
   </header>
 
   <section class="conteudo">
-    <p class="sobretitulo">Painel do escritório</p>
+    <p class="sobretitulo">Backoffice SaaS</p>
     <h1>Entrar</h1>
     <p class="descricao">
-      Acesso restrito à equipe do escritório de contabilidade.
+      Acesso restrito aos gestores da plataforma Accurit.
     </p>
 
     @if (erro(); as mensagem) {
@@ -16,18 +16,6 @@
     }
 
     <form (ngSubmit)="entrar()" #formulario="ngForm">
-      <label>
-        <span>Escritório</span>
-        <input
-          name="escritorio"
-          type="text"
-          autocomplete="organization"
-          required
-          [ngModel]="escritorio()"
-          (ngModelChange)="escritorio.set($event)"
-        />
-      </label>
-
       <label>
         <span>E-mail</span>
         <input
@@ -58,7 +46,7 @@
     </form>
 
     <p class="alternativa">
-      É cliente? <a href="/app/login">Acesse o Portal do Cliente</a>.
+      É escritório de contabilidade? <a href="/app/login">Acesse sua plataforma</a>.
     </p>
   </section>
 

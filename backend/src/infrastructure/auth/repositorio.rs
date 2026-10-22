@@ -6,9 +6,13 @@ use diesel::{QueryableByName, RunQueryDsl};
 use uuid::Uuid;
 
 use crate::application::auth::{
-    AuditoriaRepositorio, EventoAuditoria, RepositorioError, SessaoRepositorio, UsuarioRepositorio,
+    AdministradorRepositorio, AuditoriaRepositorio, EventoAuditoria, RepositorioError,
+    SessaoAdminRepositorio, SessaoRepositorio, UsuarioRepositorio,
 };
-use crate::domain::auth::{Audiencia, Escritorio, Papel, Sessao, SessaoComUsuario, Usuario};
+use crate::domain::auth::{
+    Administrador, Audiencia, Escritorio, Papel, Sessao, SessaoAdmin, SessaoAdminComAdministrador,
+    SessaoComUsuario, Usuario,
+};
 use crate::infrastructure::persistence::pool::DbPool;
 
 #[derive(Clone)]
@@ -324,7 +328,7 @@ impl AuditoriaRepositorio for RepositorioDiesel {
              VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::inet)",
         )
         .bind::<SqlUuid, _>(Uuid::now_v7())
-        .bind::<SqlUuid, _>(evento.escritorio_id)
+        .bind::<Nullable<SqlUuid>, _>(evento.escritorio_id)
         .bind::<Nullable<SqlUuid>, _>(evento.usuario_id)
         .bind::<Text, _>(evento.acao)
         .bind::<Nullable<Text>, _>(Some(evento.entidade))
@@ -333,6 +337,228 @@ impl AuditoriaRepositorio for RepositorioDiesel {
         .bind::<Nullable<Text>, _>(ip.as_deref())
         .execute(&mut conexao)
         .map(|_| ())
+        .map_err(|_| RepositorioError::Dados)
+    }
+}
+
+#[derive(QueryableByName)]
+struct AdministradorRow {
+    #[diesel(sql_type = SqlUuid)]
+    id: Uuid,
+    #[diesel(sql_type = Text)]
+    email: String,
+    #[diesel(sql_type = Text)]
+    senha_hash: String,
+    #[diesel(sql_type = diesel::sql_types::Bool)]
+    ativo: bool,
+    #[diesel(sql_type = Nullable<Timestamptz>)]
+    bloqueado_ate: Option<DateTime<Utc>>,
+}
+
+#[derive(QueryableByName)]
+struct SessaoAdminRow {
+    #[diesel(sql_type = SqlUuid)]
+    id: Uuid,
+    #[diesel(sql_type = SqlUuid)]
+    administrador_id: Uuid,
+    #[diesel(sql_type = SqlUuid)]
+    familia_id: Uuid,
+    #[diesel(sql_type = Text)]
+    refresh_hash: String,
+    #[diesel(sql_type = Timestamptz)]
+    criado_em: DateTime<Utc>,
+    #[diesel(sql_type = Timestamptz)]
+    expira_em: DateTime<Utc>,
+    #[diesel(sql_type = Nullable<Timestamptz>)]
+    revogada_em: Option<DateTime<Utc>>,
+    #[diesel(sql_type = Nullable<Text>)]
+    ip: Option<String>,
+    #[diesel(sql_type = Nullable<Text>)]
+    user_agent: Option<String>,
+    #[diesel(sql_type = Text)]
+    email: String,
+    #[diesel(sql_type = Text)]
+    senha_hash: String,
+    #[diesel(sql_type = diesel::sql_types::Bool)]
+    ativo: bool,
+    #[diesel(sql_type = Nullable<Timestamptz>)]
+    bloqueado_ate: Option<DateTime<Utc>>,
+}
+
+impl AdministradorRepositorio for RepositorioDiesel {
+    fn buscar_por_email(&self, email: &str) -> Result<Option<Administrador>, RepositorioError> {
+        let mut conexao = self.conexao()?;
+        let resultado = diesel::sql_query(
+            "SELECT id, email, senha_hash, ativo, bloqueado_ate \
+             FROM administradores WHERE lower(email) = lower($1)",
+        )
+        .bind::<Text, _>(email)
+        .get_result::<AdministradorRow>(&mut conexao)
+        .optional_result();
+
+        match resultado {
+            Ok(Some(row)) => Ok(Some(Administrador {
+                id: row.id,
+                email: row.email,
+                senha_hash: row.senha_hash,
+                ativo: row.ativo,
+                bloqueado_ate: row.bloqueado_ate,
+            })),
+            Ok(None) => Ok(None),
+            Err(_) => Err(RepositorioError::Dados),
+        }
+    }
+
+    fn buscar_por_id(
+        &self,
+        administrador_id: Uuid,
+    ) -> Result<Option<Administrador>, RepositorioError> {
+        let mut conexao = self.conexao()?;
+        let resultado = diesel::sql_query(
+            "SELECT id, email, senha_hash, ativo, bloqueado_ate \
+             FROM administradores WHERE id = $1",
+        )
+        .bind::<SqlUuid, _>(administrador_id)
+        .get_result::<AdministradorRow>(&mut conexao)
+        .optional_result();
+
+        match resultado {
+            Ok(Some(row)) => Ok(Some(Administrador {
+                id: row.id,
+                email: row.email,
+                senha_hash: row.senha_hash,
+                ativo: row.ativo,
+                bloqueado_ate: row.bloqueado_ate,
+            })),
+            Ok(None) => Ok(None),
+            Err(_) => Err(RepositorioError::Dados),
+        }
+    }
+
+    fn registrar_falha(
+        &self,
+        administrador_id: Uuid,
+        max_tentativas: u32,
+        bloqueio_secs: u64,
+    ) -> Result<(), RepositorioError> {
+        let mut conexao = self.conexao()?;
+        let max_tentativas = i32::try_from(max_tentativas).unwrap_or(i32::MAX);
+        let bloqueio_secs = i64::try_from(bloqueio_secs).unwrap_or(i64::MAX);
+
+        diesel::sql_query(
+            "UPDATE administradores SET falhas_consecutivas = falhas_consecutivas + 1, \
+             bloqueado_ate = CASE WHEN falhas_consecutivas + 1 >= $2 \
+             THEN NOW() + ($3 * INTERVAL '1 second') ELSE bloqueado_ate END \
+             WHERE id = $1",
+        )
+        .bind::<SqlUuid, _>(administrador_id)
+        .bind::<Integer, _>(max_tentativas)
+        .bind::<BigInt, _>(bloqueio_secs)
+        .execute(&mut conexao)
+        .map(|_| ())
+        .map_err(|_| RepositorioError::Dados)
+    }
+
+    fn registrar_sucesso(&self, administrador_id: Uuid) -> Result<(), RepositorioError> {
+        let mut conexao = self.conexao()?;
+        diesel::sql_query(
+            "UPDATE administradores SET falhas_consecutivas = 0, bloqueado_ate = NULL, \
+             ultimo_login_em = NOW() WHERE id = $1",
+        )
+        .bind::<SqlUuid, _>(administrador_id)
+        .execute(&mut conexao)
+        .map(|_| ())
+        .map_err(|_| RepositorioError::Dados)
+    }
+}
+
+impl SessaoAdminRepositorio for RepositorioDiesel {
+    fn criar(&self, sessao: &SessaoAdmin) -> Result<(), RepositorioError> {
+        let mut conexao = self.conexao()?;
+        diesel::sql_query(
+            "INSERT INTO sessoes_admin \
+             (id, administrador_id, familia_id, refresh_hash, criado_em, expira_em, \
+              revogada_em, ip, user_agent) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8::inet, $9)",
+        )
+        .bind::<SqlUuid, _>(sessao.id)
+        .bind::<SqlUuid, _>(sessao.administrador_id)
+        .bind::<SqlUuid, _>(sessao.familia_id)
+        .bind::<Text, _>(&sessao.refresh_hash)
+        .bind::<Timestamptz, _>(sessao.criado_em)
+        .bind::<Timestamptz, _>(sessao.expira_em)
+        .bind::<Nullable<Timestamptz>, _>(sessao.revogada_em)
+        .bind::<Nullable<Text>, _>(sessao.ip.as_deref())
+        .bind::<Nullable<Text>, _>(sessao.user_agent.as_deref())
+        .execute(&mut conexao)
+        .map(|_| ())
+        .map_err(|_| RepositorioError::Dados)
+    }
+
+    fn buscar_por_hash(
+        &self,
+        refresh_hash: &str,
+    ) -> Result<Option<SessaoAdminComAdministrador>, RepositorioError> {
+        let mut conexao = self.conexao()?;
+        let resultado = diesel::sql_query(
+            "SELECT s.id, s.administrador_id, s.familia_id, s.refresh_hash::text AS refresh_hash, \
+             s.criado_em, s.expira_em, s.revogada_em, s.ip::text AS ip, s.user_agent, \
+             a.email, a.senha_hash, a.ativo, a.bloqueado_ate \
+             FROM sessoes_admin s \
+             JOIN administradores a ON a.id = s.administrador_id \
+             WHERE s.refresh_hash = $1",
+        )
+        .bind::<Text, _>(refresh_hash)
+        .get_result::<SessaoAdminRow>(&mut conexao)
+        .optional_result();
+
+        match resultado {
+            Ok(Some(row)) => Ok(Some(SessaoAdminComAdministrador {
+                sessao: SessaoAdmin {
+                    id: row.id,
+                    administrador_id: row.administrador_id,
+                    familia_id: row.familia_id,
+                    refresh_hash: row.refresh_hash,
+                    criado_em: row.criado_em,
+                    expira_em: row.expira_em,
+                    revogada_em: row.revogada_em,
+                    ip: row.ip,
+                    user_agent: row.user_agent,
+                },
+                administrador: Administrador {
+                    id: row.administrador_id,
+                    email: row.email,
+                    senha_hash: row.senha_hash,
+                    ativo: row.ativo,
+                    bloqueado_ate: row.bloqueado_ate,
+                },
+            })),
+            Ok(None) => Ok(None),
+            Err(_) => Err(RepositorioError::Dados),
+        }
+    }
+
+    fn revogar(&self, sessao_id: Uuid) -> Result<bool, RepositorioError> {
+        let mut conexao = self.conexao()?;
+        diesel::sql_query(
+            "UPDATE sessoes_admin SET revogada_em = NOW() \
+             WHERE id = $1 AND revogada_em IS NULL",
+        )
+        .bind::<SqlUuid, _>(sessao_id)
+        .execute(&mut conexao)
+        .map(|linhas| linhas > 0)
+        .map_err(|_| RepositorioError::Dados)
+    }
+
+    fn revogar_familia(&self, familia_id: Uuid) -> Result<u64, RepositorioError> {
+        let mut conexao = self.conexao()?;
+        diesel::sql_query(
+            "UPDATE sessoes_admin SET revogada_em = NOW() \
+             WHERE familia_id = $1 AND revogada_em IS NULL",
+        )
+        .bind::<SqlUuid, _>(familia_id)
+        .execute(&mut conexao)
+        .map(|linhas| linhas as u64)
         .map_err(|_| RepositorioError::Dados)
     }
 }

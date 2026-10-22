@@ -14,8 +14,8 @@ import { RouterLink } from '@angular/router';
         <p class="sobretitulo">Acesso</p>
         <h1>Acesso negado</h1>
         <p class="descricao">
-          Sua conta não tem permissão para acessar este recurso no Painel do
-          Escritório.
+          Sua conta não tem permissão para acessar este recurso no Backoffice
+          SaaS.
         </p>
         <p><a routerLink="/dashboard">Voltar ao dashboard</a></p>
       </section>

@@ -150,7 +150,7 @@ impl LoginUsuario {
         self.sessoes.criar(&sessao)?;
 
         if let Err(erro) = self.auditoria.registrar(&EventoAuditoria {
-            escritorio_id: escritorio.id,
+            escritorio_id: Some(escritorio.id),
             usuario_id: Some(usuario.id),
             acao: "AUTH_LOGIN_SUCESSO",
             entidade: "sessoes",
@@ -180,7 +180,7 @@ impl LoginUsuario {
     ) {
         let email_hash = self.refresh.hash(email);
         if let Err(erro) = self.auditoria.registrar(&EventoAuditoria {
-            escritorio_id,
+            escritorio_id: Some(escritorio_id),
             usuario_id,
             acao: "AUTH_LOGIN_FALHA",
             entidade: "usuarios",

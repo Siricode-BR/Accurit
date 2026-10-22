@@ -10,15 +10,18 @@ async fn main() -> ExitCode {
     let mut argumentos: Vec<String> = std::env::args().skip(1).collect();
 
     let comando = argumentos.first().map(String::as_str).map(str::to_owned);
-    if comando.as_deref() == Some("bootstrap-user") {
+    if comando.as_deref() == Some("bootstrap-admin")
+        || comando.as_deref() == Some("bootstrap-tenant")
+    {
+        let alvo = comando.expect("comando verificado acima");
         argumentos.remove(0);
-        return executar_bootstrap(&argumentos).await;
+        return executar_bootstrap(&alvo, &argumentos).await;
     }
 
     executar_servidor().await
 }
 
-async fn executar_bootstrap(argumentos: &[String]) -> ExitCode {
+async fn executar_bootstrap(alvo: &str, argumentos: &[String]) -> ExitCode {
     if argumentos.iter().any(|arg| arg == "--help" || arg == "-h") {
         println!("{}", bootstrap::AJUDA);
         return ExitCode::SUCCESS;
@@ -37,10 +40,10 @@ async fn executar_bootstrap(argumentos: &[String]) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    match bootstrap::executar(argumentos).await {
+    match bootstrap::executar(alvo, argumentos).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(erro) => {
-            eprintln!("erro no bootstrap-user: {erro}");
+            eprintln!("erro no {alvo}: {erro}");
             ExitCode::FAILURE
         }
     }

@@ -4,6 +4,9 @@ use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::http::{Method, Request, StatusCode, header};
 use axum::response::Response;
+use diesel::r2d2::Pool;
+use diesel::r2d2::ConnectionManager;
+use diesel::PgConnection;
 use serde_json::Value;
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -11,10 +14,11 @@ use uuid::Uuid;
 use accurit_backend::application::ports::{SaudeBanco, SaudeBancoError};
 use accurit_backend::application::saude::ConsultarSaude;
 use accurit_backend::infrastructure::config::Config;
+use accurit_backend::infrastructure::persistence::pool::DbPool;
 use accurit_backend::presentation::routes;
 use accurit_backend::presentation::state::AppState;
 
-use common::configuracao;
+use common::{configuracao, pool_do_banco};
 
 struct BancoFixo {
     disponivel: bool,
@@ -30,9 +34,9 @@ impl SaudeBanco for BancoFixo {
     }
 }
 
-fn app(disponivel: bool, config: &Config) -> Router {
+fn app(disponivel: bool, config: &Config, pool: DbPool) -> Router {
     routes::construir(
-        AppState::novo(ConsultarSaude::novo(BancoFixo { disponivel })),
+        AppState::novo(ConsultarSaude::novo(BancoFixo { disponivel }), pool),
         None,
         config,
     )
@@ -65,8 +69,10 @@ fn request_id(resposta: &Response) -> String {
 
 #[tokio::test]
 async fn health_retorna_ok_e_request_id_gerado() {
+    let banco = common::BancoTemporario::novo();
+    let pool = pool_do_banco(&banco);
     let config = configuracao("");
-    let resposta = app(true, &config)
+    let resposta = app(true, &config, pool)
         .oneshot(pedido(Method::GET, "/api/v1/health"))
         .await
         .expect("router deve responder");
@@ -94,8 +100,10 @@ async fn health_retorna_ok_e_request_id_gerado() {
 
 #[tokio::test]
 async fn health_preserva_request_id_valido_e_substitui_invalido() {
+    let banco = common::BancoTemporario::novo();
+    let pool = pool_do_banco(&banco);
     let config = configuracao("");
-    let app = app(true, &config);
+    let app = app(true, &config, pool);
 
     let mut requisicao = pedido(Method::GET, "/api/v1/health");
     requisicao
@@ -121,8 +129,10 @@ async fn health_preserva_request_id_valido_e_substitui_invalido() {
 
 #[tokio::test]
 async fn health_retorna_503_com_envelope_quando_banco_falha() {
+    let banco = common::BancoTemporario::novo();
+    let pool = pool_do_banco(&banco);
     let config = configuracao("");
-    let resposta = app(false, &config)
+    let resposta = app(false, &config, pool)
         .oneshot(pedido(Method::GET, "/api/v1/health"))
         .await
         .expect("router deve responder");
@@ -144,8 +154,10 @@ async fn health_retorna_503_com_envelope_quando_banco_falha() {
 
 #[tokio::test]
 async fn rotas_inexistentes_e_metodos_invalidos_retornam_envelope() {
+    let banco = common::BancoTemporario::novo();
+    let pool = pool_do_banco(&banco);
     let config = configuracao("");
-    let app = app(true, &config);
+    let app = app(true, &config, pool);
 
     let resposta = app
         .clone()
@@ -178,8 +190,10 @@ async fn rotas_inexistentes_e_metodos_invalidos_retornam_envelope() {
 
 #[tokio::test]
 async fn cors_so_permite_origens_configuradas() {
+    let banco = common::BancoTemporario::novo();
+    let pool = pool_do_banco(&banco);
     let config = configuracao("http://localhost:4200");
-    let app = app(true, &config);
+    let app = app(true, &config, pool);
 
     let mut requisicao = pedido(Method::GET, "/api/v1/health");
     requisicao
@@ -216,8 +230,10 @@ async fn cors_so_permite_origens_configuradas() {
 
 #[tokio::test]
 async fn limite_de_requisicoes_retorna_429_e_health_e_isento() {
+    let banco = common::BancoTemporario::novo();
+    let pool = pool_do_banco(&banco);
     let config = configuracao("");
-    let app = app(true, &config);
+    let app = app(true, &config, pool);
 
     let mut status_final = StatusCode::OK;
     for _ in 0..61 {

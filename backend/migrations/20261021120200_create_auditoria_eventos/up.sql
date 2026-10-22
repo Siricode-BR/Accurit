@@ -1,7 +1,8 @@
 CREATE TABLE auditoria_eventos (
     id UUID PRIMARY KEY,
-    escritorio_id UUID NOT NULL REFERENCES escritorios(id),
+    escritorio_id UUID REFERENCES escritorios(id),
     usuario_id UUID,
+    administrador_id UUID,
     acao VARCHAR(64) NOT NULL,
     entidade VARCHAR(64),
     entidade_id UUID,
@@ -11,3 +12,4 @@ CREATE TABLE auditoria_eventos (
     criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_auditoria_escritorio_criado ON auditoria_eventos(escritorio_id, criado_em DESC);
+CREATE INDEX idx_auditoria_administrador_criado ON auditoria_eventos(administrador_id, criado_em DESC);

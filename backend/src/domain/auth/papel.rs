@@ -20,7 +20,7 @@ impl Papel {
     }
 
     pub const fn exige_cpf(self) -> bool {
-        !matches!(self, Self::Cliente)
+        matches!(self, Self::Admin | Self::Operador | Self::Cliente)
     }
 }
 
@@ -65,9 +65,16 @@ mod tests {
     }
 
     #[test]
-    fn cliente_nao_exige_cpf() {
-        assert!(!Papel::Cliente.exige_cpf());
+    fn todos_os_papeis_exigem_cpf() {
         assert!(Papel::Admin.exige_cpf());
         assert!(Papel::Operador.exige_cpf());
+        assert!(Papel::Cliente.exige_cpf());
+    }
+
+    #[test]
+    fn papel_admin_e_reservado_ao_gestor_de_tenants() {
+        // Papel::Admin existe apenas para tokens do backoffice (administradores);
+        // a tabela usuarios nunca o registra (migration restringe a CHECK).
+        assert_eq!(Papel::Admin.como_str(), "ADMIN");
     }
 }

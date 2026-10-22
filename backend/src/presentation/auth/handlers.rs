@@ -7,14 +7,18 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 
 use crate::application::auth::{
-    AuthError, LoginCommand, LogoutCommand, RenovarCommand, RepositorioError, SessaoEmitida,
-    UsuarioAtualCommand,
+    AdministradorAtualCommand, AuthError, LoginAdminCommand, LoginCommand, LogoutAdminCommand,
+    LogoutCommand, RenovarAdminCommand, RenovarCommand, RepositorioError, SessaoAdminEmitida,
+    SessaoEmitida, UsuarioAtualCommand,
 };
 use crate::domain::auth::Audiencia;
 use crate::presentation::error::ApiError;
 use crate::presentation::middleware::request_id::RequestId;
 
-use super::dto::{LoginRequest, LoginResponse, UsuarioAtualResponse, UsuarioResponse};
+use super::dto::{
+    AdministradorAtualResponse, AdministradorResponse, LoginAdminRequest, LoginAdminResponse,
+    LoginRequest, LoginResponse, UsuarioAtualResponse, UsuarioResponse,
+};
 use super::middleware::RequestContext;
 use super::state::AuthState;
 
@@ -25,9 +29,28 @@ pub async fn login_admin(
     state: State<AuthState>,
     request_id: RequestId,
     cabecalhos: HeaderMap,
-    corpo: Result<Json<LoginRequest>, JsonRejection>,
+    corpo: Result<Json<LoginAdminRequest>, JsonRejection>,
 ) -> Response {
-    login(state.0, request_id, cabecalhos, corpo, Audiencia::Admin).await
+    let Json(corpo) = match corpo {
+        Ok(corpo) => corpo,
+        Err(_) => return ApiError::invalid_json().resposta(request_id.como_str()),
+    };
+
+    let comando = LoginAdminCommand {
+        email: corpo.email,
+        senha: corpo.senha,
+        ip: ip_da_requisicao(&cabecalhos),
+        user_agent: user_agent(&cabecalhos),
+    };
+
+    let login = state.0.login_admin.clone();
+    let resultado = tokio::task::spawn_blocking(move || login.executar(comando)).await;
+
+    match resultado {
+        Ok(Ok(sessao)) => resposta_sessao_admin(&state.0, sessao),
+        Ok(Err(erro)) => erro_auth(erro).resposta(request_id.como_str()),
+        Err(_) => ApiError::erro_interno().resposta(request_id.como_str()),
+    }
 }
 
 pub async fn login_client(
@@ -75,7 +98,38 @@ pub async fn refresh_admin(
     request_id: RequestId,
     cabecalhos: HeaderMap,
 ) -> Response {
-    refresh(state.0, request_id, cabecalhos, Audiencia::Admin).await
+    let state = state.0;
+    if let Err(erro) = validar_csrf(&cabecalhos) {
+        return erro.resposta(request_id.como_str());
+    }
+
+    let Some(refresh_token) = super::cookie::CookieSettings::extrair(Audiencia::Admin, &cabecalhos)
+    else {
+        return com_cookie_limpo(
+            ApiError::sessao_expirada().resposta(request_id.como_str()),
+            state.cookie,
+            Audiencia::Admin,
+        );
+    };
+
+    let comando = RenovarAdminCommand {
+        refresh_token,
+        ip: ip_da_requisicao(&cabecalhos),
+        user_agent: user_agent(&cabecalhos),
+    };
+
+    let renovar = state.renovar_admin.clone();
+    let resultado = tokio::task::spawn_blocking(move || renovar.executar(comando)).await;
+
+    match resultado {
+        Ok(Ok(sessao)) => resposta_sessao_admin(&state, sessao),
+        Ok(Err(erro)) => com_cookie_limpo(
+            erro_auth(erro).resposta(request_id.como_str()),
+            state.cookie,
+            Audiencia::Admin,
+        ),
+        Err(_) => ApiError::erro_interno().resposta(request_id.como_str()),
+    }
 }
 
 pub async fn refresh_client(
@@ -130,7 +184,38 @@ pub async fn logout_admin(
     request_id: RequestId,
     cabecalhos: HeaderMap,
 ) -> Response {
-    logout(state.0, request_id, cabecalhos, Audiencia::Admin).await
+    let state = state.0;
+    if let Err(erro) = validar_csrf(&cabecalhos) {
+        return erro.resposta(request_id.como_str());
+    }
+
+    if let Some(refresh_token) =
+        super::cookie::CookieSettings::extrair(Audiencia::Admin, &cabecalhos)
+    {
+        let comando = LogoutAdminCommand {
+            refresh_token,
+            ip: ip_da_requisicao(&cabecalhos),
+        };
+        let logout = state.logout_admin.clone();
+        let resultado = tokio::task::spawn_blocking(move || logout.executar(comando)).await;
+        match resultado {
+            Ok(Ok(())) => {}
+            Ok(Err(erro)) => {
+                return com_cookie_limpo(
+                    erro_auth(erro).resposta(request_id.como_str()),
+                    state.cookie,
+                    Audiencia::Admin,
+                );
+            }
+            Err(_) => return ApiError::erro_interno().resposta(request_id.como_str()),
+        }
+    }
+
+    com_cookie_limpo(
+        StatusCode::NO_CONTENT.into_response(),
+        state.cookie,
+        Audiencia::Admin,
+    )
 }
 
 pub async fn logout_client(
@@ -184,7 +269,25 @@ pub async fn me_admin(
     request_id: RequestId,
     Extension(contexto): Extension<RequestContext>,
 ) -> Response {
-    usuario_atual(state.0, request_id, contexto).await
+    let comando = AdministradorAtualCommand {
+        administrador_id: contexto.usuario_id,
+    };
+
+    let administrador_atual = state.0.administrador_atual.clone();
+    let resultado =
+        tokio::task::spawn_blocking(move || administrador_atual.executar(comando)).await;
+
+    match resultado {
+        Ok(Ok(administrador)) => (
+            StatusCode::OK,
+            Json(AdministradorAtualResponse {
+                usuario: AdministradorResponse::from(administrador),
+            }),
+        )
+            .into_response(),
+        Ok(Err(erro)) => erro_auth(erro).resposta(request_id.como_str()),
+        Err(_) => ApiError::erro_interno().resposta(request_id.como_str()),
+    }
 }
 
 pub async fn me_client(
@@ -200,8 +303,12 @@ async fn usuario_atual(
     request_id: RequestId,
     contexto: RequestContext,
 ) -> Response {
+    let Some(escritorio_id) = contexto.escritorio_id else {
+        return ApiError::sessao_expirada().resposta(request_id.como_str());
+    };
+
     let comando = UsuarioAtualCommand {
-        escritorio_id: contexto.escritorio_id,
+        escritorio_id,
         usuario_id: contexto.usuario_id,
         audiencia: contexto.audiencia,
     };
@@ -229,17 +336,52 @@ fn resposta_sessao(state: AuthState, audiencia: Audiencia, sessao: SessaoEmitida
         usuario: UsuarioResponse::from(sessao.usuario),
     };
 
-    let Ok(cookie) = HeaderValue::from_str(&state.cookie.criar(
+    resposta_com_cookie(
+        state.cookie,
         audiencia,
         &sessao.refresh_token,
         sessao.refresh_ttl_secs,
-    )) else {
+        corpo,
+    )
+}
+
+fn resposta_sessao_admin(state: &AuthState, sessao: SessaoAdminEmitida) -> Response {
+    let corpo = LoginAdminResponse {
+        access_token: sessao.access_token,
+        expires_in: sessao.expires_in,
+        usuario: AdministradorResponse::from(sessao.administrador),
+    };
+
+    resposta_com_cookie(
+        state.cookie,
+        Audiencia::Admin,
+        &sessao.refresh_token,
+        sessao.refresh_ttl_secs,
+        corpo,
+    )
+}
+
+fn resposta_com_cookie<T>(
+    cookie: super::cookie::CookieSettings,
+    audiencia: Audiencia,
+    refresh_token: &str,
+    refresh_ttl_secs: u64,
+    corpo: T,
+) -> Response
+where
+    T: serde::Serialize,
+{
+    let Ok(valor_cookie) =
+        HeaderValue::from_str(&cookie.criar(audiencia, refresh_token, refresh_ttl_secs))
+    else {
         tracing::error!("não foi possível montar o cookie de sessão");
         return ApiError::erro_interno().resposta("desconhecido");
     };
 
     let mut resposta = (StatusCode::OK, Json(corpo)).into_response();
-    resposta.headers_mut().append(header::SET_COOKIE, cookie);
+    resposta
+        .headers_mut()
+        .append(header::SET_COOKIE, valor_cookie);
     resposta
 }
 

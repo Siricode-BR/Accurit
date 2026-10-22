@@ -6,6 +6,6 @@ mod rate_limit;
 mod router;
 mod state;
 
-pub use middleware::RequestContext;
+pub use middleware::{RequestContext, ExigirAudiencia, exigir};
 pub use router::construir;
 pub use state::{AuthInitError, AuthState};

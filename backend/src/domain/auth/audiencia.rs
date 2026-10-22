@@ -28,8 +28,11 @@ impl Audiencia {
 
     pub const fn aceita(self, papel: Papel) -> bool {
         match self {
-            Self::Admin => matches!(papel, Papel::Admin | Papel::Operador),
-            Self::Client => matches!(papel, Papel::Cliente),
+            // A audiência `admin` pertence ao backoffice SaaS (ADR-0010): nenhum papel de
+            // `usuarios` autentica nela — o gestor de tenants usa `administradores`.
+            Self::Admin => false,
+            // A plataforma do escritório aceita o titular (CLIENTE) e sua equipe (OPERADOR).
+            Self::Client => matches!(papel, Papel::Operador | Papel::Cliente),
         }
     }
 }
@@ -61,17 +64,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn admin_aceita_apenas_papeis_do_escritorio() {
-        assert!(Audiencia::Admin.aceita(Papel::Admin));
-        assert!(Audiencia::Admin.aceita(Papel::Operador));
-        assert!(!Audiencia::Admin.aceita(Papel::Cliente));
+    fn nenhuma_audiencia_aceita_papel_admin_de_usuarios() {
+        // O papel ADMIN tornou-se exclusivo do backoffice (tabela separada).
+        assert!(!Audiencia::Admin.aceita(Papel::Admin));
+        assert!(!Audiencia::Client.aceita(Papel::Admin));
     }
 
     #[test]
-    fn client_aceita_apenas_cliente() {
+    fn client_aceita_papeis_da_plataforma_do_escritorio() {
         assert!(Audiencia::Client.aceita(Papel::Cliente));
-        assert!(!Audiencia::Client.aceita(Papel::Admin));
-        assert!(!Audiencia::Client.aceita(Papel::Operador));
+        assert!(Audiencia::Client.aceita(Papel::Operador));
+        assert!(!Audiencia::Admin.aceita(Papel::Operador));
+        assert!(!Audiencia::Admin.aceita(Papel::Cliente));
     }
 
     #[test]

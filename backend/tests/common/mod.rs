@@ -12,6 +12,7 @@ use url::Url;
 use uuid::Uuid;
 
 use accurit_backend::infrastructure::config::Config;
+use accurit_backend::infrastructure::persistence::pool::DbPool;
 
 pub struct BancoTemporario {
     admin_url: String,
@@ -99,4 +100,9 @@ pub fn configuracao_com_extras(cors_allowed_origins: &str, extras: &[(&str, &str
     }
 
     Config::from_pairs(pares).expect("configuração de teste válida")
+}
+
+pub fn pool_do_banco(banco: &BancoTemporario) -> DbPool {
+    use accurit_backend::infrastructure::persistence::pool::criar_pool;
+    criar_pool(&banco.database_url).expect("pool deve ser criado")
 }
