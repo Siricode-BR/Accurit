@@ -89,7 +89,7 @@ Copie `.env.example` para `.env` e preencha os valores. Nunca versione `.env`, c
 | `AUTH_LOCKOUT_SECS` | Não | Duração do bloqueio de login em segundos (padrão 900) |
 | `AUTH_COOKIE_SECURE` | Não | `true` por padrão no Compose; `false` só com `APP_ENV=development` |
 | `AUTH_ARGON2_MEMORY_KIB` / `AUTH_ARGON2_ITERATIONS` / `AUTH_ARGON2_PARALLELISM` | Não | Ajuste opcional do Argon2id (padrões OWASP: 19456/2/1) |
-| `BOOTSTRAP_USER_PASSWORD` | Tools | Senha do primeiro usuário criado por `bootstrap-user` (≥ 8 caracteres); nunca versionar |
+| `BOOTSTRAP_ADMIN_PASSWORD` | Tools | Senha do primeiro administrador criado por `bootstrap-admin` (≥ 8 caracteres); nunca versionar |
 | `CERTIFICATE_MASTER_KEY` | Sim | Chave AES-256-GCM: base64 que decodifica para exatamente 32 bytes; valor de exemplo deve falhar no startup |
 | `CORS_ALLOWED_ORIGINS` | Não | Lista separada por vírgula; vazia não permite nenhuma origem (same-origin via proxy) |
 | `SERPRO_TOKEN_URL` | Sim | `https://gateway.apiserpro.serpro.gov.br/token` |
@@ -168,18 +168,14 @@ A chave de trial é configuração de ambiente e **não** deve ser embutida no c
 32 bytes. Prefira sempre `scripts/init-env.sh`/`scripts/init-env.ps1` para gerar o `.env`.
 
 `AUTH_COOKIE_SECURE` usa `true` por padrão no Compose (produção); o `.env.example` local usa `false`,
-aceito apenas com `APP_ENV=development`. Depois de subir a stack, crie o primeiro usuário — não existe
-cadastro público:
+aceito apenas com `APP_ENV=development`. Depois de subir a stack, crie o primeiro **administrador SaaS** (gestor de tenants) — não existe cadastro público:
 
 ```bash
-docker compose run --rm -e BOOTSTRAP_USER_PASSWORD='troque-esta-senha' backend \
-  bootstrap-user --escritorio-slug demo --escritorio-nome "Escritório Demo" \
-  --email admin@exemplo.com --cpf 00011122233 --papel ADMIN
+docker compose run --rm -e BOOTSTRAP_ADMIN_PASSWORD='troque-esta-senha' backend \
+  bootstrap-admin --email admin@accurit.com --cpf 00011122233
 ```
 
-O comando cria o escritório (se necessário) e o usuário com senha Argon2id; `--papel` aceita `ADMIN`,
-`OPERADOR` ou `CLIENTE` e o `--cpf` é obrigatório exceto para `CLIENTE`. O login do painel é
-`/admin/login` e o do portal, `/app/login`; veja `bootstrap-user --help` para a ajuda completa.
+O comando cria o registro na tabela `administradores` com senha Argon2id e CPF obrigatório (ADR-0010). O login do backoffice SaaS é `/admin/login` e o da plataforma do escritório, `/app/login`; veja `bootstrap-admin --help` para a ajuda completa.
 
 ---
 

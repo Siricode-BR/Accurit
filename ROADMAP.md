@@ -6,9 +6,7 @@
 
 **Estado atual:** a Fase 0 (reconciliação documental e configuração) foi concluída. A Fase 1
 (fundação, infraestrutura e base multi-tenant) foi implementada e validada tecnicamente; o aceite
-formal está pendente. A Fase 2A (login por aplicação, no painel e no portal do cliente) foi
-implementada na branch `feat/fase-2a-login-por-app` e aguarda aceite formal; a Fase 2B (clientes,
-certificados e procurações) não foi iniciada.
+formal está pendente. A Fase 2A (login por aplicação revisado pelo [ADR-0010](docs/ADR/0010-revisao-atores-papeis-e-provisionamento.md)) exige ajuste na ligação papel↔audiência e separação da tabela de administradores; a Fase 2B (backoffice de tenants, clientes, certificados e procurações) não foi iniciada.
 
 ---
 
@@ -58,23 +56,24 @@ certificados e procurações) não foi iniciada.
 
 ## Fase 2 — Autenticação, escritórios e clientes
 
-O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/login` → `/app/login`) está
-implementado e registrado no [ADR-0009](docs/ADR/0009-autenticacao-por-aplicacao.md); o restante da
-fase (2B) segue pendente.
+O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/login` → `/app/login`) foi implementado no modelo inicial e **revisado pelo [ADR-0010](docs/ADR/0010-revisao-atores-papeis-e-provisionamento.md)** para separar o gestor SaaS (`administradores`) dos usuários do escritório (`usuarios`). O restante da fase (2B) segue pendente.
 
 ### 1. Banco de Dados
-- [x] Criar `sessoes` com audiência (`ADMIN`/`CLIENT`), família de refresh, hash SHA-256 único, expiração, revogação e índices, sem `ALTER` (Fase 2A).
+- [x] Criar `sessoes` com audiência (`CLIENT`), família de refresh, hash SHA-256 único, expiração, revogação e índices, sem `ALTER` (Fase 2A).
+- [ ] Criar tabela `administradores` e `sessoes_admin` para o gestor de tenants SaaS (ADR-0010).
 - [ ] Criar `clientes` com `escritorio_id`, `tipo` (`PF`/`PJ`), `porte_regime`, `cpf_cnpj`, nome/razão social, contatos e timestamps.
 - [ ] Restringir `tipo` a `PF`/`PJ` e regimes a `MEI`, `SIMPLES_NACIONAL`, `LUCRO_PRESUMIDO`, `LUCRO_REAL`.
 - [ ] Criar `UNIQUE (escritorio_id, cpf_cnpj)` e índices `(escritorio_id, tipo)` e `(escritorio_id, porte_regime)`.
 - [ ] Criar `certificados_a1`, `credenciais_serpro`, `procuracoes`, `tokens_serpro` e `consultas_fiscais` conforme o modelo.
-- [ ] Consolidar a regra de CPF de usuário: obrigatório para `ADMIN`/`OPERADOR` na Fase 1; definir o requisito de CPF para `CLIENTE` no fluxo de cadastro da Fase 2.
+- [ ] Consolidar a regra de CPF de usuário: obrigatório (`NOT NULL`) com 11 dígitos para todos os papéis (`ADMIN`, `CLIENTE`, `OPERADOR`), fechando o requisito (ADR-0010).
 - [ ] Definir política de retenção e minimização de dados fiscais.
 
 ### 2. Backend (Rust / DDD)
-- [x] Implementar login JWT por audiência com claims `sub`, `escritorio_id`, `role` e `aud` (`admin`/`client`); token de uma audiência é rejeitado na outra (Fase 2A).
-- [x] Implementar refresh opaco com rotação e família, reuso revogando a sessão, logout, lockout por tentativas, rate limit de login e auditoria (`AUTH_LOGIN_SUCESSO`, `AUTH_LOGIN_FALHA`, `AUTH_LOGOUT`, `AUTH_REFRESH_REUSO`) (Fase 2A).
-- [x] Entregar o bootstrap do primeiro usuário (`bootstrap-user`) sem cadastro público (Fase 2A).
+- [x] Implementar login JWT por audiência com claims `sub`, `role` e `aud` (`admin`/`client`), rejeitando token cruzado (Fase 2A).
+- [ ] Ajustar autenticação da audiência `admin` para consultar `administradores` e `sessoes_admin` (sem `escritorio_id` no JWT).
+- [ ] Ajustar autenticação da audiência `client` para aceitar papéis `CLIENTE` e `OPERADOR` na plataforma do escritório.
+- [x] Implementar refresh opaco com rotação e família, reuso revogando a sessão, logout, lockout por tentativas, rate limit de login e auditoria (Fase 2A).
+- [ ] Entregar o bootstrap do primeiro administrador (`bootstrap-admin`) e o provisionamento de tenants.
 - [ ] Aplicar middleware de tenancy e enforcement nos repositórios Diesel.
 - [ ] Implementar CRUD de clientes PF/PJ com validação de dígitos verificadores de CPF/CNPJ.
 - [ ] Implementar filtros da API: `Todos`, `CPF`, `CNPJ - MEI`, `CNPJ - Simples Nacional`, `CNPJ - Lucro Presumido`, `CNPJ - Lucro Real`.
@@ -84,13 +83,14 @@ fase (2B) segue pendente.
 
 ### 3. Frontend (Angular / Next.js)
 - [x] Implementar login por aplicação (`/admin/login` e `/app/login`), guards de sessão, renovação automática no 401, `returnUrl` validado e rota de acesso negado (Fase 2A).
-- [ ] Implementar guards por papel nos fluxos de clientes e tratamento consistente de 403.
+- [ ] Adaptar o app `/admin` para operar como Backoffice SaaS (gestão de tenants e criação do titular `CLIENTE`).
+- [ ] Implementar guards por papel nos fluxos de clientes e tratamento consistente de 403 na plataforma do escritório (`/app`).
 - [ ] Criar telas de cadastro, edição, detalhes e listagem de clientes.
 - [ ] Disponibilizar todos os filtros tributários e sincronizá-los com query params.
 - [ ] Implementar estados de loading, erro, vazio, validação e paginação.
 - [ ] Criar páginas institucionais e formulários de lead no app Next.js (`web`).
 
-**Aceite (2A):** login independente no painel e no portal, com refresh rotativo, logout revogando a sessão e token de uma audiência rejeitado na outra; itens implementados, aceite formal pendente. **Aceite (2B):** cliente PF/PJ cadastrado, filtrado e editado com isolamento por escritório; usuário nunca acessa dados de outro tenant.
+**Aceite (2A):** login independente no backoffice e na plataforma do escritório, com refresh rotativo, logout revogando a sessão e token de uma audiência rejeitado na outra (com papéis revisados pelo ADR-0010). **Aceite (2B):** gestor SaaS provisiona tenant com titular, cliente PF/PJ é cadastrado/filtrado/editado com isolamento por escritório, e dados cruzados são bloqueados.
 
 ---
 

@@ -1,6 +1,8 @@
 # ADR-0009 — Autenticação própria por aplicação (Painel e Portal)
 
-- **Status:** Aceito
+- **Status:** Aceito — parcialmente suplantado: a decisão A1 (papéis por audiência) e o exemplo de
+  bootstrap do A5 foram revisados pelo [ADR-0010](0010-revisao-atores-papeis-e-provisionamento.md).
+  A mecânica desta decisão permanece válida.
 - **Data:** 2026-10-21
 - **Decisores:** Arquitetura Accurit
 - **Escopo:** Fase 2A — login, sessão, renovação e logout do Admin (`/admin/`) e do Client (`/app/`)

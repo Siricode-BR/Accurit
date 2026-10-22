@@ -15,6 +15,7 @@
 | D3 | Header `x-cpf-usuario` | **Não confirmado** | Médio | Manter flag; teste live opt-in |
 | D4 | Allowlist de serviços (parcelamentos/SICALC) | **Decidido** | Alto | Ver [ADR-0002](ADR/0002-escopo-consultivo-divida-ativa.md) |
 | D5 | URL de produção da Dívida Ativa | **Não confirmado** | Alto | Bloquear com `SERPRO_PROD_NOT_CONFIGURED` |
+| D6 | Modelo de atores e separação do ADMIN SaaS | **Decidido** | Alto | Ver [ADR-0010](ADR/0010-revisao-atores-papeis-e-provisionamento.md) |
 | P1 | Conversão dos docs oficiais para Markdown | Pendente | Baixo | Conferir com PDF e remover aviso |
 | P2 | Formato de “sem pendências” (200 vazio vs 404) | **Não confirmado** | Médio | Teste live opt-in |
 | P3 | Formato multi-inscrição de `/devedor` | **Não confirmado** | Médio | DTO tolerante; teste live |
@@ -37,20 +38,18 @@ nova decisão arquitetural.
 | F5 | Rate limit com chave abstrata; Fase 1 usa IP de `X-Real-IP` | Fase 2 troca para `escritorio_id` sem reescrever o middleware |
 | F6 | Testes de integração no serviço `backend-test` (profile `tools`) | Banco descartável por teste; sem dependência de toolchain no host |
 
-## Decisões de implementação da Fase 2A
+## Decisões de implementação da Fase 2A e Revisão de Atores (ADR-0010)
 
-Estas decisões estão **fechadas** para a autenticação por aplicação e registradas em
-[ADR-0009](ADR/0009-autenticacao-por-aplicacao.md). Não são pendências externas; mudanças exigem nova
-decisão arquitetural.
+Estas decisões estão **fechadas** para a autenticação por aplicação revisada e registradas em
+[ADR-0010](ADR/0010-revisao-atores-papeis-e-provisionamento.md) (suplementando o ADR-0009).
 
 | ID | Decisão | Efeito |
 |---|---|---|
-| G1 | Rotas de auth por audiência (`/api/v1/auth/{admin,client}/*`) com claim `aud` e papel fixo por audiência | Token do painel não vale no portal; `CLIENTE` não acessa o painel e vice-versa |
-| G2 | Access JWT HS256 de 900 s + refresh opaco 256 bits com hash SHA-256, rotação e família | Reuso de refresh revoga a família e audita `AUTH_REFRESH_REUSO`; logout revoga no servidor |
-| G3 | Refresh em cookie `HttpOnly`/`SameSite=Strict` com `Path` por audiência; CSRF por `X-Requested-With: accurit` + `Content-Type` JSON | `AUTH_COOKIE_SECURE=true` por padrão; `false` só em `APP_ENV=development` |
-| G4 | Argon2id, `401 AUTH_INVALID_CREDENTIALS` uniforme, lockout 5/900 s e rate limit 10 r/m (burst 5) no login | Sem enumeração de usuário; motivos auditados (`USUARIO_INEXISTENTE`, `USUARIO_INATIVO`, `USUARIO_BLOQUEADO`) |
-| G5 | Primeiro usuário via `bootstrap-user` (subcomando do binário `backend`, senha em `BOOTSTRAP_USER_PASSWORD`) | Sem endpoint público de cadastro na fase |
-| G6 | Numeração: autenticação por aplicação = ADR-0009 | O "ADR-0008" previsto originalmente foi consumido pelas decisões de implementação da Fase 1 |
+| A-ATR-1 | Papéis por audiência revistos: audiência `admin` autentica exclusivamente gestores SaaS (`ADMIN` em tabela separada); audiência `client` autentica `CLIENTE` e `OPERADOR` do escritório | Token de ADMIN não possui `escritorio_id`; token de escritório (`CLIENTE`/`OPERADOR`) restringe-se ao tenant |
+| A-ATR-2 | ADMIN em tabela separada (`administradores`) e sessões próprias (`sessoes_admin`) | Preserva `escritorio_id NOT NULL` nas tabelas de negócio e isolamento multi-tenant |
+| A-ATR-3 | Provisionamento de tenants (escritório + titular `CLIENTE`) por tela no backoffice `/admin` | CLI fica como `bootstrap-admin` e fallback de suporte; dispensa escritório "sede" |
+| A-ATR-4 | Toggle Trial alterado pelo ADMIN no `/admin`, com auditoria; escritório apenas visualiza | Mantém a governança da Fase 3 centralizada no operador SaaS |
+| A-ATR-5 | CPF obrigatório para todos os usuários (`ADMIN`, `CLIENTE`, `OPERADOR`) | Fecha pendência de CPF de `CLIENTE` do roadmap; escritórios possuem CNPJ, usuários possuem CPF |
 
 ## D1 — Modelo de contratação SERPRO
 

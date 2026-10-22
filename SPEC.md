@@ -39,6 +39,23 @@ A Accurit permite que escritórios de contabilidade administrem clientes PF/PJ, 
 - Custódia de dinheiro, emissão de nota fiscal própria ou substituição de sistemas contábeis.
 - Uso de credenciais de trial como fonte de dados fiscais reais.
 - Compartilhamento de certificados A1 entre escritórios.
+- Portal autenticado para o cliente PF/PJ atendido: ele é dado (`clientes`), nunca usuário.
+
+### 1.4 Atores e papéis
+
+Modelo revisado em 2026-10-21 ([ADR-0010](docs/ADR/0010-revisao-atores-papeis-e-provisionamento.md)):
+
+| Ator | Quem é | Canal | Papel |
+|---|---|---|---|
+| **ADMIN — gestor de tenants** | Operação interna do SaaS; não pertence a escritório | `/admin` (backoffice) | `ADMIN` — tabela `administradores`, fora de `usuarios` |
+| **CLIENTE — escritório assinante** | O escritório que contratou o serviço; titular do tenant | `/app` (plataforma do escritório) | `CLIENTE` em `usuarios` |
+| **OPERADOR** | Membro da equipe do escritório, dentro da plataforma do CLIENTE | `/app` | `OPERADOR` em `usuarios` |
+| **Visitante / Lead** | Anônimo; potencial comprador | `/` (site institucional) | — |
+| **Cliente PF/PJ atendido** | Dado do escritório; nunca autentica | — | — (registro em `clientes`) |
+
+O token do gestor de tenants não carrega `escritorio_id`: quando ele atua sobre um tenant,
+o identificador alvo vem da requisição (A-ATR-1/D3 de ADR-0010). Todo usuário é pessoa física
+e exige CPF válido (A-ATR-5); o escritório é identificado por CNPJ.
 
 ---
 
@@ -98,13 +115,18 @@ Request
   └─ resposta JSON + cabeçalhos de correlação
 ```
 
+O token da plataforma do escritório (audiência `client`) carrega `escritorio_id`; o token do
+gestor de tenants (audiência `admin`) **não** — rota dele que age sobre um tenant recebe o
+`escritorio_id` alvo na URL/corpo e o valida no caso de uso. Neste documento, rotas sob
+`/api/v1/admin/*` são do backoffice SaaS.
+
 ### 2.2 Frontends
 
 | Aplicação | Rota | Renderização | Arquitetura |
 |---|---|---|---|
 | Web | `/` | Next.js App Router (SSG/SSR) | SEO, conteúdo institucional e formulário de lead |
-| Admin | `/admin` e `/admin/login` | Angular 21 SPA/CSR | Signals, Standalone Components, Clean Arch por feature |
-| Cliente | `/app`, `/app/login` e `/login` (301) | Angular 21 SPA/CSR | Signals, Standalone Components, Clean Arch por feature |
+| Backoffice | `/admin` e `/admin/login` | Angular 21 SPA/CSR | Gestão de tenants: provisionar escritórios, definir usuários ADMIN, alternar modo Trial por escritório |
+| Plataforma do escritório | `/app`, `/app/login` e `/login` (301) | Angular 21 SPA/CSR | Gestão de clientes atendidos, equipe (OPERADOR), consultas e configurações |
 
 ```text
 src/app/
@@ -125,13 +147,16 @@ Convenções:
 - Guards por papel tratam 401/403 de forma consistente.
 - O toggle de Trial é apenas apresentação; a autoridade é sempre o backend.
 
-O login é por aplicação (Fase 2A, [ADR-0009](docs/ADR/0009-autenticacao-por-aplicacao.md)): o painel
-autentica em `/admin/login` contra a audiência `admin` e o portal em `/app/login` contra a audiência
-`client`; `/login` responde `301` para `/app/login`. Cada app consome somente o seu grupo de rotas
-(`/api/v1/auth/admin/*` ou `/api/v1/auth/client/*`) e um token emitido para uma audiência é rejeitado
-na outra. O access token fica apenas em memória (`signal`); a renovação usa cookie `HttpOnly` com
-rotação e o interceptor renova uma única vez antes de repetir a requisição. Falha de renovação leva
-ao login com `returnUrl` interno validado e o acesso proibido tem a rota dedicada `/acesso-negado`.
+O login é por aplicação (Fase 2A, [ADR-0009](docs/ADR/0009-autenticacao-por-aplicacao.md), revisado
+por [ADR-0010](docs/ADR/0010-revisao-atores-papeis-e-provisionamento.md)): o **backoffice**
+autentica em `/admin/login` contra a audiência `admin` (apenas o papel `ADMIN`, que autentica na
+tabela `administradores`) e a **plataforma do escritório** em `/app/login` contra a audiência
+`client` (papéis `CLIENTE` e `OPERADOR`, tabela `usuarios`); `/login` responde `301` para
+`/app/login`. Cada app consome somente o seu grupo de rotas (`/api/v1/auth/admin/*` ou
+`/api/v1/auth/client/*`) e um token emitido para uma audiência é rejeitado na outra. O access
+token fica apenas em memória (`signal`); a renovação usa cookie `HttpOnly` com rotação e o
+interceptor renova uma única vez antes de repetir a requisição. Falha de renovação leva ao login
+com `returnUrl` interno validado e o acesso proibido tem a rota dedicada `/acesso-negado`.
 
 ### 2.3 Infraestrutura e rede
 
@@ -755,7 +780,9 @@ alternativa. O fallback só pode ser habilitado com
 
 ## 8. Modo Trial SERPRO
 
-O painel `/admin` oferece um toggle reativo (Angular Signals) para habilitar/desabilitar o Trial. O estado é persistido em `escritorios.modo_trial_serpro BOOLEAN NOT NULL DEFAULT TRUE`.
+O toggle do Modo Trial é operado no **backoffice `/admin`** pelo gestor de tenants (papel `ADMIN`,
+[ADR-0010 D5](docs/ADR/0010-revisao-atores-papeis-e-provisionamento.md)), por escritório e com
+confirmação explícita; o escritório apenas visualiza o ambiente ativo em `/app`. O estado é persistido em `escritorios.modo_trial_serpro BOOLEAN NOT NULL DEFAULT TRUE`.
 
 | Modo | Integra Contador | Dívida Ativa | Credencial |
 |---|---|---|---|
@@ -767,7 +794,7 @@ O painel `/admin` oferece um toggle reativo (Angular Signals) para habilitar/des
 Regras:
 
 - O backend é a autoridade: lê a flag no início de cada requisição e registra o ambiente efetivo.
-- A alteração exige papel autorizado, confirmação explícita para produção e auditoria (`quem`, `quando`, valor anterior/novo).
+- A alteração é feita pelo gestor de tenants no backoffice (`/admin`), com confirmação explícita para produção e auditoria (`quem`, `quando`, valor anterior/novo). O escritório somente visualiza.
 - Não trocar de ambiente no meio de uma requisição.
 - Falha de configuração de produção resulta em erro explícito; **nunca** fazer fallback silencioso de produção para trial ou vice-versa.
 - A chave de demonstração do trial é configuração de ambiente e não deve ser embutida no bundle Angular, no repositório ou em logs.
@@ -804,27 +831,29 @@ CREATE TABLE usuarios (
     id UUID PRIMARY KEY,
     escritorio_id UUID NOT NULL REFERENCES escritorios(id),
     email TEXT NOT NULL,
-    cpf VARCHAR(11),
+    cpf VARCHAR(11) NOT NULL,
     senha_hash TEXT NOT NULL,
-    papel VARCHAR(32) NOT NULL CHECK (papel IN ('ADMIN', 'OPERADOR', 'CLIENTE')),
+    papel VARCHAR(32) NOT NULL CHECK (papel IN ('CLIENTE', 'OPERADOR')),
     ativo BOOLEAN NOT NULL DEFAULT TRUE,
     ultimo_login_em TIMESTAMPTZ,
     falhas_consecutivas INTEGER NOT NULL DEFAULT 0,
     bloqueado_ate TIMESTAMPTZ,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CHECK (cpf IS NULL OR cpf ~ '^[0-9]{11}$'),
-    CHECK (papel = 'CLIENTE' OR cpf IS NOT NULL),
+    CHECK (cpf ~ '^[0-9]{11}$'),
     UNIQUE (escritorio_id, email),
     UNIQUE (escritorio_id, cpf)
 );
 CREATE INDEX idx_usuarios_escritorio ON usuarios(escritorio_id);
 ```
 
-O CPF é obrigatório para `ADMIN` e `OPERADOR` e opcional para `CLIENTE`; quando presente, é
-normalizado para 11 dígitos e validado pelos dígitos verificadores na aplicação. O CPF do operador
-**nunca** é incluído no JWT, em logs ou em respostas da API. Ele é carregado do banco por requisição
-(com cache curto) e injetado apenas na camada `infrastructure/serpro` para o header operacional.
-`falhas_consecutivas` e `bloqueado_ate` preparam o bloqueio temporário de login da Fase 2.
+`usuarios` contém apenas os usuários **da plataforma do escritório**: o titular (`CLIENTE`) e os
+integrantes da equipe (`OPERADOR`). O gestor de tenants fica em `administradores` (§9.12) e nunca
+em `usuarios`. Todo usuário tem CPF de 11 dígitos válido (A-ATR-5, ADR-0010), normalizado na
+aplicação com os dígitos verificadores. O CPF do operador **nunca** é incluído no JWT, em logs ou
+em respostas da API; é carregado do banco por requisição (com cache curto) e injetado apenas na
+camada `infrastructure/serpro` para o header operacional. `falhas_consecutivas` e
+`bloqueado_ate` sustentam o bloqueio temporário de login da Fase 2. A sessão de usuários da
+plataforma vive em `sessoes` (§9.10), sempre na audiência `CLIENT`.
 
 ### 9.3 `clientes`
 
@@ -973,7 +1002,7 @@ a versão exibível (ex.: `***.***.***-09`). A chave completa nunca é persistid
 ```sql
 CREATE TABLE auditoria_eventos (
     id UUID PRIMARY KEY,
-    escritorio_id UUID NOT NULL REFERENCES escritorios(id),
+    escritorio_id UUID REFERENCES escritorios(id),
     usuario_id UUID,
     acao VARCHAR(64) NOT NULL,
     entidade VARCHAR(64),
@@ -983,13 +1012,15 @@ CREATE TABLE auditoria_eventos (
     ip INET,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_auditoria_escritorio_criado
-    ON auditoria_eventos(escritorio_id, criado_em DESC);
+CREATE INDEX idx_auditoria_escritorio_criado ON auditoria_eventos(escritorio_id, criado_em DESC);
 ```
 
 `usuario_id` e `entidade_id` são referências lógicas sem `FOREIGN KEY`, para preservar o histórico
 de auditoria mesmo se o usuário ou a entidade forem removidos. O acesso continua isolado por
-`escritorio_id` e o índice composto atende a consulta cronológica do tenant.
+`escritorio_id` e o índice composto atende a consulta cronológica do tenant. **Exceção
+controlada (ADR-0010, D7):** eventos que não pertencem a nenhum tenant — sessões do gestor de
+tenants — são gravados com `escritorio_id NULL`; toda ação do backoffice sobre um tenant, contudo,
+grava o `escritorio_id` alvo.
 
 ### 9.10 `sessoes`
 
@@ -998,7 +1029,7 @@ CREATE TABLE sessoes (
     id UUID PRIMARY KEY,
     escritorio_id UUID NOT NULL REFERENCES escritorios(id),
     usuario_id UUID NOT NULL REFERENCES usuarios(id),
-    audiencia VARCHAR(8) NOT NULL CHECK (audiencia IN ('ADMIN', 'CLIENT')),
+    audiencia VARCHAR(8) NOT NULL CHECK (audiencia IN ('CLIENT')),
     familia_id UUID NOT NULL,
     refresh_hash CHAR(64) NOT NULL UNIQUE,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1012,11 +1043,12 @@ CREATE INDEX idx_sessoes_escritorio_usuario ON sessoes(escritorio_id, usuario_id
 CREATE INDEX idx_sessoes_familia ON sessoes(familia_id);
 ```
 
-`refresh_hash` guarda apenas o SHA-256 do refresh token opaco — nenhum token em claro é persistido.
-`familia_id` agrupa a cadeia de rotações: cada renovação cria uma linha nova e revoga a anterior, e o
-reuso de um token já rotacionado revoga toda a família e audita `AUTH_REFRESH_REUSO`. `revogada_em`
-marca logout e revogações; a sessão vale de `criado_em` até `expira_em`, conforme a audiência (painel
-8 h, portal 7 dias). O isolamento continua por `escritorio_id`.
+`sessoes` serve exclusivamente à plataforma do escritório (audiência `CLIENT`, papéis `CLIENTE` e
+`OPERADOR`). `refresh_hash` guarda apenas o SHA-256 do refresh token opaco — nenhum token em claro
+é persistido. `familia_id` agrupa a cadeia de rotações: cada renovação cria uma linha nova e revoga
+a anterior, e o reuso de um token já rotacionado revoga toda a família e audita `AUTH_REFRESH_REUSO`.
+`revogada_em` marca logout e revogações; a sessão vale de `criado_em` até `expira_em`.
+O isolamento continua por `escritorio_id`. A sessão do backoffice vive em `sessoes_admin` (§9.13).
 
 ### 9.11 Retenção e minimização
 
@@ -1024,6 +1056,59 @@ marca logout e revogações; a sessão vale de `criado_em` até `expira_em`, con
 - `request_redigido`/`response_redigido` guardam apenas o necessário para auditoria e suporte.
 - Definir prazo de retenção por tipo de consulta e rotina de expurgo.
 - Backups devem seguir a mesma classificação de sensibilidade e controle de acesso.
+
+### 9.12 `administradores`
+
+O gestor de tenants (papel `ADMIN`, audiência `admin`) não fica em `usuarios`: não pertence a
+nenhum escritório e `email` é único globalmente (ADR-0010, D2).
+
+```sql
+CREATE TABLE administradores (
+    id UUID PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    cpf VARCHAR(11) NOT NULL UNIQUE,
+    senha_hash TEXT NOT NULL,
+    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    ultimo_login_em TIMESTAMPTZ,
+    falhas_consecutivas INTEGER NOT NULL DEFAULT 0,
+    bloqueado_ate TIMESTAMPTZ,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (cpf ~ '^[0-9]{11}$'),
+    CHECK (email ~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$')
+);
+```
+
+O CPF segue as mesmas regras de `usuarios` (obrigatório, 11 dígitos, dígitos verificadores na
+aplicação). O login/lockout usa `falhas_consecutivas`/`bloqueado_ate` com a mesma política dos
+usuários (5 falhas, 900 s). O primeiro administrador é criado no bootstrap (
+`cargo run --bootstrap-admin`, [INSTRUCTIONS §3.3](INSTRUCTIONS.md)); o provisionamento de novos
+administradores no backoffice `/admin` é tarefa da Fase 2B.
+
+### 9.13 `sessoes_admin`
+
+Sessões de refresh do backoffice, espelhando a mecânica de `sessoes` (família, hash, rotação,
+revogação), sem `escritorio_id` e sem coluna de audiência — todas são da audiência `admin`.
+
+```sql
+CREATE TABLE sessoes_admin (
+    id UUID PRIMARY KEY,
+    administrador_id UUID NOT NULL REFERENCES administradores(id),
+    familia_id UUID NOT NULL,
+    refresh_hash CHAR(64) NOT NULL UNIQUE,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expira_em TIMESTAMPTZ NOT NULL,
+    revogada_em TIMESTAMPTZ,
+    ip INET,
+    user_agent TEXT,
+    CHECK (expira_em > criado_em)
+);
+CREATE INDEX idx_sessoes_admin_familia ON sessoes_admin(familia_id);
+```
+
+TTL de refresh do backoffice: 8 h (mesmo valor do painel original). A rotação, a detecção de reuso
+e a revogação da família operam de forma idêntica a `sessoes`, com os eventos de auditoria próprios
+(`AUTH_LOGIN_SUCESSO`, `AUTH_LOGIN_FALHA`, `AUTH_LOGOUT`, `AUTH_REFRESH_REUSO` gravados com
+`escritorio_id NULL`).
 
 ---
 
@@ -1033,11 +1118,11 @@ marca logout e revogações; a sessão vale de `criado_em` até `expira_em`, con
 
 | Método | Rota | Descrição |
 |---|---|---|
-| `POST` | `/api/v1/auth/admin/login` | Login do painel (audiência `admin`; papéis `ADMIN`/`OPERADOR`) |
-| `POST` | `/api/v1/auth/admin/refresh` | Renovação rotativa via cookie do painel |
-| `POST` | `/api/v1/auth/admin/logout` | Revoga a sessão do painel e limpa o cookie |
-| `GET` | `/api/v1/auth/admin/me` | Contexto do usuário autenticado no painel |
-| `POST` | `/api/v1/auth/client/login` | Login do portal (audiência `client`; papel `CLIENTE`) |
+| `POST` | `/api/v1/auth/admin/login` | Login do backoffice (audiência `admin`; papel `ADMIN`, tabela `administradores`) — corpo `{ email, senha }` |
+| `POST` | `/api/v1/auth/admin/refresh` | Renovação rotativa via cookie do backoffice |
+| `POST` | `/api/v1/auth/admin/logout` | Revoga a sessão do backoffice e limpa o cookie |
+| `GET` | `/api/v1/auth/admin/me` | Contexto do gestor autenticado no backoffice |
+| `POST` | `/api/v1/auth/client/login` | Login da plataforma do escritório (audiência `client`; papéis `CLIENTE`/`OPERADOR`) — corpo `{ escritorio, email, senha }` |
 | `POST` | `/api/v1/auth/client/refresh` | Renovação rotativa via cookie do portal |
 | `POST` | `/api/v1/auth/client/logout` | Revoga a sessão do portal e limpa o cookie |
 | `GET` | `/api/v1/auth/client/me` | Contexto do usuário autenticado no portal |
@@ -1050,11 +1135,12 @@ marca logout e revogações; a sessão vale de `criado_em` até `expira_em`, con
 | `GET` | `/api/v1/divida-ativa/inscricoes/{numero}` | Detalhe da inscrição |
 | `POST` | `/api/v1/integra-contador/{verbo}` | Execução de `apoiar`, `consultar`, `declarar`, `emitir` ou `monitorar` |
 | `GET` | `/api/v1/procuracoes/{cpfCnpj}` | Situação das procurações do contribuinte |
-| `GET` | `/api/v1/admin/serpro/configuracao` | Estado atual do ambiente SERPRO |
-| `PATCH` | `/api/v1/admin/serpro/trial` | Alternância do modo Trial |
+| `GET` | `/api/v1/serpro/configuracao` | Ambiente SERPRO ativo do escritório (somente leitura, audiência `client`) |
+| `GET` | `/api/v1/admin/serpro/configuracao` | Estado persistido do Trial por escritório (backoffice) |
+| `PATCH` | `/api/v1/admin/serpro/trial` | Alternância do modo Trial pelo gestor de tenants |
 | `GET` | `/api/v1/health` | Health check |
 
-Autenticação (Fase 2A, [ADR-0009](docs/ADR/0009-autenticacao-por-aplicacao.md)): o login recebe `{ escritorio, email, senha }` e responde `{ accessToken, expiresIn, usuario }` com `Set-Cookie` do refresh; `/me` exige `Authorization: Bearer` com a claim `aud` da audiência e o papel correspondente (`ADMIN`/`OPERADOR` no painel, `CLIENTE` no portal). `refresh` e `logout` usam somente o cookie `HttpOnly` (`SameSite=Strict`, `Path=/api/v1/auth/{admin|client}`) com `Content-Type: application/json` e `X-Requested-With: accurit`; a rotação invalida o token anterior e o reuso revoga a família. Credencial inválida responde sempre `401 AUTH_INVALID_CREDENTIALS` (sem enumeração), com lockout após 5 falhas por 900 s e rate limit de 10 r/m (burst 5) por IP+caminho+slug. A auditoria registra `AUTH_LOGIN_SUCESSO`, `AUTH_LOGIN_FALHA`, `AUTH_LOGOUT` e `AUTH_REFRESH_REUSO`.
+Autenticação (Fase 2A, [ADR-0009](docs/ADR/0009-autenticacao-por-aplicacao.md), revisada por [ADR-0010](docs/ADR/0010-revisao-atores-papeis-e-provisionamento.md)): o login da plataforma do escritório recebe `{ escritorio, email, senha }` e o do backoffice `{ email, senha }`; ambos respondem `{ accessToken, expiresIn, usuario }` com `Set-Cookie` do refresh (`usuario.escritorioId` vem `null` no backoffice). `/me` exige `Authorization: Bearer` com a claim `aud` da audiência e o papel correspondente (`ADMIN` no backoffice, `CLIENTE`/`OPERADOR` na plataforma do escritório). `refresh` e `logout` usam somente o cookie `HttpOnly` (`SameSite=Strict`, `Path=/api/v1/auth/{admin|client}`) com `Content-Type: application/json` e `X-Requested-With: accurit`; a rotação invalida o token anterior e o reuso revoga a família. Credencial inválida responde sempre `401 AUTH_INVALID_CREDENTIALS` (sem enumeração), com lockout após 5 falhas por 900 s e rate limit de 10 r/m (burst 5) por IP+caminho+slug. A auditoria registra `AUTH_LOGIN_SUCESSO`, `AUTH_LOGIN_FALHA`, `AUTH_LOGOUT` e `AUTH_REFRESH_REUSO` — os eventos de sessão do gestor de tenants são gravados com `escritorio_id NULL`.
 
 Todos os endpoints de domínio validam o tenant no repositório e ignoram qualquer `escritorio_id` enviado pelo usuário.
 
@@ -1205,7 +1291,7 @@ Observações de produção:
   `Emitir` nunca são repetidos automaticamente.
 - [ ] CPF/CNPJ e valores monetários são higienizados antes da serialização; a moeda pt-BR usa
   `parse_moeda_ptbr_estrito` e a entrada de usuário usa `parse_moeda_entrada_usuario`.
-- [ ] O CPF do operador é obrigatório em `usuarios`, nunca vai no JWT/logs e é carregado do banco.
+- [ ] O CPF é obrigatório para todos os papéis (`ADMIN`, `CLIENTE`, `OPERADOR`), nunca vai no JWT/logs e é carregado do banco.
 - [ ] A autenticação da Dívida Ativa e a da SAPI/Integra Contador são implementadas separadamente.
 - [ ] O modo Trial é persistido por escritório e decidido pelo backend, sem fallback silencioso.
 - [ ] A produção da Dívida Ativa falha com `SERPRO_PROD_NOT_CONFIGURED` até confirmação da SERPRO.
