@@ -71,6 +71,18 @@ impl AlterarModoTrialSerproUseCase {
         &self,
         comando: AlterarModoTrialSerproCommand,
     ) -> Result<AlterarModoTrialSerproResultado, AlterarModoTrialError> {
+        // Existência vem antes de qualquer validação: escritório alvo
+        // inexistente é 404 (SPEC §10.1), não "sem credencial" (400).
+        let estado = self
+            .escritorio_repo
+            .buscar_modo_trial(comando.escritorio_id)
+            .map_err(AlterarModoTrialError::Repositorio)?;
+        if estado.is_none() {
+            return Err(AlterarModoTrialError::Ambiente(
+                ErroAmbiente::EscritorioNaoEncontrado(comando.escritorio_id),
+            ));
+        }
+
         if !comando.modo_trial_serpro {
             self.validar_configuracao_producao(comando.escritorio_id)
                 .await?;
@@ -556,6 +568,19 @@ mod tests {
         assert_eq!(banco.estado.lock().unwrap().expect("estado"), (true, 1));
         assert!(banco.auditorias.lock().unwrap().is_empty());
         assert!(banco.invalidacoes.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn alterar_em_escritorio_inexistente_falha_com_404_antes_de_validar() {
+        let banco = Arc::new(BancoFalso::default().nenhum_escritorio());
+        let use_case = use_case(&banco);
+
+        let erro = use_case.executar(comando_producao(1)).await.unwrap_err();
+
+        assert!(matches!(
+            erro,
+            AlterarModoTrialError::Ambiente(ErroAmbiente::EscritorioNaoEncontrado(_))
+        ));
     }
 
     #[tokio::test]
