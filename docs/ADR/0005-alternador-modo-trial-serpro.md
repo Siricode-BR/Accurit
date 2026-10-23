@@ -117,6 +117,21 @@ Regras:
 - O endpoint não retorna tokens, credenciais ou certificados.
 - A troca para Produção pode exigir confirmação explícita adicional na UI; a API valida que o tenant tem configuração de Produção antes de aceitar a mudança, retornando erro claro se faltar certificado/credencial.
 
+Implementação (Fase 3):
+
+- Os exemplos acima usam `modo_trial_serpro`; o contrato entregue usa **snake_case no Rust,
+  camelCase no JSON**: `GET .../configuracao?escritorioId=...` (o token do backoffice não tem
+  `escritorio_id`, ADR-0010 D3) e `PATCH .../trial` com corpo
+  `{ escritorioId, modoTrialSerpro, versao }` (concorrência otimista por coluna `versao`).
+- A existência do escritório é verificada **antes** da validação de produção: alvo inexistente
+  responde `404` mesmo que a produção não esteja configurada.
+- Pré-requisitos de produção: credencial `INTEGRA_CONTADOR`/`PRODUCAO` e certificado A1 em
+  validade; Dívida Ativa em produção responde sempre `SERPRO_PROD_NOT_CONFIGURED`.
+- Após a troca persistida, os caches voláteis (token de procuração/produto) do escritório são
+  invalidados antes de responder (§6, 7).
+- Versão de referência da tela: `admin/src/app/features/serpro/serpro-page.component.ts`
+  (recarrega automaticamente em `409`).
+
 ### 4. Toggle reativo no Admin com Angular Signals
 
 O estado de tela é modelado com Signals, mas a fonte de verdade é o backend:

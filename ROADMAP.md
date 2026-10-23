@@ -104,26 +104,28 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 ## Fase 3 — Configuração SERPRO e Modo Trial
 
 ### 1. Banco de Dados
-- [ ] Garantir `modo_trial_serpro BOOLEAN NOT NULL DEFAULT TRUE` em `escritorios`.
-- [ ] Criar trilha de auditoria para alteração do ambiente SERPRO (`quem`, `quando`, valor anterior/novo).
-- [ ] Persistir o ambiente efetivamente utilizado em cada consulta (`consultas_fiscais.ambiente`).
-- [ ] Criar constraints para `tokens_serpro` por produto/ambiente.
+- [x] Garantir `modo_trial_serpro BOOLEAN NOT NULL DEFAULT TRUE` em `escritorios`.
+- [x] Criar trilha de auditoria para alteração do ambiente SERPRO (`quem`, `quando`, valor anterior/novo).
+- [x] Persistir o ambiente efetivamente utilizado em cada consulta (`consultas_fiscais.ambiente`).
+- [x] Criar constraints para `tokens_serpro` por produto/ambiente.
 
 ### 2. Backend (Rust / DDD)
-- [ ] Criar configuração tipada e separada para Trial e Produção por produto.
-- [ ] Configurar base Trial do Integra Contador: `https://gateway.apiserpro.serpro.gov.br/integra-contador-trial/v1`.
-- [ ] Configurar base Trial de Consulta Dívida Ativa: `https://gateway.apiserpro.serpro.gov.br/consulta-divida-ativa-trial/api/v1`.
-- [ ] Ler a chave Bearer de trial de `SERPRO_TRIAL_BEARER_TOKEN`, sem hardcode no código ou no bundle.
-- [ ] Configurar produção do Integra Contador com SAPI, mTLS e e-CNPJ; configurar a produção da Dívida Ativa como bloqueada por `SERPRO_PROD_NOT_CONFIGURED`.
-- [ ] Fazer o backend decidir o ambiente por escritório; proibir fallback silencioso entre Trial e Produção.
-- [ ] Implementar `SerproCredentialProvider` e `credenciais_serpro` por escritório, com variáveis globais apenas como fallback de desenvolvimento.
-- [ ] Implementar testes para estado ausente, troca de modo, credencial inválida e indisponibilidade.
+- [x] Criar configuração tipada e separada para Trial e Produção por produto.
+- [x] Configurar base Trial do Integra Contador: `https://gateway.apiserpro.serpro.gov.br/integra-contador-trial/v1`.
+- [x] Configurar base Trial de Consulta Dívida Ativa: `https://gateway.apiserpro.serpro.gov.br/consulta-divida-ativa-trial/api/v1`.
+- [x] Ler a chave Bearer de trial de `SERPRO_TRIAL_BEARER_TOKEN`, sem hardcode no código ou no bundle.
+- [x] Configurar produção do Integra Contador com SAPI, mTLS e e-CNPJ; configurar a produção da Dívida Ativa como bloqueada por `SERPRO_PROD_NOT_CONFIGURED`.
+- [x] Fazer o backend decidir o ambiente por escritório; proibir fallback silencioso entre Trial e Produção.
+- [x] Implementar `SerproCredentialProvider` e `credenciais_serpro` por escritório, com variáveis globais apenas como fallback de desenvolvimento.
+- [x] Implementar testes para estado ausente, troca de modo, credencial inválida e indisponibilidade.
 
 ### 3. Frontend (Angular / Next.js)
-- [ ] Criar toggle “Modo Trial SERPRO” no Admin `/admin` com Angular Signals.
-- [ ] Exibir ambiente ativo, aviso de demonstração e confirmação antes de alternar para Produção.
-- [ ] Restringir a alteração a papel autorizado e atualizar a tela somente após resposta confirmada da API.
-- [ ] Marcar visualmente resultados e consultas originados do ambiente Trial.
+- [x] Criar toggle “Modo Trial SERPRO” no Admin `/admin` com Angular Signals.
+- [x] Exibir ambiente ativo, aviso de demonstração e confirmação antes de alternar para Produção.
+- [x] Restringir a alteração a papel autorizado e atualizar a tela somente após resposta confirmada da API.
+- [x] Marcar visualmente resultados e consultas originados do ambiente Trial
+      (selo do ambiente na home da plataforma do escritório; as consultas em si,
+      da Fase 4, exibirão o próprio ambiente em cada resultado).
 
 **Aceite:** toggle persiste por escritório, alteração é auditada e chamadas novas usam exclusivamente o ambiente resolvido pelo backend.
 

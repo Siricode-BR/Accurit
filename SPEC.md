@@ -799,6 +799,27 @@ Regras:
 - Falha de configuração de produção resulta em erro explícito; **nunca** fazer fallback silencioso de produção para trial ou vice-versa.
 - A chave de demonstração do trial é configuração de ambiente e não deve ser embutida no bundle Angular, no repositório ou em logs.
 
+Contrato implementado da API (Fase 3):
+
+- `GET /api/v1/admin/serpro/configuracao?escritorioId=...` — o token do backoffice não tem
+  `escritorio_id` ([ADR-0010](docs/ADR/0010-revisao-atores-papeis-e-provisionamento.md), D3);
+  o escritório alvo vai na query. Resposta `{ escritorioId, modoTrialSerpro, ambienteEfetivo, versao, atualizadoEm }` em camelCase.
+- `PATCH /api/v1/admin/serpro/trial` — corpo `{ escritorioId, modoTrialSerpro, versao }` com
+  concorrência otimista por `versao`: divergência responde `409` e a UI recarrega o estado;
+  sucesso responde `{ modoTrialSerpro, ambienteEfetivo, versaoAtual, atualizadoEm }`.
+- A existência do escritório é verificada **antes** da validação dos pré-requisitos de produção:
+  escritório inexistente em GET ou PATCH responde `404` (não `400`).
+- Troca para produção exige credencial `INTEGRA_CONTADOR`/`PRODUCAO` em `credenciais_serpro` e
+  certificado A1 em validade; falta de qualquer um responde `400` com mensagem explícita.
+  A produção da Dívida Ativa permanece bloqueada por `SERPRO_PROD_NOT_CONFIGURED`.
+- Sucesso grava a auditoria da troca (`quem` = administrador, `quando`, valor anterior/novo, IP) e
+  invalida os caches voláteis do escritório ([ADR-0005 §6](docs/ADR/0005-alternador-modo-trial-serpro.md));
+  falha de auditoria aborta a troca.
+- `GET /api/v1/serpro/configuracao` (audiência `client`) devolve o mesmo JSON para o selo de
+  ambiente na página inicial da plataforma do escritório; é somente leitura e não expõe segredos.
+- Fallback global de credencial (`SERPRO_CONSUMER_KEY`/`SERPRO_CONSUMER_SECRET`) só desmobiliza
+  TRIAL e somente com `APP_ENV=development` ([ADR-0007](docs/ADR/0007-modelo-contratacao-serpro.md), D6).
+
 ---
 
 ## 9. Modelo de dados — PostgreSQL 16
@@ -1136,8 +1157,8 @@ e a revogação da família operam de forma idêntica a `sessoes`, com os evento
 | `POST` | `/api/v1/integra-contador/{verbo}` | Execução de `apoiar`, `consultar`, `declarar`, `emitir` ou `monitorar` |
 | `GET` | `/api/v1/procuracoes/{cpfCnpj}` | Situação das procurações do contribuinte |
 | `GET` | `/api/v1/serpro/configuracao` | Ambiente SERPRO ativo do escritório (somente leitura, audiência `client`) |
-| `GET` | `/api/v1/admin/serpro/configuracao` | Estado persistido do Trial por escritório (backoffice) |
-| `PATCH` | `/api/v1/admin/serpro/trial` | Alternância do modo Trial pelo gestor de tenants |
+| `GET` | `/api/v1/admin/serpro/configuracao?escritorioId=...` | Estado persistido do Trial por escritório (backoffice; o token de backoffice não tem `escritorio_id`) |
+| `PATCH` | `/api/v1/admin/serpro/trial` | Alternância do modo Trial pelo gestor de tenants — corpo `{ escritorioId, modoTrialSerpro, versao }` (concorrência otimista; `409` em divergência, credencial/certificado ausentes → `400`) |
 | `GET` | `/api/v1/health` | Health check |
 
 Autenticação (Fase 2A, [ADR-0009](docs/ADR/0009-autenticacao-por-aplicacao.md), revisada por [ADR-0010](docs/ADR/0010-revisao-atores-papeis-e-provisionamento.md)): o login da plataforma do escritório recebe `{ escritorio, email, senha }` e o do backoffice `{ email, senha }`; ambos respondem `{ accessToken, expiresIn, usuario }` com `Set-Cookie` do refresh (`usuario.escritorioId` vem `null` no backoffice). `/me` exige `Authorization: Bearer` com a claim `aud` da audiência e o papel correspondente (`ADMIN` no backoffice, `CLIENTE`/`OPERADOR` na plataforma do escritório). `refresh` e `logout` usam somente o cookie `HttpOnly` (`SameSite=Strict`, `Path=/api/v1/auth/{admin|client}`) com `Content-Type: application/json` e `X-Requested-With: accurit`; a rotação invalida o token anterior e o reuso revoga a família. Credencial inválida responde sempre `401 AUTH_INVALID_CREDENTIALS` (sem enumeração), com lockout após 5 falhas por 900 s e rate limit de 10 r/m (burst 5) por IP+caminho+slug. A auditoria registra `AUTH_LOGIN_SUCESSO`, `AUTH_LOGIN_FALHA`, `AUTH_LOGOUT` e `AUTH_REFRESH_REUSO` — os eventos de sessão do gestor de tenants são gravados com `escritorio_id NULL`.
