@@ -1,6 +1,7 @@
 CREATE TABLE certificados_a1 (
     id UUID PRIMARY KEY,
     escritorio_id UUID NOT NULL REFERENCES escritorios(id),
+    tipo VARCHAR(2) NOT NULL CHECK (tipo IN ('A1', 'A3')),
     titular_cpf_cnpj VARCHAR(14) NOT NULL,
     conteudo_cifrado BYTEA NOT NULL,
     senha_cifrada BYTEA,

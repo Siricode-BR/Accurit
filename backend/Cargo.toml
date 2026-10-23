@@ -35,3 +35,11 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 url = "2.5.8"
 uuid = { version = "1.28.0", features = ["v7", "serde"] }
+aes-gcm = "0.10.3"
+ring = "0.17.13"
+zeroize = { version = "1.7.0", features = ["derive"] }
+hex = "0.4.3"
+async-trait = "0.1.83"
+
+[dev-dependencies]
+async-trait = "0.1.83"

@@ -3,7 +3,7 @@ import { Routes } from '@angular/router';
 import { autenticadoGuard, naoAutenticadoGuard } from './core/auth/auth.guards';
 
 export const routes: Routes = [
-  { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
+  { path: '', pathMatch: 'full', redirectTo: 'tenants' },
   {
     path: 'login',
     title: 'Entrar | Accurit Admin',
@@ -18,11 +18,18 @@ export const routes: Routes = [
       import('./features/acesso-negado/acesso-negado').then((m) => m.AcessoNegado),
   },
   {
-    path: 'dashboard',
-    title: 'Dashboard | Accurit Admin',
+    path: 'tenants',
+    title: 'Escritórios | Accurit Admin',
     canActivate: [autenticadoGuard],
     loadComponent: () =>
-      import('./features/dashboard/dashboard').then((m) => m.Dashboard),
+      import('./features/tenants/tenant-list.component').then((m) => m.TenantListComponent),
   },
-  { path: '**', redirectTo: 'dashboard' },
+  {
+    path: 'tenants/novo',
+    title: 'Novo Escritório | Accurit Admin',
+    canActivate: [autenticadoGuard],
+    loadComponent: () =>
+      import('./features/tenants/tenant-create.component').then((m) => m.TenantCreateComponent),
+  },
+  { path: '**', redirectTo: 'tenants' },
 ];

@@ -254,3 +254,32 @@ impl From<ClienteError> for ApiError {
         }
     }
 }
+
+impl From<crate::application::certificados::CertificadoError> for ApiError {
+    fn from(erro: crate::application::certificados::CertificadoError) -> Self {
+        match erro {
+            crate::application::certificados::CertificadoError::Dominio(e) => {
+                Self::validacao(e.to_string())
+            }
+            crate::application::certificados::CertificadoError::Repositorio(e) => match e {
+                crate::application::certificados::RepositorioError::Indisponivel => {
+                    Self::indisponivel()
+                }
+                crate::application::certificados::RepositorioError::Dados => Self::erro_interno(),
+                crate::application::certificados::RepositorioError::NaoEncontrado => {
+                    Self::nao_encontrado("certificado")
+                }
+                crate::application::certificados::RepositorioError::FingerprintDuplicado => {
+                    Self::conflito("Certificado com este fingerprint já existe")
+                }
+            },
+            crate::application::certificados::CertificadoError::Criptografia => {
+                Self::erro_interno()
+            }
+            crate::application::certificados::CertificadoError::AcessoNegado => Self::proibido(),
+            crate::application::certificados::CertificadoError::Fingerprint(e) => {
+                Self::validacao(e.to_string())
+            }
+        }
+    }
+}

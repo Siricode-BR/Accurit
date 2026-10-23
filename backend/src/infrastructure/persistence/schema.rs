@@ -37,6 +37,8 @@ diesel::table! {
     certificados_a1 (id) {
         id -> Uuid,
         escritorio_id -> Uuid,
+        #[max_length = 2]
+        tipo -> Varchar,
         #[max_length = 14]
         titular_cpf_cnpj -> Varchar,
         conteudo_cifrado -> Bytea,

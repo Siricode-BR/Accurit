@@ -6,6 +6,10 @@ use tower_http::trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
 use crate::application::admin::ProvisionarTenantUseCase;
+use crate::application::certificados::{
+    CriarCertificadoUseCase, ListarCertificadosUseCase, ObterCertificadoUseCase,
+    PoliticaCertificados, RevogarCertificadoUseCase,
+};
 use crate::application::clientes::{
     AtualizarClienteUseCase, CriarClienteUseCase, ExcluirClienteUseCase, ListarClientesUseCase,
     ObterClienteUseCase, PoliticaClientes,
@@ -13,14 +17,18 @@ use crate::application::clientes::{
 use crate::application::ports::SaudeBanco;
 use crate::infrastructure::auth::HashArgon2;
 use crate::infrastructure::config::{BURST_RATE_LIMIT, Config, REQUISICOES_POR_SEGUNDO};
+use crate::infrastructure::crypto::criar_criptografia;
 use crate::infrastructure::persistence::admin::AdminRepositorioDiesel;
+use crate::infrastructure::persistence::certificados::CertificadoRepositorioDiesel;
 use crate::infrastructure::persistence::clientes::ClienteRepositorioDiesel;
 use crate::presentation::admin::handlers::provisionar_tenant;
 use crate::presentation::auth::{AuthState, ExigirAudiencia, construir as construir_auth, exigir};
+use crate::presentation::certificados::construir_certificados;
 use crate::presentation::clientes::router::construir_clientes;
 use crate::presentation::handlers;
 use crate::presentation::middleware::{cors, rate_limit, request_id, security_headers};
 use crate::presentation::state::AppState;
+use secrecy::ExposeSecret;
 
 pub fn construir<S>(estado: AppState<S>, auth: Option<AuthState>, config: &Config) -> Router
 where
@@ -57,6 +65,26 @@ where
         std::sync::Arc::new(argon2),
     );
 
+    let certificado_repo = CertificadoRepositorioDiesel::novo(std::sync::Arc::new(pool.clone()));
+    let criptografia = criar_criptografia(config.certificate_master_key.expose_secret())
+        .expect("criptografia deve inicializar");
+    let auditoria_certificado = certificado_repo.clone();
+
+    let criar_certificados = CriarCertificadoUseCase::novo(
+        std::sync::Arc::new(certificado_repo.clone()),
+        std::sync::Arc::new(auditoria_certificado.clone()),
+        criptografia,
+        PoliticaCertificados::nova(),
+    );
+    let listar_certificados =
+        ListarCertificadosUseCase::novo(std::sync::Arc::new(certificado_repo.clone()));
+    let obter_certificados =
+        ObterCertificadoUseCase::novo(std::sync::Arc::new(certificado_repo.clone()));
+    let revogar_certificados = RevogarCertificadoUseCase::novo(
+        std::sync::Arc::new(certificado_repo.clone()),
+        std::sync::Arc::new(auditoria_certificado.clone()),
+    );
+
     let mut api = Router::new()
         .route("/health", get(handlers::saude::<S>))
         .with_state(estado);
@@ -88,6 +116,17 @@ where
                     exigir,
                 ))
                 .with_state(provisionar_tenant_uc),
+        );
+
+        api = api.nest(
+            "/certificados",
+            construir_certificados(
+                criar_certificados,
+                listar_certificados,
+                obter_certificados,
+                revogar_certificados,
+                auth_state.clone(),
+            ),
         );
     }
 

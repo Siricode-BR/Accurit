@@ -73,7 +73,7 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 - [x] Criar `UNIQUE (escritorio_id, cpf_cnpj)` e índices `(escritorio_id, tipo)` e `(escritorio_id, porte_regime)`.
 - [x] Criar `certificados_a1`, `credenciais_serpro`, `procuracoes`, `tokens_serpro` e `consultas_fiscais` conforme o modelo.
 - [x] Consolidar a regra de CPF de usuário: obrigatório (`NOT NULL`) com 11 dígitos para todos os papéis (`ADMIN`, `CLIENTE`, `OPERADOR`), fechando o requisito (ADR-0010).
-- [ ] Definir política de retenção e minimização de dados fiscais.
+- [x] Definir política de retenção e minimização de dados fiscais (SPEC §9.11).
 
 ### 2. Backend (Rust / DDD)
 - [x] Implementar login JWT por audiência com claims `sub`, `role` e `aud` (`admin`/`client`), rejeitando token cruzado (Fase 2A).
@@ -81,21 +81,21 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 - [x] Ajustar autenticação da audiência `client` para aceitar papéis `CLIENTE` e `OPERADOR` na plataforma do escritório.
 - [x] Implementar refresh opaco com rotação e família, reuso revogando a sessão, logout, lockout por tentativas, rate limit de login e auditoria (Fase 2A).
 - [x] Entregar o bootstrap do primeiro administrador (`bootstrap-admin`) e o provisionamento de tenants (`bootstrap-tenant`).
-- [~] Aplicar middleware de tenancy e enforcement nos repositórios Diesel (middleware de audiência e filtro por `escritorio_id` existem; enforcement falta ser comprovado por testes).
-- [~] Implementar CRUD de clientes PF/PJ com validação de dígitos verificadores de CPF/CNPJ (código completo; falta teste de integração HTTP).
-- [~] Implementar filtros da API: `Todos`, `CPF`, `CNPJ - MEI`, `CNPJ - Simples Nacional`, `CNPJ - Lucro Presumido`, `CNPJ - Lucro Real` (implementados no domínio e repositório; falta teste de integração HTTP).
-- [ ] Implementar armazenamento cifrado (AES-256-GCM) e gestão de validade do certificado A1.
-- [ ] Padronizar erros, paginação, ordenação, logs redigidos e auditoria.
-- [ ] Cobrir IDOR e isolamento multi-tenant com testes.
+- [x] Aplicar middleware de tenancy e enforcement nos repositórios Diesel (middleware de audiência e filtro por `escritorio_id` existem; enforcement comprovado por testes).
+- [x] Implementar CRUD de clientes PF/PJ com validação de dígitos verificadores de CPF/CNPJ (código completo; testes de integração HTTP passando).
+- [x] Implementar filtros da API: `Todos`, `CPF`, `CNPJ - MEI`, `CNPJ - Simples Nacional`, `CNPJ - Lucro Presumido`, `CNPJ - Lucro Real` (implementados no domínio e repositório; testes de integração HTTP passando).
+- [x] Implementar armazenamento cifrado (AES-256-GCM) e gestão de validade do certificado A1.
+- [x] Padronizar erros, paginação, ordenação, logs redigidos e auditoria.
+- [x] Cobrir IDOR e isolamento multi-tenant com testes.
 
 ### 3. Frontend (Angular / Next.js)
 - [x] Implementar login por aplicação (`/admin/login` e `/app/login`), guards de sessão, renovação automática no 401, `returnUrl` validado e rota de acesso negado (Fase 2A).
-- [~] Adaptar o app `/admin` para operar como Backoffice SaaS (gestão de tenants e criação do titular `CLIENTE`) — o login já segue o ADR-0010 (sem slug do escritório); as telas de gestão de tenants não existem.
-- [ ] Implementar guards por papel nos fluxos de clientes e tratamento consistente de 403 na plataforma do escritório (`/app`).
-- [ ] Criar telas de cadastro, edição, detalhes e listagem de clientes.
-- [ ] Disponibilizar todos os filtros tributários e sincronizá-los com query params.
-- [ ] Implementar estados de loading, erro, vazio, validação e paginação.
-- [ ] Criar páginas institucionais e formulários de lead no app Next.js (`web`).
+- [x] Adaptar o app `/admin` para operar como Backoffice SaaS (gestão de tenants e criação do titular `CLIENTE`) — o login já segue o ADR-0010 (sem slug do escritório); telas de gestão de tenants implementadas.
+- [x] Implementar guards por papel nos fluxos de clientes e tratamento consistente de 403 na plataforma do escritório (`/app`).
+- [x] Criar telas de cadastro, edição, detalhes e listagem de clientes.
+- [x] Disponibilizar todos os filtros tributários e sincronizá-los com query params.
+- [x] Implementar estados de loading, erro, vazio, validação e paginação.
+- [x] Criar páginas institucionais e formulários de lead no app Next.js (`web`).
 
 **Aceite (2A):** login independente no backoffice e na plataforma do escritório, com refresh rotativo, logout revogando a sessão e token de uma audiência rejeitado na outra (com papéis revisados pelo ADR-0010). **Aceite (2B):** gestor SaaS provisiona tenant com titular, cliente PF/PJ é cadastrado/filtrado/editado com isolamento por escritório, e dados cruzados são bloqueados.
 

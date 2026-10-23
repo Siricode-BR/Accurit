@@ -1,6 +1,6 @@
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct EscritorioId(Uuid);
 
 impl EscritorioId {
@@ -13,6 +13,10 @@ impl EscritorioId {
     }
 
     pub const fn como_uuid(self) -> Uuid {
+        self.0
+    }
+
+    pub fn as_uuid(&self) -> Uuid {
         self.0
     }
 }

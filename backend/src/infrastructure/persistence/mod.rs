@@ -1,4 +1,5 @@
 pub mod admin;
+pub mod certificados;
 pub mod clientes;
 pub mod migrations;
 pub mod pool;
