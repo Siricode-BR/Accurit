@@ -31,5 +31,12 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/tenants/tenant-create.component').then((m) => m.TenantCreateComponent),
   },
+  {
+    path: 'serpro/:escritorioId',
+    title: 'Ambiente SERPRO | Accurit Admin',
+    canActivate: [autenticadoGuard],
+    loadComponent: () =>
+      import('./features/serpro/serpro-page.component').then((m) => m.SerproPageComponent),
+  },
   { path: '**', redirectTo: 'tenants' },
 ];

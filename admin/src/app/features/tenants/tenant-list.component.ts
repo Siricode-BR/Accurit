@@ -82,8 +82,8 @@ import { TenantService, Tenant } from './tenant.service';
             <ng-container matColumnDef="acoes">
               <th mat-header-cell *matHeaderCellDef>Ações</th>
               <td mat-cell *matCellDef="let tenant">
-                <button mat-icon-button [routerLink]="['/admin/tenants', tenant.id]" matTooltip="Ver detalhes">
-                  <mat-icon>visibility</mat-icon>
+                <button mat-icon-button [routerLink]="['/serpro', tenant.id]" matTooltip="Configurar SERPRO">
+                  <mat-icon>settings</mat-icon>
                 </button>
               </td>
             </ng-container>
