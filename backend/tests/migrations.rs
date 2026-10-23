@@ -818,8 +818,8 @@ fn inserir_certificado(
 ) -> diesel::QueryResult<usize> {
     sql_query(
         "INSERT INTO certificados_a1 \
-         (id, escritorio_id, titular_cpf_cnpj, fingerprint_sha256, conteudo_cifrado, valido_de, valido_ate) \
-         VALUES ($1, $2, $3, $4, $5, NOW() - interval '30 days', NOW() + $6::interval)",
+         (id, escritorio_id, tipo, titular_cpf_cnpj, fingerprint_sha256, conteudo_cifrado, valido_de, valido_ate) \
+         VALUES ($1, $2, 'A1', $3, $4, $5, NOW() - interval '30 days', NOW() + $6::interval)",
     )
     .bind::<SqlUuid, _>(Uuid::now_v7())
     .bind::<SqlUuid, _>(escritorio_id)
