@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
@@ -119,8 +119,10 @@ import { TenantService, CreateTenantRequest } from './tenant.service';
                 <mat-spinner diameter="20"></mat-spinner>
                 <span>Cadastrando...</span>
               } @else {
-                <mat-icon>save</mat-icon>
-                <span>Cadastrar Escritório</span>
+                <ng-container>
+                  <mat-icon>save</mat-icon>
+                  <span>Cadastrar Escritório</span>
+                </ng-container>
               }
             </button>
           </div>

@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
@@ -31,8 +31,8 @@ import { ClienteService, Cliente, CreateClienteRequest, UpdateClienteRequest, Ti
   template: `
     <mat-card>
       <mat-card-header>
-        <mat-card-title>{{ isEditing() ? 'Editar Cliente' : 'Novo Cliente' }}</mat-card-title>
-        <mat-card-subtitle>{{ isEditing() ? 'Atualize os dados do cliente' : 'Cadastre um novo cliente no escritório' }}</mat-card-subtitle>
+        <mat-card-title>{{ isEditing ? 'Editar Cliente' : 'Novo Cliente' }}</mat-card-title>
+        <mat-card-subtitle>{{ isEditing ? 'Atualize os dados do cliente' : 'Cadastre um novo cliente no escritório' }}</mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
         <form [formGroup]="form" (ngSubmit)="onSubmit()" class="cliente-form">
@@ -136,8 +136,10 @@ import { ClienteService, Cliente, CreateClienteRequest, UpdateClienteRequest, Ti
                 <mat-spinner diameter="20"></mat-spinner>
                 <span>Salvando...</span>
               } @else {
-                <mat-icon>{{ isEditing() ? 'save' : 'person_add' }}</mat-icon>
-                <span>{{ isEditing() ? 'Atualizar' : 'Cadastrar' }}</span>
+                <ng-container>
+                  <mat-icon>{{ isEditing ? 'save' : 'person_add' }}</mat-icon>
+                  <span>{{ isEditing ? 'Atualizar' : 'Cadastrar' }}</span>
+                </ng-container>
               }
             </button>
           </div>
@@ -298,14 +300,14 @@ export class ClienteFormComponent implements OnInit {
       telefone: formValue.telefone || undefined,
     };
 
-    const operacao = this.isEditing()
+    const operacao = this.isEditing
       ? this.clienteService.atualizar(this.route.snapshot.paramMap.get('id')!, request as UpdateClienteRequest)
       : this.clienteService.criar(request as CreateClienteRequest);
 
     operacao.subscribe({
       next: () => {
         this.snackBar.open(
-          this.isEditing() ? 'Cliente atualizado com sucesso!' : 'Cliente cadastrado com sucesso!',
+          this.isEditing ? 'Cliente atualizado com sucesso!' : 'Cliente cadastrado com sucesso!',
           'Fechar',
           { duration: 3000 }
         );
