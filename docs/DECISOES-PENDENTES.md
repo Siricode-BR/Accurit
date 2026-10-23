@@ -1,6 +1,6 @@
 # Decisões Pendentes e Itens Não Confirmados
 
-- **Atualizado em:** 2026-10-21
+- **Atualizado em:** 2026-10-23
 - **Escopo:** Fase 0 (reconciliação documental), Fase 1 (fundação técnica) e Fase 2A (autenticação por aplicação)
 - **Regra:** nenhum item abaixo pode ser tratado como contrato oficial até confirmação. O código
   deve isolar o comportamento em porta/flag e falhar de forma explícita quando a configuração não
@@ -180,7 +180,9 @@ aprovação de arquitetura.
 - `schema.rs` gerado por `schema-tool` e formatado com `rustfmt`, sem `diesel_cli` no runtime.
 - `backend-test` executa a suíte no container com banco descartável por teste.
 - Smoke `.ps1`/`.sh` cobre as rotas públicas, health, redirect de login, envelope 404 e request-id.
-- Quatro migrations validadas (`escritorios`, `usuarios`, `auditoria_eventos`, `sessoes`) com a
-  política "sem `ALTER`" (`backend/tests/migrations_policy.rs` exige ≥ 8 migrations verificadas).
+- Doze migrations validadas (`escritorios`, `usuarios`, `auditoria_eventos`, `sessoes`,
+  `administradores`, `sessoes_admin`, `clientes`, `credenciais_serpro`, `certificados_a1`,
+  `tokens_serpro`, `procuracoes`, `consultas_fiscais`) com a política "sem `ALTER"`
+  (`backend/tests/migrations_policy.rs` exige ≥ 8 migrations verificadas; o repositório tem 12).
 - Suíte `backend/tests/http_auth.rs` cobre login por audiência, cookie seguro, CSRF, rotação e reuso
   de refresh, logout, lockout e bloqueio cruzado entre painel e portal.
