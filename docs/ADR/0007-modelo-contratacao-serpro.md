@@ -78,9 +78,8 @@ pub trait SerproCredentialProvider: Send + Sync {
 
 ### 3. Persistência
 
-- `credenciais_serpro`: `(escritorio_id, produto, ambiente)` único, com `consumer_key_cifrado` e
-  `consumer_secret_cifrado` em AES-256-GCM.
-- `certificados_a1`: certificado e senha cifrados, fingerprint SHA-256, validade e titular.
+- `credenciais_serpro`: `(escritorio_id, produto, ambiente)` único, com `consumer_key_cifrado` e `consumer_secret_cifrado` em AES-256-GCM, com uso de `zeroize` na memória.
+- `certificados_a1`: certificado e senha cifrados (AES-256-GCM), fingerprint SHA-256, validade e titular. Descriptografia em memória com `zeroize` após o uso.
 - `tokens_serpro`: `tipo_token` (`ACCESS`, `JWT`, `AUTENTICAR_PROCURADOR`) e `autor_pedido_dados`.
 - `procuracoes`: inclui `ambiente` e `procurador_cpf_cnpj` na chave única.
 

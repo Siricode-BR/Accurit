@@ -125,7 +125,7 @@ gestor de tenants (audiência `admin`) **não** — rota dele que age sobre um t
 | Aplicação | Rota | Renderização | Arquitetura |
 |---|---|---|---|
 | Web | `/` | Next.js App Router (SSG/SSR) | SEO, conteúdo institucional e formulário de lead |
-| Backoffice | `/admin` e `/admin/login` | Angular 21 SPA/CSR | Gestão de tenants: provisionar escritórios, definir usuários ADMIN, alternar modo Trial por escritório |
+| Backoffice | `/admin` e `/admin/login` | Angular 21 SPA/CSR | Gestão de tenants: provisionar escritórios e titular CLIENTE, alternar modo Trial por escritório |
 | Plataforma do escritório | `/app`, `/app/login` e `/login` (301) | Angular 21 SPA/CSR | Gestão de clientes atendidos, equipe (OPERADOR), consultas e configurações |
 
 ```text
