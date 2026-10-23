@@ -38,7 +38,7 @@ O produto foi desenhado para eliminar erro operacional e retrabalho: os payloads
 - **Modo Trial SERPRO:** toggle reativo no painel `/admin`, persistido por escritório em `escritorios.modo_trial_serpro`.
 - **Gestão de clientes:** cadastro PF/PJ, validação de CPF/CNPJ e filtros por regime tributário.
 - **Multi-tenancy:** todo dado de negócio é isolado por `escritorio_id`, derivado do contexto autenticado.
-- **Autenticação por aplicação:** painel do escritório em `/admin/login` (papéis `ADMIN`/`OPERADOR`) e portal do cliente em `/app/login` (`CLIENTE`), com access token JWT de vida curta, refresh rotativo em cookie `HttpOnly`, logout com revogação no servidor e auditoria; um token de uma audiência nunca vale na outra.
+- **Autenticação por aplicação:** backoffice SaaS em `/admin/login` (papel `ADMIN`, tabela `administradores`, token sem `escritorio_id`) e plataforma do escritório em `/app/login` (papéis `CLIENTE`/`OPERADOR`), com access token JWT de vida curta, refresh rotativo em cookie `HttpOnly`, logout com revogação no servidor e auditoria; um token de uma audiência nunca vale na outra ([ADR-0010](docs/ADR/0010-revisao-atores-papeis-e-provisionamento.md)).
 - **Migrations automáticas:** SQL versionado embutido no binário Rust com `diesel_migrations::embed_migrations!` e aplicado no startup.
 - **Auditoria:** registro de consultas, alternância de ambiente e ações administrativas sem armazenar payload fiscal excessivo.
 
@@ -85,8 +85,8 @@ O produto foi desenhado para eliminar erro operacional e retrabalho: os payloads
 | Backend | Rust 2024, Axum 0.8, Tokio, Diesel 2.3+ | API REST, regras de negócio, integrações SERPRO |
 | Banco | PostgreSQL 16 (`postgres:16-alpine`) | Persistência multi-tenant e migrations |
 | Web | Next.js (App Router, SSG/SSR) atrás do proxy Nginx | Site institucional, SEO e captação de leads |
-| Admin | Angular 21 (Signals, Standalone) | Painel do escritório: clientes, configurações e Trial |
-| Cliente | Angular 21 (Signals, Standalone) | Portal do cliente e login |
+| Admin | Angular 21 (Signals, Standalone) | Backoffice SaaS: provisionamento de tenants, gestores de tenants e Trial por escritório |
+| Cliente | Angular 21 (Signals, Standalone) | Plataforma do escritório: gestão de clientes, equipe e configurações |
 | Proxy | Nginx (`nginx:alpine`) | Roteamento, TLS, compressão e cache de estáticos |
 | Orquestração | Docker Compose | Build e execução integrada da stack |
 
@@ -136,28 +136,36 @@ Para encerrar preservando os volumes do banco:
 docker compose down
 ```
 
-### Primeiro usuário (bootstrap)
+### Primeiro gestor de tenants (bootstrap)
 
-Não existe cadastro público. Crie o escritório e o primeiro usuário com o subcomando do próprio backend:
+Não existe cadastro público. Crie o primeiro **gestor de tenants** (papel `ADMIN`, tabela
+`administradores`, [ADR-0010](docs/ADR/0010-revisao-atores-papeis-e-provisionamento.md)) com o subcomando do próprio backend:
+
+```bash
+docker compose run --rm -e BOOTSTRAP_ADMIN_PASSWORD='troque-esta-senha' backend \
+  bootstrap-admin --email gestor@accurit.com --cpf 00011122233
+```
+
+O fallback de suporte provisiona um escritório e o usuário titular `CLIENTE` (o fluxo normal é
+provisionar pelo backoffice autenticado, `POST /api/v1/admin/escritorios`):
 
 ```bash
 docker compose run --rm -e BOOTSTRAP_USER_PASSWORD='troque-esta-senha' backend \
-  bootstrap-user --escritorio-slug demo --escritorio-nome "Escritório Demo" \
-  --email admin@exemplo.com --cpf 00011122233 --papel ADMIN
+  bootstrap-tenant --escritorio-slug demo --escritorio-nome "Escritório Demo" \
+  --email admin@exemplo.com --cpf 00011122233
 ```
 
-O comando cria o escritório se ainda não existir e grava a senha com Argon2id; `--papel` aceita
-`ADMIN`, `OPERADOR` ou `CLIENTE` (`--cpf` é obrigatório exceto para `CLIENTE`). Use
-`bootstrap-user --help` para a ajuda completa.
+As senhas são gravadas com Argon2id; `--papel` do tenant aceita `CLIENTE` ou `OPERADOR` (ADR-0010).
+Use `bootstrap-admin --help` ou `bootstrap-tenant --help` para a ajuda completa.
 
 ### Acessos locais
 
 | Serviço | URL |
 |---|---|
 | Web (site institucional) | `http://localhost/` |
-| Painel administrativo (login do escritório) | `http://localhost/admin/login` |
-| Portal do cliente | `http://localhost/app/` |
-| Login do cliente | `http://localhost/app/login` (`/login` redireciona com `301`) |
+| Backoffice SaaS (login do gestor de tenants) | `http://localhost/admin/login` |
+| Plataforma do escritório | `http://localhost/app/` |
+| Login da plataforma do escritório | `http://localhost/app/login` (`/login` redireciona com `301`) |
 | Health check da API | `http://localhost/api/v1/health` |
 
 ### Validar a stack
@@ -214,12 +222,20 @@ Accurit/
 │   │   ├── 20261021120000_create_escritorios/
 │   │   ├── 20261021120100_create_usuarios/
 │   │   ├── 20261021120200_create_auditoria_eventos/
-│   │   └── 20261021130000_create_sessoes/
+│   │   ├── 20261021130000_create_sessoes/
+│   │   ├── 20261021130100_create_administradores/
+│   │   ├── 20261021130200_create_sessoes_admin/
+│   │   ├── 20261022090000_create_clientes/
+│   │   ├── 20261022090100_create_credenciais_serpro/
+│   │   ├── 20261022090200_create_certificados_a1/
+│   │   ├── 20261022090300_create_tokens_serpro/
+│   │   ├── 20261022090400_create_procuracoes/
+│   │   └── 20261022090500_create_consultas_fiscais/
 │   ├── scripts/
 │   │   └── generate-schema.sh      # schema.rs via container descartável
 │   ├── tests/                      # migrations, política, autenticação e HTTP
 │   └── src/
-│       ├── main.rs                 # servidor Axum e subcomando bootstrap-user
+│       ├── main.rs                 # servidor Axum e subcomandos bootstrap-admin/bootstrap-tenant
 │       ├── lib.rs
 │       ├── startup.rs              # retry, advisory lock, pool e graceful shutdown
 │       ├── bootstrap.rs            # criação do primeiro usuário (CLI)
@@ -240,7 +256,7 @@ Accurit/
 │           ├── error.rs
 │           ├── state.rs
 │           └── middleware/         # request-id, CORS, headers e rate limit
-├── admin/                          # Angular 21 · painel do escritório
+├── admin/                          # Angular 21 · backoffice SaaS (gestão de tenants)
 │   ├── Dockerfile
 │   ├── package.json
 │   └── src/app/
@@ -251,7 +267,7 @@ Accurit/
 │       ├── features/acesso-negado/
 │       ├── features/dashboard/
 │       └── app.ts / app.config.ts / app.routes.ts
-├── client/                         # Angular 21 · portal do cliente
+├── client/                         # Angular 21 · plataforma do escritório
 │   ├── Dockerfile
 │   ├── package.json
 │   └── src/app/
@@ -297,7 +313,7 @@ Accurit/
 - Todas as consultas e mutações de domínio são limitadas ao `escritorio_id` obtido do contexto autenticado.
 - Login por aplicação: o access token (JWT HS256, 900 s) fica apenas em memória no frontend; o refresh é opaco, em cookie `HttpOnly`/`SameSite=Strict` com rotação e detecção de reuso; `refresh` e `logout` exigem `Content-Type: application/json` e `X-Requested-With: accurit` (proteção CSRF).
 - Falha de login responde sempre `401 AUTH_INVALID_CREDENTIALS` (sem enumeração), com lockout após 5 falhas/900 s e rate limit de 10 r/m; a auditoria registra `AUTH_LOGIN_SUCESSO`, `AUTH_LOGIN_FALHA`, `AUTH_LOGOUT` e `AUTH_REFRESH_REUSO` sem senha nem token.
-- O primeiro usuário é criado via `bootstrap-user`; não há endpoint público de cadastro.
+- O primeiro gestor de tenants é criado via `bootstrap-admin`; o provisionamento de escritórios ocorre pelo backoffice autenticado (`/api/v1/admin/escritorios`, [ADR-0010](docs/ADR/0010-revisao-atores-papeis-e-provisionamento.md)); não há endpoint público de cadastro.
 - O header `x-cpf-usuario` é operacional e **não consta na documentação oficial**; é enviado apenas
   quando `SERPRO_OPERATOR_HEADER_ENABLED=true`, a partir de `usuarios.cpf`, e nunca é aceito do
   cliente. O comportamento real do SERPRO é validado por teste live (D3).

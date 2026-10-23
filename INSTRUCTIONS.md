@@ -52,9 +52,9 @@ Acessos locais:
 | Serviço | URL |
 |---|---|
 | Web (site institucional) | `http://localhost/` |
-| Admin | `http://localhost/admin/` |
-| Login do cliente | `http://localhost/login` |
-| Portal do cliente | `http://localhost/app/` |
+| Backoffice SaaS (login do gestor de tenants) | `http://localhost/admin/login` |
+| Login da plataforma do escritório | `http://localhost/login` |
+| Plataforma do escritório | `http://localhost/app/` |
 | Health check | `http://localhost/api/v1/health` |
 
 Comandos úteis:
@@ -90,6 +90,7 @@ Copie `.env.example` para `.env` e preencha os valores. Nunca versione `.env`, c
 | `AUTH_COOKIE_SECURE` | Não | `true` por padrão no Compose; `false` só com `APP_ENV=development` |
 | `AUTH_ARGON2_MEMORY_KIB` / `AUTH_ARGON2_ITERATIONS` / `AUTH_ARGON2_PARALLELISM` | Não | Ajuste opcional do Argon2id (padrões OWASP: 19456/2/1) |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Tools | Senha do primeiro administrador criado por `bootstrap-admin` (≥ 8 caracteres); nunca versionar |
+| `BOOTSTRAP_USER_PASSWORD` | Tools | Senha do titular/operador criado por `bootstrap-tenant` (≥ 8 caracteres); nunca versionar |
 | `CERTIFICATE_MASTER_KEY` | Sim | Chave AES-256-GCM: base64 que decodifica para exatamente 32 bytes; valor de exemplo deve falhar no startup |
 | `CORS_ALLOWED_ORIGINS` | Não | Lista separada por vírgula; vazia não permite nenhuma origem (same-origin via proxy) |
 | `SERPRO_TOKEN_URL` | Sim | `https://gateway.apiserpro.serpro.gov.br/token` |
@@ -214,14 +215,22 @@ para o banco e `edge` para baixar dependências durante o teste.
 
 ## 5. Como criar migrations SQL
 
-As migrations ficam em `backend/migrations/` e são embutidas no binário Rust em tempo de compilação por `diesel_migrations::embed_migrations!`. As Fases 1 e 2A entregam:
+As migrations ficam em `backend/migrations/` e são embutidas no binário Rust em tempo de compilação por `diesel_migrations::embed_migrations!`. As Fases 1, 2A e a parte de Banco de Dados da 2B entregam:
 
 ```text
 backend/migrations/
 ├── 20261021120000_create_escritorios/
 ├── 20261021120100_create_usuarios/
 ├── 20261021120200_create_auditoria_eventos/
-└── 20261021130000_create_sessoes/
+├── 20261021130000_create_sessoes/
+├── 20261021130100_create_administradores/
+├── 20261021130200_create_sessoes_admin/
+├── 20261022090000_create_clientes/
+├── 20261022090100_create_credenciais_serpro/
+├── 20261022090200_create_certificados_a1/
+├── 20261022090300_create_tokens_serpro/
+├── 20261022090400_create_procuracoes/
+└── 20261022090500_create_consultas_fiscais/
 ```
 
 Crie manualmente uma pasta versionada no padrão aceito pelo Diesel, com `up.sql` e `down.sql`:
