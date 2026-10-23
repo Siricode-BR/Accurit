@@ -4,8 +4,8 @@ use serde_json::Value as JsonValue;
 use uuid::Uuid;
 
 use crate::application::admin::{
-    AuditoriaAdminRepositorio, EscritorioNovo, EscritorioRepositorio, EventoAuditoriaAdmin,
-    RepositorioError, UsuarioAdminRepositorio, UsuarioNovo,
+    AuditoriaAdminRepositorio, EscritorioNovo, EscritorioRepositorio, EscritorioResumo,
+    EventoAuditoriaAdmin, RepositorioError, UsuarioAdminRepositorio, UsuarioNovo,
 };
 use crate::infrastructure::persistence::pool::DbPool;
 use crate::infrastructure::persistence::schema::{auditoria_eventos, escritorios, usuarios};
@@ -69,6 +69,41 @@ impl EscritorioRepositorio for AdminRepositorioDiesel {
             .select(id)
             .first(&mut conexao)
             .optional()
+            .map_err(|_| RepositorioError::Dados)
+    }
+
+    fn listar(&self) -> Result<Vec<EscritorioResumo>, RepositorioError> {
+        use self::escritorios::dsl::*;
+
+        let mut conexao = self.conexao()?;
+        escritorios
+            .order_by(criado_em.asc())
+            .select((id, slug, nome, cnpj, modo_trial_serpro, criado_em))
+            .load::<(
+                Uuid,
+                String,
+                String,
+                Option<String>,
+                bool,
+                chrono::DateTime<chrono::Utc>,
+            )>(&mut conexao)
+            .map(|linhas| {
+                linhas
+                    .into_iter()
+                    .map(
+                        |(id_linha, slug_linha, nome_linha, cnpj_linha, modo_trial, criado)| {
+                            EscritorioResumo {
+                                id: id_linha,
+                                slug: slug_linha,
+                                nome: nome_linha,
+                                cnpj: cnpj_linha,
+                                modo_trial_serpro: modo_trial,
+                                criado_em: criado,
+                            }
+                        },
+                    )
+                    .collect()
+            })
             .map_err(|_| RepositorioError::Dados)
     }
 }

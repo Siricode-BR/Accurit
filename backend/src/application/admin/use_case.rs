@@ -1,12 +1,30 @@
 use std::sync::Arc;
 
 use crate::application::admin::{
-    AuditoriaAdminRepositorio, EscritorioNovo, EscritorioRepositorio, EventoAuditoriaAdmin,
-    ProvisionarError, ProvisionarTenantCommand, ProvisionarTenantResultado, RepositorioError,
-    UsuarioAdminRepositorio, UsuarioNovo,
+    AuditoriaAdminRepositorio, EscritorioNovo, EscritorioRepositorio, EscritorioResumo,
+    EventoAuditoriaAdmin, ProvisionarError, ProvisionarTenantCommand, ProvisionarTenantResultado,
+    RepositorioError, UsuarioAdminRepositorio, UsuarioNovo,
 };
 use crate::domain::auth::Papel;
 use crate::infrastructure::auth::HashArgon2;
+
+/// Listagem simples de tenants para o backoffice (GET /admin/escritorios):
+/// pré-requisito da tela do toggle SERPRO, que seleciona o escritório na
+/// lista e navega para o detalhe (remediação mínima da Fase 2B).
+#[derive(Clone)]
+pub struct ListarEscritoriosUseCase {
+    escritorio_repo: Arc<dyn EscritorioRepositorio>,
+}
+
+impl ListarEscritoriosUseCase {
+    pub const fn novo(escritorio_repo: Arc<dyn EscritorioRepositorio>) -> Self {
+        Self { escritorio_repo }
+    }
+
+    pub fn executar(&self) -> Result<Vec<EscritorioResumo>, RepositorioError> {
+        self.escritorio_repo.listar()
+    }
+}
 
 #[derive(Clone)]
 pub struct ProvisionarTenantUseCase {

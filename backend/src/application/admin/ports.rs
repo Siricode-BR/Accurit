@@ -44,6 +44,8 @@ pub trait EscritorioRepositorio: Send + Sync {
     fn criar(&self, escritorio: &EscritorioNovo) -> Result<Uuid, RepositorioError>;
 
     fn buscar_por_slug(&self, slug: &str) -> Result<Option<Uuid>, RepositorioError>;
+
+    fn listar(&self) -> Result<Vec<EscritorioResumo>, RepositorioError>;
 }
 
 pub trait UsuarioAdminRepositorio: Send + Sync {
@@ -64,6 +66,18 @@ pub trait AuditoriaAdminRepositorio: Send + Sync {
 pub struct EscritorioNovo {
     pub slug: String,
     pub nome: String,
+}
+
+/// Resumo de escritório para listagem no backoffice (GET /admin/escritorios):
+/// suficiente para a tela de tenants mostrar o toggle SERPRO por linha.
+#[derive(Debug, Clone)]
+pub struct EscritorioResumo {
+    pub id: Uuid,
+    pub slug: String,
+    pub nome: String,
+    pub cnpj: Option<String>,
+    pub modo_trial_serpro: bool,
+    pub criado_em: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Debug, Clone)]
