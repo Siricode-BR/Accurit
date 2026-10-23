@@ -6,7 +6,14 @@
 
 **Estado atual:** a Fase 0 (reconciliação documental e configuração) foi concluída. A Fase 1
 (fundação, infraestrutura e base multi-tenant) foi implementada e validada tecnicamente; o aceite
-formal está pendente. A Fase 2A (login por aplicação revisado pelo [ADR-0010](docs/ADR/0010-revisao-atores-papeis-e-provisionamento.md)) exige ajuste na ligação papel↔audiência e separação da tabela de administradores; a Fase 2B (backoffice de tenants, clientes, certificados e procurações) não foi iniciada.
+formal está pendente. A Fase 2A (login por aplicação) foi implementada e revisada pelo
+[ADR-0010](docs/ADR/0010-revisao-atores-papeis-e-provisionamento.md) — a ligação papel↔audiência e
+a separação do gestor SaaS (`administradores`/`sessoes_admin`) já estão no código e nas tabelas,
+com testes. A Fase 2B (backoffice de tenants, clientes, certificados e procurações) está
+**parcialmente entregue** em `main`: migrations das tabelas de negócio e o backend de
+clientes/provisionamento existem, mas pendem remediação de qualidade (`cargo fmt --check` e
+`clippy -D warnings` violados no último commit), testes HTTP de IDOR/isolamento multi-tenant e o
+frontend (telas de `/admin` e `/app`); certificados A1 cifrados e procurações não foram iniciados.
 
 ---
 
@@ -56,15 +63,15 @@ formal está pendente. A Fase 2A (login por aplicação revisado pelo [ADR-0010]
 
 ## Fase 2 — Autenticação, escritórios e clientes
 
-O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/login` → `/app/login`) foi implementado no modelo inicial e **revisado pelo [ADR-0010](docs/ADR/0010-revisao-atores-papeis-e-provisionamento.md)** para separar o gestor SaaS (`administradores`) dos usuários do escritório (`usuarios`). O restante da fase (2B) segue pendente.
+O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/login` → `/app/login`) foi implementado no modelo inicial e **revisado pelo [ADR-0010](docs/ADR/0010-revisao-atores-papeis-e-provisionamento.md)** para separar o gestor SaaS (`administradores`) dos usuários do escritório (`usuarios`). A Fase 2B está **parcialmente entregue** (tabelas de negócio e backend de clientes/provisionamento); o frontend do backoffice/portal e a cobertura de testes de IDOR pendem.
 
 ### 1. Banco de Dados
 - [x] Criar `sessoes` com audiência (`CLIENT`), família de refresh, hash SHA-256 único, expiração, revogação e índices, sem `ALTER` (Fase 2A).
 - [x] Criar tabela `administradores` e `sessoes_admin` para o gestor de tenants SaaS (ADR-0010).
-- [ ] Criar `clientes` com `escritorio_id`, `tipo` (`PF`/`PJ`), `porte_regime`, `cpf_cnpj`, nome/razão social, contatos e timestamps.
-- [ ] Restringir `tipo` a `PF`/`PJ` e regimes a `MEI`, `SIMPLES_NACIONAL`, `LUCRO_PRESUMIDO`, `LUCRO_REAL`.
-- [ ] Criar `UNIQUE (escritorio_id, cpf_cnpj)` e índices `(escritorio_id, tipo)` e `(escritorio_id, porte_regime)`.
-- [ ] Criar `certificados_a1`, `credenciais_serpro`, `procuracoes`, `tokens_serpro` e `consultas_fiscais` conforme o modelo.
+- [x] Criar `clientes` com `escritorio_id`, `tipo` (`PF`/`PJ`), `porte_regime`, `cpf_cnpj`, nome/razão social, contatos e timestamps.
+- [x] Restringir `tipo` a `PF`/`PJ` e regimes a `MEI`, `SIMPLES_NACIONAL`, `LUCRO_PRESUMIDO`, `LUCRO_REAL`.
+- [x] Criar `UNIQUE (escritorio_id, cpf_cnpj)` e índices `(escritorio_id, tipo)` e `(escritorio_id, porte_regime)`.
+- [x] Criar `certificados_a1`, `credenciais_serpro`, `procuracoes`, `tokens_serpro` e `consultas_fiscais` conforme o modelo.
 - [x] Consolidar a regra de CPF de usuário: obrigatório (`NOT NULL`) com 11 dígitos para todos os papéis (`ADMIN`, `CLIENTE`, `OPERADOR`), fechando o requisito (ADR-0010).
 - [ ] Definir política de retenção e minimização de dados fiscais.
 
@@ -74,16 +81,16 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 - [x] Ajustar autenticação da audiência `client` para aceitar papéis `CLIENTE` e `OPERADOR` na plataforma do escritório.
 - [x] Implementar refresh opaco com rotação e família, reuso revogando a sessão, logout, lockout por tentativas, rate limit de login e auditoria (Fase 2A).
 - [x] Entregar o bootstrap do primeiro administrador (`bootstrap-admin`) e o provisionamento de tenants (`bootstrap-tenant`).
-- [ ] Aplicar middleware de tenancy e enforcement nos repositórios Diesel.
-- [ ] Implementar CRUD de clientes PF/PJ com validação de dígitos verificadores de CPF/CNPJ.
-- [ ] Implementar filtros da API: `Todos`, `CPF`, `CNPJ - MEI`, `CNPJ - Simples Nacional`, `CNPJ - Lucro Presumido`, `CNPJ - Lucro Real`.
+- [~] Aplicar middleware de tenancy e enforcement nos repositórios Diesel (middleware de audiência e filtro por `escritorio_id` existem; enforcement falta ser comprovado por testes).
+- [~] Implementar CRUD de clientes PF/PJ com validação de dígitos verificadores de CPF/CNPJ (código completo; falta teste de integração HTTP).
+- [~] Implementar filtros da API: `Todos`, `CPF`, `CNPJ - MEI`, `CNPJ - Simples Nacional`, `CNPJ - Lucro Presumido`, `CNPJ - Lucro Real` (implementados no domínio e repositório; falta teste de integração HTTP).
 - [ ] Implementar armazenamento cifrado (AES-256-GCM) e gestão de validade do certificado A1.
 - [ ] Padronizar erros, paginação, ordenação, logs redigidos e auditoria.
 - [ ] Cobrir IDOR e isolamento multi-tenant com testes.
 
 ### 3. Frontend (Angular / Next.js)
 - [x] Implementar login por aplicação (`/admin/login` e `/app/login`), guards de sessão, renovação automática no 401, `returnUrl` validado e rota de acesso negado (Fase 2A).
-- [ ] Adaptar o app `/admin` para operar como Backoffice SaaS (gestão de tenants e criação do titular `CLIENTE`).
+- [~] Adaptar o app `/admin` para operar como Backoffice SaaS (gestão de tenants e criação do titular `CLIENTE`) — o login já segue o ADR-0010 (sem slug do escritório); as telas de gestão de tenants não existem.
 - [ ] Implementar guards por papel nos fluxos de clientes e tratamento consistente de 403 na plataforma do escritório (`/app`).
 - [ ] Criar telas de cadastro, edição, detalhes e listagem de clientes.
 - [ ] Disponibilizar todos os filtros tributários e sincronizá-los com query params.

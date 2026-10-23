@@ -1129,7 +1129,7 @@ e a revogação da família operam de forma idêntica a `sessoes`, com os evento
 | `GET` | `/api/v1/clientes?filtro=...` | Listagem paginada com filtro tributário |
 | `POST` | `/api/v1/clientes` | Cadastro PF/PJ |
 | `GET` | `/api/v1/clientes/{id}` | Detalhe do cliente |
-| `PATCH` | `/api/v1/clientes/{id}` | Atualização |
+| `PUT` | `/api/v1/clientes/{id}` | Atualização (campos opcionais aplicados parcialmente, semântica PATCH em corpo) |
 | `DELETE` | `/api/v1/clientes/{id}` | Remoção lógica ou física conforme política |
 | `GET` | `/api/v1/divida-ativa/devedores/{cpfCnpj}` | Consulta devedor |
 | `GET` | `/api/v1/divida-ativa/inscricoes/{numero}` | Detalhe da inscrição |
