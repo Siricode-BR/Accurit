@@ -243,36 +243,24 @@ impl AtualizarClienteUseCase {
             cliente.nome_razao_social = nome.trim().to_owned();
         }
 
-        if let Some(fantasia) = comando.nome_fantasia {
-            if !fantasia.trim().is_empty() {
-                validar_opcional_max_len(
-                    &fantasia,
-                    self.politica.max_fantasia_len,
-                    "nome_fantasia",
-                )?;
-                cliente.nome_fantasia = Some(fantasia.trim().to_owned());
-            } else {
-                cliente.nome_fantasia = None;
-            }
-        }
-
-        if let Some(email) = comando.email {
-            if !email.trim().is_empty() {
-                validar_opcional_max_len(&email, self.politica.max_email_len, "email")?;
-                cliente.email = Some(email.trim().to_owned());
-            } else {
-                cliente.email = None;
-            }
-        }
-
-        if let Some(telefone) = comando.telefone {
-            if !telefone.trim().is_empty() {
-                validar_opcional_max_len(&telefone, self.politica.max_telefone_len, "telefone")?;
-                cliente.telefone = Some(telefone.trim().to_owned());
-            } else {
-                cliente.telefone = None;
-            }
-        }
+        aplicar_opcional(
+            &mut cliente.nome_fantasia,
+            comando.nome_fantasia,
+            self.politica.max_fantasia_len,
+            "nome_fantasia",
+        )?;
+        aplicar_opcional(
+            &mut cliente.email,
+            comando.email,
+            self.politica.max_email_len,
+            "email",
+        )?;
+        aplicar_opcional(
+            &mut cliente.telefone,
+            comando.telefone,
+            self.politica.max_telefone_len,
+            "telefone",
+        )?;
 
         cliente.atualizado_em = chrono::Utc::now();
 
@@ -357,6 +345,24 @@ fn validar_opcional_max_len(valor: &str, max_len: usize, campo: &str) -> Result<
             "{} deve ter no m\u{00e1}ximo {} caracteres",
             campo, max_len
         )));
+    }
+    Ok(())
+}
+
+fn aplicar_opcional(
+    campo_atual: &mut Option<String>,
+    comando: Option<Option<String>>,
+    max_len: usize,
+    campo: &str,
+) -> Result<(), ClienteError> {
+    if let Some(valor) = comando {
+        match valor {
+            Some(valor) if !valor.trim().is_empty() => {
+                validar_opcional_max_len(&valor, max_len, campo)?;
+                *campo_atual = Some(valor.trim().to_owned());
+            }
+            _ => *campo_atual = None,
+        }
     }
     Ok(())
 }

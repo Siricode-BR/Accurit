@@ -19,10 +19,10 @@ impl FiltroClientes {
         match self {
             Self::Todos => None,
             Self::Cpf => Some("cpf"),
-            Self::CnpjMei => Some("cnpj-mei"),
-            Self::CnpjSimplesNacional => Some("cnpj-simples-nacional"),
-            Self::CnpjLucroPresumido => Some("cnpj-lucro-presumido"),
-            Self::CnpjLucroReal => Some("cnpj-lucro-real"),
+            Self::CnpjMei => Some("cnpj_mei"),
+            Self::CnpjSimplesNacional => Some("cnpj_simples"),
+            Self::CnpjLucroPresumido => Some("cnpj_presumido"),
+            Self::CnpjLucroReal => Some("cnpj_real"),
         }
     }
 
@@ -31,10 +31,10 @@ impl FiltroClientes {
         match valor.as_str() {
             "todos" | "" => Some(Self::Todos),
             "cpf" => Some(Self::Cpf),
-            "cpf-mei" => Some(Self::CnpjMei),
-            "cpf-simples-nacional" => Some(Self::CnpjSimplesNacional),
-            "cpf-lucro-presumido" => Some(Self::CnpjLucroPresumido),
-            "cpf-lucro-real" => Some(Self::CnpjLucroReal),
+            "cnpj_mei" => Some(Self::CnpjMei),
+            "cnpj_simples" => Some(Self::CnpjSimplesNacional),
+            "cnpj_presumido" => Some(Self::CnpjLucroPresumido),
+            "cnpj_real" => Some(Self::CnpjLucroReal),
             _ => None,
         }
     }
@@ -88,10 +88,10 @@ mod tests {
         for (valor, esperado) in [
             ("todos", None),
             ("cpf", Some("cpf")),
-            ("cpf-mei", Some("cnpj-mei")),
-            ("cpf-simples-nacional", Some("cnpj-simples-nacional")),
-            ("cpf-lucro-presumido", Some("cnpj-lucro-presumido")),
-            ("cpf-lucro-real", Some("cnpj-lucro-real")),
+            ("cnpj_mei", Some("cnpj_mei")),
+            ("cnpj_simples", Some("cnpj_simples")),
+            ("cnpj_presumido", Some("cnpj_presumido")),
+            ("cnpj_real", Some("cnpj_real")),
         ] {
             let filtro = FiltroClientes::de_query(valor).expect("filtro válido");
             assert_eq!(filtro.como_query(), esperado);

@@ -15,7 +15,8 @@ use crate::application::clientes::{
 use crate::domain::auth::Papel;
 use crate::presentation::auth::RequestContext;
 use crate::presentation::clientes::dto::{
-    AtualizarClienteRequest, CriarClienteRequest, ListagemClientesResponse, ListarClientesQuery,
+    AtualizarClienteRequest, ClienteResponse, CriarClienteRequest, ListagemClientesResponse,
+    ListarClientesQuery,
 };
 use crate::presentation::error::ApiError;
 
@@ -47,7 +48,7 @@ pub async fn criar_cliente(
     };
 
     let cliente = criar_use_case.executar(comando).await?;
-    Ok((StatusCode::CREATED, Json(cliente)).into_response())
+    Ok((StatusCode::CREATED, Json(ClienteResponse::from(cliente))).into_response())
 }
 
 pub async fn obter_cliente(
@@ -60,7 +61,7 @@ pub async fn obter_cliente(
     let comando = ObterClienteCommand { escritorio_id, id };
 
     let cliente = obter_use_case.executar(comando).await?;
-    Ok(Json(cliente).into_response())
+    Ok(Json(ClienteResponse::from(cliente)).into_response())
 }
 
 pub async fn listar_clientes(
@@ -105,15 +106,15 @@ pub async fn atualizar_cliente(
         porte_regime,
         cpf_cnpj: payload.cpf_cnpj,
         nome_razao_social: payload.nome_razao_social,
-        nome_fantasia: payload.nome_fantasia.flatten(),
-        email: payload.email.flatten(),
-        telefone: payload.telefone.flatten(),
+        nome_fantasia: payload.nome_fantasia,
+        email: payload.email,
+        telefone: payload.telefone,
         ip: context.ip,
         usuario_id: context.usuario_id,
     };
 
     let cliente = atualizar_use_case.executar(comando).await?;
-    Ok(Json(cliente).into_response())
+    Ok(Json(ClienteResponse::from(cliente)).into_response())
 }
 
 pub async fn excluir_cliente(

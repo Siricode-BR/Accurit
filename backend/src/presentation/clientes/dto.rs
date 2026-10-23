@@ -69,6 +69,18 @@ pub struct CriarClienteRequest {
     pub telefone: Option<String>,
 }
 
+mod opcoes_duas {
+    use serde::{Deserialize, Deserializer};
+
+    pub fn duas<'de, T, D>(deserializador: D) -> Result<Option<Option<T>>, D::Error>
+    where
+        T: Deserialize<'de>,
+        D: Deserializer<'de>,
+    {
+        Deserialize::deserialize(deserializador).map(Some)
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AtualizarClienteRequest {
@@ -76,17 +88,22 @@ pub struct AtualizarClienteRequest {
     pub porte_regime: Option<Option<String>>,
     pub cpf_cnpj: Option<String>,
     pub nome_razao_social: Option<String>,
+    #[serde(default, deserialize_with = "opcoes_duas::duas")]
     pub nome_fantasia: Option<Option<String>>,
+    #[serde(default, deserialize_with = "opcoes_duas::duas")]
     pub email: Option<Option<String>>,
+    #[serde(default, deserialize_with = "opcoes_duas::duas")]
     pub telefone: Option<Option<String>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListarClientesQuery {
-    pub filtro: Option<String>,
+    #[serde(alias = "page")]
     pub pagina: Option<i64>,
+    #[serde(alias = "pageSize")]
     pub tamanho: Option<i64>,
+    pub filtro: Option<String>,
 }
 
 impl ListarClientesQuery {

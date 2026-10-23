@@ -147,9 +147,9 @@ pub struct AtualizarClienteCommand {
     pub porte_regime: Option<crate::domain::clientes::PorteRegime>,
     pub cpf_cnpj: Option<String>,
     pub nome_razao_social: Option<String>,
-    pub nome_fantasia: Option<String>,
-    pub email: Option<String>,
-    pub telefone: Option<String>,
+    pub nome_fantasia: Option<Option<String>>,
+    pub email: Option<Option<String>>,
+    pub telefone: Option<Option<String>>,
     pub ip: Option<IpAddr>,
     pub usuario_id: Uuid,
 }
