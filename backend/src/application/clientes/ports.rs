@@ -4,7 +4,7 @@ use serde_json::Value;
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::domain::clientes::{Cliente, CpfCnpjInvalido, FiltroClientes, NovoCliente, Paginacao, TipoCliente};
+use crate::domain::clientes::{Cliente, CpfCnpjInvalido, FiltroClientes, Paginacao, TipoCliente};
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum RepositorioError {
@@ -107,11 +107,7 @@ pub trait ClienteRepositorio: Send + Sync {
         paginacao: Paginacao,
     ) -> Result<ListagemClientes, RepositorioError>;
 
-    fn atualizar(
-        &self,
-        escritorio_id: Uuid,
-        cliente: &Cliente,
-    ) -> Result<(), RepositorioError>;
+    fn atualizar(&self, escritorio_id: Uuid, cliente: &Cliente) -> Result<(), RepositorioError>;
 
     fn excluir(&self, escritorio_id: Uuid, id: Uuid) -> Result<bool, RepositorioError>;
 }

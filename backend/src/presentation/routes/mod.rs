@@ -5,19 +5,19 @@ use axum::routing::{get, post};
 use tower_http::trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
+use crate::application::admin::ProvisionarTenantUseCase;
 use crate::application::clientes::{
     AtualizarClienteUseCase, CriarClienteUseCase, ExcluirClienteUseCase, ListarClientesUseCase,
     ObterClienteUseCase, PoliticaClientes,
 };
 use crate::application::ports::SaudeBanco;
-use crate::application::admin::ProvisionarTenantUseCase;
-use crate::infrastructure::config::{BURST_RATE_LIMIT, Config, REQUISICOES_POR_SEGUNDO};
-use crate::infrastructure::persistence::clientes::ClienteRepositorioDiesel;
-use crate::infrastructure::persistence::admin::AdminRepositorioDiesel;
 use crate::infrastructure::auth::HashArgon2;
-use crate::presentation::auth::{AuthState, ExigirAudiencia, exigir, construir as construir_auth};
-use crate::presentation::clientes::router::construir_clientes;
+use crate::infrastructure::config::{BURST_RATE_LIMIT, Config, REQUISICOES_POR_SEGUNDO};
+use crate::infrastructure::persistence::admin::AdminRepositorioDiesel;
+use crate::infrastructure::persistence::clientes::ClienteRepositorioDiesel;
 use crate::presentation::admin::handlers::provisionar_tenant;
+use crate::presentation::auth::{AuthState, ExigirAudiencia, construir as construir_auth, exigir};
+use crate::presentation::clientes::router::construir_clientes;
 use crate::presentation::handlers;
 use crate::presentation::middleware::{cors, rate_limit, request_id, security_headers};
 use crate::presentation::state::AppState;
@@ -72,7 +72,6 @@ where
                 listar_clientes,
                 atualizar_clientes,
                 excluir_clientes,
-                PoliticaClientes::default(),
                 auth_state.clone(),
             ),
         );

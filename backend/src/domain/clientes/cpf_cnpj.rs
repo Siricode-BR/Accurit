@@ -149,10 +149,7 @@ mod tests {
 
     #[test]
     fn rejeita_formato_invalido() {
-        assert_eq!(
-            CpfCnpj::novo("123").unwrap_err(),
-            CpfCnpjInvalido::Formato
-        );
+        assert_eq!(CpfCnpj::novo("123").unwrap_err(), CpfCnpjInvalido::Formato);
         assert_eq!(
             CpfCnpj::novo("123456789012345").unwrap_err(),
             CpfCnpjInvalido::Formato

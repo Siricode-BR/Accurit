@@ -1,11 +1,9 @@
 use std::sync::Arc;
 
-use uuid::Uuid;
-
 use crate::application::admin::{
-    AuditoriaAdminRepositorio, EscritorioNovo, EscritorioRepositorio, ProvisionarError,
-    ProvisionarTenantCommand, ProvisionarTenantResultado, RepositorioError, UsuarioAdminRepositorio,
-    UsuarioNovo, EventoAuditoriaAdmin,
+    AuditoriaAdminRepositorio, EscritorioNovo, EscritorioRepositorio, EventoAuditoriaAdmin,
+    ProvisionarError, ProvisionarTenantCommand, ProvisionarTenantResultado, RepositorioError,
+    UsuarioAdminRepositorio, UsuarioNovo,
 };
 use crate::domain::auth::Papel;
 use crate::infrastructure::auth::HashArgon2;
@@ -58,7 +56,9 @@ impl ProvisionarTenantUseCase {
             .buscar_por_escritorio_e_email(escritorio_id, &comando.email_titular)?
             .is_some()
         {
-            return Err(ProvisionarError::Repositorio(RepositorioError::UsuarioExistente));
+            return Err(ProvisionarError::Repositorio(
+                RepositorioError::UsuarioExistente,
+            ));
         }
 
         let senha_hash = self
@@ -117,7 +117,8 @@ fn validar_slug(slug: &str) -> Result<(), ProvisionarError> {
         .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
     {
         return Err(ProvisionarError::Validacao(
-            "slug deve conter apenas letras min\u{00fa}sculas, d\u{00ed}gitos e h\u{00ed}fen".into(),
+            "slug deve conter apenas letras min\u{00fa}sculas, d\u{00ed}gitos e h\u{00ed}fen"
+                .into(),
         ));
     }
     Ok(())

@@ -5,7 +5,6 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::domain::auth::Papel;
-use crate::domain::clientes::TipoCliente;
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum RepositorioError {

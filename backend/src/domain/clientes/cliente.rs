@@ -116,9 +116,7 @@ impl NovoCliente {
             }
         }
 
-        if self.tipo == TipoCliente::Pf
-            && !matches!(self.documento.tipo(), TipoDocumento::Cpf)
-        {
+        if self.tipo == TipoCliente::Pf && !matches!(self.documento.tipo(), TipoDocumento::Cpf) {
             return Err(ClienteInvalido::TipoIncompativelComDocumento);
         }
 
@@ -158,7 +156,11 @@ mod tests {
         CpfCnpj::novo("11444777000161").expect("CNPJ válido")
     }
 
-    fn novo_cliente(tipo: TipoCliente, documento: CpfCnpj, porte: Option<PorteRegime>) -> NovoCliente {
+    fn novo_cliente(
+        tipo: TipoCliente,
+        documento: CpfCnpj,
+        porte: Option<PorteRegime>,
+    ) -> NovoCliente {
         NovoCliente {
             tipo,
             porte_regime: porte,
@@ -172,7 +174,11 @@ mod tests {
 
     #[test]
     fn aceita_pf_sem_porte() {
-        assert!(novo_cliente(TipoCliente::Pf, documento_pf(), None).validar().is_ok());
+        assert!(
+            novo_cliente(TipoCliente::Pf, documento_pf(), None)
+                .validar()
+                .is_ok()
+        );
     }
 
     #[test]
@@ -192,13 +198,19 @@ mod tests {
                 .validar()
                 .is_ok()
         );
-        assert!(novo_cliente(TipoCliente::Pj, documento_pj(), None).validar().is_ok());
+        assert!(
+            novo_cliente(TipoCliente::Pj, documento_pj(), None)
+                .validar()
+                .is_ok()
+        );
     }
 
     #[test]
     fn rejeita_cross_tipos_de_documento() {
         assert_eq!(
-            novo_cliente(TipoCliente::Pf, documento_pj(), None).validar().unwrap_err(),
+            novo_cliente(TipoCliente::Pf, documento_pj(), None)
+                .validar()
+                .unwrap_err(),
             ClienteInvalido::TipoIncompativelComDocumento
         );
         assert_eq!(

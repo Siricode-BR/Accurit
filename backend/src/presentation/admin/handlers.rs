@@ -1,9 +1,8 @@
 use axum::{
-    extract::{Extension, State, Json},
+    extract::{Extension, Json, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use uuid::Uuid;
 
 use crate::application::admin::ProvisionarTenantUseCase;
 use crate::domain::auth::Papel;

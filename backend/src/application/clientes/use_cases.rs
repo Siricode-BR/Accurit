@@ -3,12 +3,12 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::application::clientes::{
-    AuditoriaClienteRepositorio, ClienteError, ClientePublico, ClienteRepositorio, CriarClienteCommand,
-    EventoAuditoriaCliente, ExcluirClienteCommand, ListagemClientes, ListarClientesCommand,
-    ObterClienteCommand, PoliticaClientes, RepositorioError, AtualizarClienteCommand,
+    AtualizarClienteCommand, AuditoriaClienteRepositorio, ClienteError, ClientePublico,
+    ClienteRepositorio, CriarClienteCommand, EventoAuditoriaCliente, ExcluirClienteCommand,
+    ListagemClientes, ListarClientesCommand, ObterClienteCommand, PoliticaClientes,
+    RepositorioError,
 };
-use crate::domain::clientes::{Cliente, FiltroClientes, NovoCliente, Paginacao, PorteRegime, TipoCliente};
-use crate::domain::clientes::CpfCnpj;
+use crate::domain::clientes::{Cliente, CpfCnpj, NovoCliente, TipoCliente};
 
 #[derive(Clone)]
 pub struct CriarClienteUseCase {
@@ -30,7 +30,10 @@ impl CriarClienteUseCase {
         }
     }
 
-    pub async fn executar(&self, comando: CriarClienteCommand) -> Result<ClientePublico, ClienteError> {
+    pub async fn executar(
+        &self,
+        comando: CriarClienteCommand,
+    ) -> Result<ClientePublico, ClienteError> {
         let cpf_cnpj = CpfCnpj::novo(&comando.cpf_cnpj)?;
         let documento_normalizado = cpf_cnpj.como_str().to_owned();
 
@@ -106,7 +109,10 @@ impl ObterClienteUseCase {
         Self { repositorio }
     }
 
-    pub async fn executar(&self, comando: ObterClienteCommand) -> Result<ClientePublico, ClienteError> {
+    pub async fn executar(
+        &self,
+        comando: ObterClienteCommand,
+    ) -> Result<ClientePublico, ClienteError> {
         let cliente = self
             .repositorio
             .buscar_por_id(comando.escritorio_id, comando.id)?
@@ -126,17 +132,13 @@ impl ListarClientesUseCase {
         Self { repositorio }
     }
 
-    pub async fn executar(&self, comando: ListarClientesCommand) -> Result<ListagemClientes, ClienteError> {
-        let resultado = self
+    pub async fn executar(
+        &self,
+        comando: ListarClientesCommand,
+    ) -> Result<ListagemClientes, ClienteError> {
+        Ok(self
             .repositorio
-            .listar(comando.escritorio_id, comando.filtro, comando.paginacao)?;
-
-        Ok(ListagemClientes {
-            itens: resultado.itens.into_iter().map(Into::into).collect(),
-            total: resultado.total,
-            pagina: resultado.pagina,
-            tamanho: resultado.tamanho,
-        })
+            .listar(comando.escritorio_id, comando.filtro, comando.paginacao)?)
     }
 }
 
@@ -160,7 +162,10 @@ impl AtualizarClienteUseCase {
         }
     }
 
-    pub async fn executar(&self, comando: AtualizarClienteCommand) -> Result<ClientePublico, ClienteError> {
+    pub async fn executar(
+        &self,
+        comando: AtualizarClienteCommand,
+    ) -> Result<ClientePublico, ClienteError> {
         let mut cliente = self
             .repositorio
             .buscar_por_id(comando.escritorio_id, comando.id)?
@@ -168,22 +173,25 @@ impl AtualizarClienteUseCase {
 
         let valor_anterior = serde_json::to_value(&cliente).unwrap_or_default();
 
-        if let Some(tipo) = comando.tipo {
-            if tipo != cliente.tipo {
-                if tipo == TipoCliente::Pf && cliente.porte_regime.is_some() {
-                    return Err(ClienteError::Dominio(
-                        crate::domain::clientes::ClienteInvalido::PfComPorte,
-                    ));
-                }
-                if tipo == TipoCliente::Pj
-                    && matches!(cliente.documento.tipo(), crate::domain::clientes::TipoDocumento::Cpf)
-                {
-                    return Err(ClienteError::Dominio(
-                        crate::domain::clientes::ClienteInvalido::TipoIncompativelComDocumento,
-                    ));
-                }
-                cliente.tipo = tipo;
+        if let Some(tipo) = comando.tipo
+            && tipo != cliente.tipo
+        {
+            if tipo == TipoCliente::Pf && cliente.porte_regime.is_some() {
+                return Err(ClienteError::Dominio(
+                    crate::domain::clientes::ClienteInvalido::PfComPorte,
+                ));
             }
+            if tipo == TipoCliente::Pj
+                && matches!(
+                    cliente.documento.tipo(),
+                    crate::domain::clientes::TipoDocumento::Cpf
+                )
+            {
+                return Err(ClienteError::Dominio(
+                    crate::domain::clientes::ClienteInvalido::TipoIncompativelComDocumento,
+                ));
+            }
+            cliente.tipo = tipo;
         }
 
         if let Some(porte_regime) = comando.porte_regime {
@@ -197,26 +205,35 @@ impl AtualizarClienteUseCase {
 
         if let Some(cpf_cnpj) = comando.cpf_cnpj {
             let documento = CpfCnpj::novo(&cpf_cnpj)?;
-            if cliente.tipo == TipoCliente::Pf && !matches!(documento.tipo(), crate::domain::clientes::TipoDocumento::Cpf) {
+            if cliente.tipo == TipoCliente::Pf
+                && !matches!(
+                    documento.tipo(),
+                    crate::domain::clientes::TipoDocumento::Cpf
+                )
+            {
                 return Err(ClienteError::Dominio(
                     crate::domain::clientes::ClienteInvalido::TipoIncompativelComDocumento,
                 ));
             }
-            if cliente.tipo == TipoCliente::Pj && !matches!(documento.tipo(), crate::domain::clientes::TipoDocumento::Cnpj) {
+            if cliente.tipo == TipoCliente::Pj
+                && !matches!(
+                    documento.tipo(),
+                    crate::domain::clientes::TipoDocumento::Cnpj
+                )
+            {
                 return Err(ClienteError::Dominio(
                     crate::domain::clientes::ClienteInvalido::TipoIncompativelComDocumento,
                 ));
             }
 
             let doc_norm = documento.como_str().to_owned();
-            if doc_norm != cliente.documento.como_str() {
-                if self
+            if doc_norm != cliente.documento.como_str()
+                && self
                     .repositorio
                     .buscar_por_cpf_cnpj(comando.escritorio_id, &doc_norm)?
                     .is_some()
-                {
-                    return Err(ClienteError::Repositorio(RepositorioError::Duplicado));
-                }
+            {
+                return Err(ClienteError::Repositorio(RepositorioError::Duplicado));
             }
             cliente.documento = documento;
         }
@@ -228,7 +245,11 @@ impl AtualizarClienteUseCase {
 
         if let Some(fantasia) = comando.nome_fantasia {
             if !fantasia.trim().is_empty() {
-                validar_opcional_max_len(&fantasia, self.politica.max_fantasia_len, "nome_fantasia")?;
+                validar_opcional_max_len(
+                    &fantasia,
+                    self.politica.max_fantasia_len,
+                    "nome_fantasia",
+                )?;
                 cliente.nome_fantasia = Some(fantasia.trim().to_owned());
             } else {
                 cliente.nome_fantasia = None;
@@ -255,7 +276,8 @@ impl AtualizarClienteUseCase {
 
         cliente.atualizado_em = chrono::Utc::now();
 
-        self.repositorio.atualizar(comando.escritorio_id, &cliente)?;
+        self.repositorio
+            .atualizar(comando.escritorio_id, &cliente)?;
 
         self.auditoria.registrar(&EventoAuditoriaCliente {
             escritorio_id: comando.escritorio_id,
@@ -295,7 +317,9 @@ impl ExcluirClienteUseCase {
             .buscar_por_id(comando.escritorio_id, comando.id)?
             .ok_or(ClienteError::Repositorio(RepositorioError::NaoEncontrado))?;
 
-        let excluido = self.repositorio.excluir(comando.escritorio_id, comando.id)?;
+        let excluido = self
+            .repositorio
+            .excluir(comando.escritorio_id, comando.id)?;
 
         if !excluido {
             return Err(ClienteError::Repositorio(RepositorioError::NaoEncontrado));
@@ -319,7 +343,9 @@ impl ExcluirClienteUseCase {
 fn validar_nome(nome: &str, max_len: usize) -> Result<(), ClienteError> {
     let limpo = nome.trim();
     if limpo.is_empty() || limpo.chars().count() > max_len {
-        return Err(ClienteError::Validacao("nome deve ter entre 1 e 200 caracteres".into()));
+        return Err(ClienteError::Validacao(
+            "nome deve ter entre 1 e 200 caracteres".into(),
+        ));
     }
     Ok(())
 }
@@ -327,7 +353,10 @@ fn validar_nome(nome: &str, max_len: usize) -> Result<(), ClienteError> {
 fn validar_opcional_max_len(valor: &str, max_len: usize, campo: &str) -> Result<(), ClienteError> {
     let limpo = valor.trim();
     if !limpo.is_empty() && limpo.chars().count() > max_len {
-        return Err(ClienteError::Validacao(format!("{} deve ter no m\u{00e1}ximo {} caracteres", campo, max_len)));
+        return Err(ClienteError::Validacao(format!(
+            "{} deve ter no m\u{00e1}ximo {} caracteres",
+            campo, max_len
+        )));
     }
     Ok(())
 }

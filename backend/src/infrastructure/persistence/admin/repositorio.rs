@@ -1,5 +1,4 @@
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
-use diesel::sql_types::{Integer, Nullable, Text, Timestamptz, Uuid as SqlUuid};
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use ipnet::IpNet;
 use serde_json::Value as JsonValue;
 use uuid::Uuid;
@@ -9,7 +8,7 @@ use crate::application::admin::{
     RepositorioError, UsuarioAdminRepositorio, UsuarioNovo,
 };
 use crate::infrastructure::persistence::pool::DbPool;
-use crate::infrastructure::persistence::schema::{escritorios, usuarios, auditoria_eventos};
+use crate::infrastructure::persistence::schema::{auditoria_eventos, escritorios, usuarios};
 
 #[derive(Clone)]
 pub struct AdminRepositorioDiesel {
@@ -61,12 +60,12 @@ impl EscritorioRepositorio for AdminRepositorioDiesel {
             })
     }
 
-    fn buscar_por_slug(&self, slug: &str) -> Result<Option<Uuid>, RepositorioError> {
+    fn buscar_por_slug(&self, slug_alvo: &str) -> Result<Option<Uuid>, RepositorioError> {
         use self::escritorios::dsl::*;
 
         let mut conexao = self.conexao()?;
         escritorios
-            .filter(slug.eq(slug))
+            .filter(slug.eq(slug_alvo))
             .select(id)
             .first(&mut conexao)
             .optional()
@@ -109,15 +108,15 @@ impl UsuarioAdminRepositorio for AdminRepositorioDiesel {
 
     fn buscar_por_escritorio_e_email(
         &self,
-        escritorio_id: Uuid,
-        email: &str,
+        escritorio_id_alvo: Uuid,
+        email_alvo: &str,
     ) -> Result<Option<Uuid>, RepositorioError> {
         use self::usuarios::dsl::*;
 
         let mut conexao = self.conexao()?;
         usuarios
-            .filter(escritorio_id.eq(escritorio_id))
-            .filter(email.eq(email))
+            .filter(escritorio_id.eq(escritorio_id_alvo))
+            .filter(email.eq(email_alvo))
             .select(id)
             .first(&mut conexao)
             .optional()
@@ -130,14 +129,15 @@ impl AuditoriaAdminRepositorio for AdminRepositorioDiesel {
         use self::auditoria_eventos::dsl::*;
 
         let mut conexao = self.conexao()?;
-        let valor_novo_json: JsonValue = serde_json::to_value(&evento.valor_novo).map_err(|_| RepositorioError::Dados)?;
+        let valor_novo_json: JsonValue =
+            serde_json::to_value(&evento.valor_novo).map_err(|_| RepositorioError::Dados)?;
         let valor_anterior_json: Option<JsonValue> = evento
             .valor_anterior
             .as_ref()
             .map(serde_json::to_value)
             .transpose()
             .map_err(|_| RepositorioError::Dados)?;
-        let ip_net = evento.ip.map(|ip_addr| IpNet::from(ip_addr));
+        let ip_net = evento.ip.map(IpNet::from);
 
         diesel::insert_into(auditoria_eventos)
             .values((

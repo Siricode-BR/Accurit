@@ -156,11 +156,7 @@ impl ApiError {
     }
 
     pub fn proibido() -> Self {
-        Self::nova(
-            StatusCode::FORBIDDEN,
-            "PROIBIDO",
-            "Acesso negado",
-        )
+        Self::nova(StatusCode::FORBIDDEN, "PROIBIDO", "Acesso negado")
     }
 
     pub fn indisponivel() -> Self {
@@ -172,19 +168,11 @@ impl ApiError {
     }
 
     pub fn conflito(message: impl Into<String>) -> Self {
-        Self::nova(
-            StatusCode::CONFLICT,
-            "CONFLITO",
-            message,
-        )
+        Self::nova(StatusCode::CONFLICT, "CONFLITO", message)
     }
 
     pub fn validacao(message: impl Into<String>) -> Self {
-        Self::nova(
-            StatusCode::BAD_REQUEST,
-            "VALIDACAO",
-            message,
-        )
+        Self::nova(StatusCode::BAD_REQUEST, "VALIDACAO", message)
     }
 
     pub fn nao_encontrado(entidade: &str) -> Self {
@@ -250,7 +238,9 @@ impl From<ClienteError> for ApiError {
             ClienteError::Dominio(e) => Self::validacao(e.to_string()),
             ClienteError::CpfCnpj(e) => Self::validacao(e.to_string()),
             ClienteError::Repositorio(e) => match e {
-                crate::application::clientes::RepositorioError::Indisponivel => Self::indisponivel(),
+                crate::application::clientes::RepositorioError::Indisponivel => {
+                    Self::indisponivel()
+                }
                 crate::application::clientes::RepositorioError::Dados => Self::erro_interno(),
                 crate::application::clientes::RepositorioError::NaoEncontrado => {
                     Self::nao_encontrado("cliente")

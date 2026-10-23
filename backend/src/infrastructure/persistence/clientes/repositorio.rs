@@ -2,21 +2,19 @@ use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
-use diesel::sql_types::{BigInt, Integer, Nullable, Text, Timestamptz, Uuid as SqlUuid};
 use ipnet::IpNet;
 use serde_json::Value as JsonValue;
 use uuid::Uuid;
 
 use crate::application::clientes::{
-    AuditoriaClienteRepositorio, ClienteError, ClientePublico, ClienteRepositorio,
-    EventoAuditoriaCliente, ListagemClientes, RepositorioError,
+    AuditoriaClienteRepositorio, ClienteRepositorio, EventoAuditoriaCliente, ListagemClientes,
+    RepositorioError,
 };
-use crate::domain::clientes::{Cliente, FiltroClientes, NovoCliente, Paginacao, PorteRegime, TipoCliente};
-use crate::domain::clientes::CpfCnpj;
+use crate::domain::clientes::{
+    Cliente, CpfCnpj, FiltroClientes, Paginacao, PorteRegime, TipoCliente,
+};
 use crate::infrastructure::persistence::pool::DbPool;
-use crate::infrastructure::persistence::schema::{
-    clientes, certificados_a1, credenciais_serpro, procuracoes, tokens_serpro, consultas_fiscais,
-};
+use crate::infrastructure::persistence::schema::clientes;
 
 #[derive(Clone)]
 pub struct ClienteRepositorioDiesel {
@@ -64,15 +62,15 @@ impl ClienteRepositorio for ClienteRepositorioDiesel {
 
     fn buscar_por_id(
         &self,
-        escritorio_id: Uuid,
-        id: Uuid,
+        escritorio_id_alvo: Uuid,
+        id_alvo: Uuid,
     ) -> Result<Option<Cliente>, RepositorioError> {
         use crate::infrastructure::persistence::schema::clientes::dsl::*;
 
         let mut conexao = self.conexao()?;
         clientes
-            .filter(escritorio_id.eq(escritorio_id))
-            .filter(id.eq(id))
+            .filter(escritorio_id.eq(escritorio_id_alvo))
+            .filter(id.eq(id_alvo))
             .select(ClienteRow::as_select())
             .first(&mut conexao)
             .optional()
@@ -82,15 +80,15 @@ impl ClienteRepositorio for ClienteRepositorioDiesel {
 
     fn buscar_por_cpf_cnpj(
         &self,
-        escritorio_id: Uuid,
-        cpf_cnpj: &str,
+        escritorio_id_alvo: Uuid,
+        cpf_cnpj_alvo: &str,
     ) -> Result<Option<Cliente>, RepositorioError> {
         use crate::infrastructure::persistence::schema::clientes::dsl::*;
 
         let mut conexao = self.conexao()?;
         clientes
-            .filter(escritorio_id.eq(escritorio_id))
-            .filter(cpf_cnpj.eq(cpf_cnpj))
+            .filter(escritorio_id.eq(escritorio_id_alvo))
+            .filter(cpf_cnpj.eq(cpf_cnpj_alvo))
             .select(ClienteRow::as_select())
             .first(&mut conexao)
             .optional()
@@ -100,7 +98,7 @@ impl ClienteRepositorio for ClienteRepositorioDiesel {
 
     fn listar(
         &self,
-        escritorio_id: Uuid,
+        escritorio_id_alvo: Uuid,
         filtro: FiltroClientes,
         paginacao: Paginacao,
     ) -> Result<ListagemClientes, RepositorioError> {
@@ -110,7 +108,7 @@ impl ClienteRepositorio for ClienteRepositorioDiesel {
 
         let base_query = || {
             crate::infrastructure::persistence::schema::clientes::table
-                .filter(escritorio_id.eq(escritorio_id))
+                .filter(escritorio_id.eq(escritorio_id_alvo))
                 .select(ClienteRow::as_select())
                 .into_boxed()
         };
@@ -118,16 +116,18 @@ impl ClienteRepositorio for ClienteRepositorioDiesel {
         let query_for_count = match filtro {
             FiltroClientes::Todos => base_query(),
             FiltroClientes::Cpf => base_query().filter(tipo.eq("PF")),
-            FiltroClientes::CnpjMei => base_query().filter(tipo.eq("PJ")).filter(porte_regime.eq("MEI")),
-            FiltroClientes::CnpjSimplesNacional => {
-                base_query().filter(tipo.eq("PJ")).filter(porte_regime.eq("SIMPLES_NACIONAL"))
-            }
-            FiltroClientes::CnpjLucroPresumido => {
-                base_query().filter(tipo.eq("PJ")).filter(porte_regime.eq("LUCRO_PRESUMIDO"))
-            }
-            FiltroClientes::CnpjLucroReal => {
-                base_query().filter(tipo.eq("PJ")).filter(porte_regime.eq("LUCRO_REAL"))
-            }
+            FiltroClientes::CnpjMei => base_query()
+                .filter(tipo.eq("PJ"))
+                .filter(porte_regime.eq("MEI")),
+            FiltroClientes::CnpjSimplesNacional => base_query()
+                .filter(tipo.eq("PJ"))
+                .filter(porte_regime.eq("SIMPLES_NACIONAL")),
+            FiltroClientes::CnpjLucroPresumido => base_query()
+                .filter(tipo.eq("PJ"))
+                .filter(porte_regime.eq("LUCRO_PRESUMIDO")),
+            FiltroClientes::CnpjLucroReal => base_query()
+                .filter(tipo.eq("PJ"))
+                .filter(porte_regime.eq("LUCRO_REAL")),
         };
 
         let total: i64 = query_for_count
@@ -138,16 +138,18 @@ impl ClienteRepositorio for ClienteRepositorioDiesel {
         let query_for_items = match filtro {
             FiltroClientes::Todos => base_query(),
             FiltroClientes::Cpf => base_query().filter(tipo.eq("PF")),
-            FiltroClientes::CnpjMei => base_query().filter(tipo.eq("PJ")).filter(porte_regime.eq("MEI")),
-            FiltroClientes::CnpjSimplesNacional => {
-                base_query().filter(tipo.eq("PJ")).filter(porte_regime.eq("SIMPLES_NACIONAL"))
-            }
-            FiltroClientes::CnpjLucroPresumido => {
-                base_query().filter(tipo.eq("PJ")).filter(porte_regime.eq("LUCRO_PRESUMIDO"))
-            }
-            FiltroClientes::CnpjLucroReal => {
-                base_query().filter(tipo.eq("PJ")).filter(porte_regime.eq("LUCRO_REAL"))
-            }
+            FiltroClientes::CnpjMei => base_query()
+                .filter(tipo.eq("PJ"))
+                .filter(porte_regime.eq("MEI")),
+            FiltroClientes::CnpjSimplesNacional => base_query()
+                .filter(tipo.eq("PJ"))
+                .filter(porte_regime.eq("SIMPLES_NACIONAL")),
+            FiltroClientes::CnpjLucroPresumido => base_query()
+                .filter(tipo.eq("PJ"))
+                .filter(porte_regime.eq("LUCRO_PRESUMIDO")),
+            FiltroClientes::CnpjLucroReal => base_query()
+                .filter(tipo.eq("PJ"))
+                .filter(porte_regime.eq("LUCRO_REAL")),
         };
 
         let itens = query_for_items
@@ -158,7 +160,11 @@ impl ClienteRepositorio for ClienteRepositorioDiesel {
             .map_err(|_| RepositorioError::Dados)?;
 
         Ok(ListagemClientes {
-            itens: itens.into_iter().map(para_cliente).map(|c| (&c).into()).collect(),
+            itens: itens
+                .into_iter()
+                .map(para_cliente)
+                .map(|c| (&c).into())
+                .collect(),
             total,
             pagina: paginacao.pagina,
             tamanho: paginacao.tamanho,
@@ -167,7 +173,7 @@ impl ClienteRepositorio for ClienteRepositorioDiesel {
 
     fn atualizar(
         &self,
-        escritorio_id: Uuid,
+        escritorio_id_alvo: Uuid,
         cliente: &Cliente,
     ) -> Result<(), RepositorioError> {
         use crate::infrastructure::persistence::schema::clientes::dsl::*;
@@ -175,7 +181,7 @@ impl ClienteRepositorio for ClienteRepositorioDiesel {
         let mut conexao = self.conexao()?;
         diesel::update(
             crate::infrastructure::persistence::schema::clientes::table
-                .filter(escritorio_id.eq(escritorio_id))
+                .filter(escritorio_id.eq(escritorio_id_alvo))
                 .filter(id.eq(cliente.id)),
         )
         .set((
@@ -193,14 +199,14 @@ impl ClienteRepositorio for ClienteRepositorioDiesel {
         .map_err(|_| RepositorioError::Dados)
     }
 
-    fn excluir(&self, escritorio_id: Uuid, id: Uuid) -> Result<bool, RepositorioError> {
+    fn excluir(&self, escritorio_id_alvo: Uuid, id_alvo: Uuid) -> Result<bool, RepositorioError> {
         use crate::infrastructure::persistence::schema::clientes::dsl::*;
 
         let mut conexao = self.conexao()?;
         diesel::delete(
             crate::infrastructure::persistence::schema::clientes::table
-                .filter(escritorio_id.eq(escritorio_id))
-                .filter(id.eq(id)),
+                .filter(escritorio_id.eq(escritorio_id_alvo))
+                .filter(id.eq(id_alvo)),
         )
         .execute(&mut conexao)
         .map(|linhas| linhas > 0)
@@ -213,14 +219,15 @@ impl AuditoriaClienteRepositorio for ClienteRepositorioDiesel {
         use crate::infrastructure::persistence::schema::auditoria_eventos::dsl::*;
 
         let mut conexao = self.conexao()?;
-        let valor_novo_json: JsonValue = serde_json::to_value(&evento.valor_novo).map_err(|_| RepositorioError::Dados)?;
+        let valor_novo_json: JsonValue =
+            serde_json::to_value(&evento.valor_novo).map_err(|_| RepositorioError::Dados)?;
         let valor_anterior_json: Option<JsonValue> = evento
             .valor_anterior
             .as_ref()
             .map(serde_json::to_value)
             .transpose()
             .map_err(|_| RepositorioError::Dados)?;
-        let ip_net = evento.ip.map(|ip_addr| IpNet::from(ip_addr));
+        let ip_net = evento.ip.map(IpNet::from);
 
         diesel::insert_into(auditoria_eventos)
             .values((
@@ -262,7 +269,9 @@ fn para_cliente(row: ClienteRow) -> Cliente {
         id: row.id,
         escritorio_id: row.escritorio_id,
         tipo: TipoCliente::from_str(&row.tipo).unwrap_or(TipoCliente::Pf),
-        porte_regime: row.porte_regime.and_then(|s| PorteRegime::from_str(&s).ok()),
+        porte_regime: row
+            .porte_regime
+            .and_then(|s| PorteRegime::from_str(&s).ok()),
         documento: CpfCnpj::novo(&row.cpf_cnpj).expect("CPF/CNPJ válido no banco"),
         nome_razao_social: row.nome_razao_social,
         nome_fantasia: row.nome_fantasia,

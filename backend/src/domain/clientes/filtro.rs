@@ -67,14 +67,11 @@ impl Paginacao {
     }
 
     pub fn validada(pagina: i64, tamanho: i64) -> Result<Self, PaginacaoInvalida> {
-        if pagina < 1 || tamanho < 1 || tamanho > TAMANHO_MAXIMO {
+        if pagina < 1 || !(1..=TAMANHO_MAXIMO).contains(&tamanho) {
             return Err(PaginacaoInvalida);
         }
 
-        Ok(Self {
-            pagina,
-            tamanho,
-        })
+        Ok(Self { pagina, tamanho })
     }
 
     pub const fn deslocamento(&self) -> i64 {
