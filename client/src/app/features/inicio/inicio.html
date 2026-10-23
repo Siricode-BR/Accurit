@@ -14,6 +14,16 @@
       Em breve você acompanhará aqui as consultas e os documentos do seu escritório.
     </p>
 
+    @if (estadoSerpro() !== 'desconhecido') {
+      <div
+        class="selo-serpro"
+        [class]="'selo-serpro selo-serpro--' + estadoSerpro()"
+        title="Ambiente dos serviços SERPRO disponível para o seu escritório"
+      >
+        {{ rotuloSerpro() }}
+      </div>
+    }
+
     <div class="status" [class]="'status status--' + estado()" aria-live="polite">
       <span class="ponto" aria-hidden="true"></span>
       <div>

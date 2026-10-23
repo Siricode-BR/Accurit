@@ -18,6 +18,12 @@ export const routes: Routes = [
       import('./features/acesso-negado/acesso-negado').then((m) => m.AcessoNegado),
   },
   {
+    path: 'inicio',
+    title: 'Início | Accurit Cliente',
+    canActivate: [autenticadoGuard],
+    loadComponent: () => import('./features/inicio/inicio').then((m) => m.Inicio),
+  },
+  {
     path: 'clientes',
     title: 'Clientes | Accurit Cliente',
     canActivate: [autenticadoGuard],
