@@ -11,7 +11,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBarModule, MatSnackBar } from '@angular/material/snack-bar';
 
-import { ClienteService, Cliente, CreateClienteRequest, UpdateClienteRequest, TipoCliente, PorteRegime } from './cliente.service';
+import { ClienteService, CreateClienteRequest, UpdateClienteRequest, TipoCliente, PorteRegime } from './cliente.service';
 
 @Component({
   selector: 'app-cliente-form',

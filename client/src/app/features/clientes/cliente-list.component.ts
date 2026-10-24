@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
@@ -12,7 +12,7 @@ import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
 
-import { ClienteService, Cliente, ListagemClientes, FiltroClientes, TipoCliente, PorteRegime } from './cliente.service';
+import { ClienteService, ListagemClientes, FiltroClientes, TipoCliente } from './cliente.service';
 
 @Component({
   selector: 'app-cliente-list',
