@@ -22,21 +22,18 @@ export const routes: Routes = [
     title: 'Escritórios | Accurit Admin',
     canActivate: [autenticadoGuard],
     loadComponent: () =>
-      import('./features/tenants/tenant-list.component').then((m) => m.TenantListComponent),
+      import('./features/tenants/presentation/tenant-list.component').then(
+        (m) => m.TenantListComponent,
+      ),
   },
   {
     path: 'tenants/novo',
     title: 'Novo Escritório | Accurit Admin',
     canActivate: [autenticadoGuard],
     loadComponent: () =>
-      import('./features/tenants/tenant-create.component').then((m) => m.TenantCreateComponent),
-  },
-  {
-    path: 'serpro/:escritorioId',
-    title: 'Ambiente SERPRO | Accurit Admin',
-    canActivate: [autenticadoGuard],
-    loadComponent: () =>
-      import('./features/serpro/serpro-page.component').then((m) => m.SerproPageComponent),
+      import('./features/tenants/presentation/tenant-create.component').then(
+        (m) => m.TenantCreateComponent,
+      ),
   },
   { path: '**', redirectTo: 'tenants' },
 ];

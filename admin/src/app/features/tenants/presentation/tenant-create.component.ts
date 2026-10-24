@@ -10,7 +10,8 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBarModule, MatSnackBar } from '@angular/material/snack-bar';
 
-import { TenantService, CreateTenantRequest } from './tenant.service';
+import { TenantService } from '../data/tenant.service';
+import type { CriarTenantRequest } from '../domain/tenant';
 
 @Component({
   selector: 'app-tenant-create',
@@ -110,7 +111,7 @@ import { TenantService, CreateTenantRequest } from './tenant.service';
           </div>
 
           <div class="form-actions">
-            <button mat-button type="button" routerLink="/admin/tenants">
+            <button mat-button type="button" routerLink="/tenants">
               <mat-icon>arrow_back</mat-icon>
               Voltar
             </button>
@@ -214,7 +215,7 @@ export class TenantCreateComponent {
 
     this.enviando.set(true);
 
-    const request: CreateTenantRequest = {
+    const request: CriarTenantRequest = {
       slug: this.form.value.slug,
       nome: this.form.value.nome,
       emailTitular: this.form.value.emailTitular,
@@ -225,7 +226,7 @@ export class TenantCreateComponent {
     this.tenantService.criar(request).subscribe({
       next: (response) => {
         this.snackBar.open('Escritório cadastrado com sucesso!', 'Fechar', { duration: 3000 });
-        this.router.navigate(['/admin/tenants']);
+        this.router.navigate(['/tenants']);
       },
       error: (error) => {
         const message = error.error?.error?.message || 'Erro ao cadastrar escritório';
