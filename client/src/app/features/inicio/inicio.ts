@@ -4,13 +4,14 @@ import { Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { SessionStore } from '../../core/auth/session.store';
 import { SaudeService } from '../../data/saude.service';
-import { SerproConfiguracaoService } from '../../data/serpro.configuracao.service';
+import { SeloAmbienteComponent } from '../../shared/selo-ambiente/selo-ambiente.component';
 
 type EstadoSaude = 'carregando' | 'ok' | 'indisponivel';
-type EstadoSerpro = 'carregando' | 'trial' | 'producao' | 'desconhecido';
 
 @Component({
   selector: 'app-inicio',
+  standalone: true,
+  imports: [SeloAmbienteComponent],
   templateUrl: './inicio.html',
   styleUrl: './inicio.css',
 })
@@ -45,20 +46,6 @@ export class Inicio {
     }
   });
 
-  private readonly serpro = inject(SerproConfiguracaoService);
-
-  protected readonly estadoSerpro = signal<EstadoSerpro>('carregando');
-  protected readonly rotuloSerpro = computed(() => {
-    switch (this.estadoSerpro()) {
-      case 'trial':
-        return 'SERPRO: Trial';
-      case 'producao':
-        return 'SERPRO: Produção';
-      default:
-        return 'SERPRO: verificando…';
-    }
-  });
-
   constructor() {
     this.saude.verificar().subscribe({
       next: (resposta) => {
@@ -67,11 +54,6 @@ export class Inicio {
         );
       },
       error: () => this.estado.set('indisponivel'),
-    });
-    this.serpro.obterConfiguracao().subscribe({
-      next: (configuracao) =>
-        this.estadoSerpro.set(configuracao.ambienteEfetivo === 'PRODUCAO' ? 'producao' : 'trial'),
-      error: () => this.estadoSerpro.set('desconhecido'),
     });
   }
 

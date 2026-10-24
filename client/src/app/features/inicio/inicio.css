@@ -73,28 +73,8 @@ h1 {
   color: #475569;
 }
 
-.selo-serpro {
-  display: inline-block;
+app-selo-ambiente {
   margin-top: 1.25rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 999px;
-  background: #ffffff;
-  padding: 0.375rem 0.875rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: #0f172a;
-}
-
-.selo-serpro--trial {
-  border-color: #86efac;
-  background: #f0fdf4;
-  color: #15803d;
-}
-
-.selo-serpro--producao {
-  border-color: #93c5fd;
-  background: #eff6ff;
-  color: #1d4ed8;
 }
 
 .status {

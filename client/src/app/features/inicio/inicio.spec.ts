@@ -3,23 +3,18 @@ import { provideRouter } from '@angular/router';
 import { Observable, of, throwError } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { SaudeService } from '../../data/saude.service';
-import { SerproConfiguracao, SerproConfiguracaoService } from '../../data/serpro.configuracao.service';
+import { AmbienteSerproInfo, SerproAmbienteService } from '../../data/serpro.ambiente.service';
 import { Inicio } from './inicio';
 
-type Ambiente = 'TRIAL' | 'PRODUCAO';
-
 describe('Inicio', () => {
-  const configuracao = (ambiente: Ambiente): SerproConfiguracao => ({
-    escritorioId: 'esc',
-    modoTrialSerpro: ambiente === 'TRIAL',
-    ambienteEfetivo: ambiente,
-    versao: 1,
-    atualizadoEm: '2026-10-20T12:00:00Z',
-  });
+  function leitura(ambiente: 'TRIAL' | 'PRODUCAO'): AmbienteSerproInfo {
+    return {
+      ambienteEfetivo: ambiente,
+      atualizadoEm: '2026-10-24T09:00:00Z',
+    };
+  }
 
-  async function montar(
-    ambiente: () => Observable<SerproConfiguracao>,
-  ) {
+  async function montar(ambiente: () => Observable<AmbienteSerproInfo>) {
     await TestBed.configureTestingModule({
       imports: [Inicio],
       providers: [
@@ -35,8 +30,8 @@ describe('Inicio', () => {
           useValue: { logout: () => undefined },
         },
         {
-          provide: SerproConfiguracaoService,
-          useValue: { obterConfiguracao: ambiente },
+          provide: SerproAmbienteService,
+          useValue: { obter: ambiente },
         },
       ],
     }).compileComponents();
@@ -45,39 +40,38 @@ describe('Inicio', () => {
     return fixture;
   }
 
-  it('should create the inicio page', async () => {
-    const fixture = await montar(() => of(configuracao('TRIAL')));
+  it('monta a pagina com o ambiente do portal', async () => {
+    const fixture = await montar(() => of(leitura('TRIAL')));
     expect(fixture.componentInstance).toBeTruthy();
   });
 
-  it('should show the available status', async () => {
-    const fixture = await montar(() => of(configuracao('TRIAL')));
-    const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.textContent).toContain('Plataforma disponível');
+  it('mostra o estado da plataforma', async () => {
+    const fixture = await montar(() => of(leitura('TRIAL')));
+    const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(texto).toContain('Plataforma disponível');
   });
 
-  it('should render the logout action', async () => {
-    const fixture = await montar(() => of(configuracao('TRIAL')));
-    const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.sair')?.textContent).toContain('Sair');
+  it('renderiza a acao de sair', async () => {
+    const fixture = await montar(() => of(leitura('TRIAL')));
+    const texto = ((fixture.nativeElement as HTMLElement).querySelector('.sair')?.textContent) ?? '';
+    expect(texto).toContain('Sair');
   });
 
   it('exibe o selo do ambiente trial', async () => {
-    const fixture = await montar(() => of(configuracao('TRIAL')));
-    const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.selo-serpro')?.textContent).toContain('SERPRO: Trial');
+    const fixture = await montar(() => of(leitura('TRIAL')));
+    const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(texto).toContain('SERPRO: Trial');
   });
 
   it('exibe o selo do ambiente de producao', async () => {
-    const fixture = await montar(() => of(configuracao('PRODUCAO')));
-    const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.selo-serpro')?.textContent).toContain('SERPRO: Produção');
+    const fixture = await montar(() => of(leitura('PRODUCAO')));
+    const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(texto).toContain('SERPRO: Produção');
   });
 
-  it('omite o selo quando a configuracao nao pode ser obtida', async () => {
-    const fixture = await montar(() => throwError(() => new Error('500')));
-    const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.selo-serpro')).toBeNull();
+  it('omite o selo quando a leitura do ambiente falha', async () => {
+    const fixture = await montar(() => throwError(() => new Error('503')));
+    const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(texto).not.toContain('SERPRO');
   });
 });
-
