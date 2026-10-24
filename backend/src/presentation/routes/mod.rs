@@ -26,16 +26,15 @@ use crate::infrastructure::persistence::certificados::CertificadoRepositorioDies
 use crate::infrastructure::persistence::clientes::ClienteRepositorioDiesel;
 use crate::infrastructure::serpro::{SerproCriptografia, SerproRepositorioDiesel};
 use crate::presentation::admin::handlers::{listar_escritorios, provisionar_tenant};
-use crate::presentation::admin::serpro::handlers::{
-    alterar_modo_trial_serpro, obter_configuracao_serpro,
-};
+use crate::presentation::admin::serpro::handlers::alterar_modo_trial_serpro;
 use crate::presentation::admin::state::AdminState;
 use crate::presentation::auth::{AuthState, ExigirAudiencia, construir as construir_auth, exigir};
 use crate::presentation::certificados::construir_certificados;
 use crate::presentation::clientes::router::construir_clientes;
 use crate::presentation::handlers;
 use crate::presentation::middleware::{cors, rate_limit, request_id, security_headers};
-use crate::presentation::serpro::handlers::obter_configuracao;
+use crate::presentation::serpro::ambiente::{EstadoAmbiente, resolver_ambiente};
+use crate::presentation::serpro::handlers::obter_ambiente;
 use crate::presentation::serpro::state::SerproState;
 use crate::presentation::state::AppState;
 use secrecy::ExposeSecret;
@@ -101,6 +100,11 @@ where
     let serpro_repo = SerproRepositorioDiesel::novo(pool.clone());
     let obter_config_serpro =
         ObterConfiguracaoSerproUseCase::novo(std::sync::Arc::new(serpro_repo.clone()));
+    // O mesmo use case alimenta o middleware do snapshot de ambiente (SPEC
+    // §8: o ambiente é lido uma única vez no início da requisição).
+    let estado_ambiente = EstadoAmbiente {
+        configuracao: std::sync::Arc::new(obter_config_serpro.clone()),
+    };
     let alterar_modo_serpro = AlterarModoTrialSerproUseCase::novo(
         std::sync::Arc::new(serpro_repo.clone()),
         std::sync::Arc::new(serpro_repo.clone()),
@@ -171,9 +175,8 @@ where
                     "/escritorios",
                     post(provisionar_tenant).get(listar_escritorios),
                 )
-                .route("/serpro/configuracao", get(obter_configuracao_serpro))
                 .route(
-                    "/serpro/trial",
+                    "/escritorios/{id}/serpro/trial",
                     axum::routing::patch(alterar_modo_trial_serpro),
                 )
                 .route_layer(axum_middleware::from_fn_with_state(
@@ -197,11 +200,21 @@ where
             ),
         );
 
-        // Portal (client): leitura do ambiente ativo para o badge (SPEC §10.2).
+        // Portal (client): leitura enxuta do ambiente ativo para o selo
+        // (SPEC §8, D8). O middleware `resolver_ambiente` roda **após** a
+        // exigência de audiência e insere o snapshot `AmbienteResolvido`
+        // antes do handler — ambiente resolvido uma vez por requisição.
         api = api.nest(
             "/serpro",
             Router::new()
-                .route("/configuracao", get(obter_configuracao))
+                .route("/ambiente", get(obter_ambiente))
+                // Ordem dos route_layer: o último adicionado é o mais externo.
+                // `exigir` (audiência client) deve rodar primeiro para inserir
+                // o RequestContext; o snapshot entra logo depois, mais interno.
+                .route_layer(axum_middleware::from_fn_with_state(
+                    estado_ambiente,
+                    resolver_ambiente,
+                ))
                 .route_layer(axum_middleware::from_fn_with_state(
                     ExigirAudiencia::novo(
                         auth_state.tokens.clone(),

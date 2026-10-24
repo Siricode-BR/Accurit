@@ -1,69 +1,33 @@
-use axum::extract::{Extension, Json, Query, State};
+use axum::extract::{Extension, Json, Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 
-use crate::application::serpro::{
-    AlterarModoTrialSerproCommand, ObterConfiguracaoSerproCommand, ports::RepositorioError,
-};
+use crate::application::serpro::{AlterarModoTrialSerproCommand, ports::RepositorioError};
 use crate::domain::auth::Papel;
 use crate::domain::serpro::erros::ErroAmbiente;
 use crate::presentation::admin::state::AdminState;
 use crate::presentation::auth::RequestContext;
 use crate::presentation::error::ApiError;
-use crate::presentation::serpro::dto::{
-    AlterarModoTrialRequest, AlterarModoTrialResponse, ObterConfiguracaoQuery,
-    SerproConfiguracaoResponse,
-};
-use crate::presentation::serpro::handlers::map_obter_para_api;
+use crate::presentation::serpro::dto::AlterarModoTrialRequest;
 
-/// GET /api/v1/admin/serpro/configuracao?escritorioId=...
+/// PATCH /api/v1/admin/escritorios/{id}/serpro/trial
 ///
-/// O gestor de tenants (audiência ADMIN) não tem `escritorio_id` no token
-/// (ADR-0010, D3); o escritório alvo vem na query. Cliente (portal) usa
-/// `GET /api/v1/serpro/configuracao` — ver presentation/serpro.
-pub async fn obter_configuracao_serpro(
-    State(estado): State<AdminState>,
-    Extension(contexto): Extension<RequestContext>,
-    Query(query): Query<ObterConfiguracaoQuery>,
-) -> Result<Response, ApiError> {
-    garante_admin(&contexto)?;
-
-    let resultado = estado
-        .serpro
-        .obter_configuracao
-        .executar(ObterConfiguracaoSerproCommand {
-            escritorio_id: query.escritorio_id,
-        })
-        .await
-        .map_err(map_obter_para_api)?;
-
-    Ok((
-        StatusCode::OK,
-        Json(SerproConfiguracaoResponse {
-            escritorio_id: resultado.escritorio_id,
-            modo_trial_serpro: resultado.modo_trial_serpro,
-            ambiente_efetivo: resultado.ambiente_efetivo,
-            versao: resultado.versao,
-            atualizado_em: resultado.atualizado_em,
-        }),
-    )
-        .into_response())
-}
-
-/// PATCH /api/v1/admin/serpro/trial
-///
-/// Concorrência otimista por `versao`; troca para produção é bloqueada
-/// quando faltam credencial de produção do Integra Contador ou certificado
-/// A1 em validade (ADR-0005 §3/§5). Auditoria gravada no sucesso.
+/// O gestor de tenants (audiência ADMIN) altera o modo Trial do escritório
+/// alvo, cujo identificador vem no **path** (ADR-0010, D3; D7 de
+/// DECISOES-PENDENTES). Concorrência otimista por `versao`; troca
+/// para produção é bloqueada quando faltam credencial de produção do Integra
+/// Contador ou certificado A1 em validade (ADR-0005 §3/§5). Auditoria gravada
+/// na mesma transação.
 pub async fn alterar_modo_trial_serpro(
     State(estado): State<AdminState>,
     Extension(contexto): Extension<RequestContext>,
+    Path(escritorio_alvo): Path<uuid::Uuid>,
     Json(payload): Json<AlterarModoTrialRequest>,
 ) -> Result<Response, ApiError> {
     garante_admin(&contexto)?;
 
     let comando = AlterarModoTrialSerproCommand {
-        escritorio_id: payload.escritorio_id,
+        escritorio_id: escritorio_alvo,
         modo_trial_serpro: payload.modo_trial_serpro,
         administrador_id: contexto.usuario_id,
         ip: contexto.ip,
@@ -79,7 +43,7 @@ pub async fn alterar_modo_trial_serpro(
 
     Ok((
         StatusCode::OK,
-        Json(AlterarModoTrialResponse {
+        Json(crate::presentation::serpro::dto::AlterarModoTrialResponse {
             modo_trial_serpro: resultado.modo_trial_serpro,
             ambiente_efetivo: resultado.ambiente_efetivo,
             versao_atual: resultado.versao_atual,

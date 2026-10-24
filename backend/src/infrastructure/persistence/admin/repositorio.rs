@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::application::admin::{
     AuditoriaAdminRepositorio, EscritorioNovo, EscritorioRepositorio, EscritorioResumo,
-    EventoAuditoriaAdmin, RepositorioError, UsuarioAdminRepositorio, UsuarioNovo,
+    EventoAuditoriaAdmin, Paginacao, RepositorioError, UsuarioAdminRepositorio, UsuarioNovo,
 };
 use crate::infrastructure::persistence::pool::DbPool;
 use crate::infrastructure::persistence::schema::{auditoria_eventos, escritorios, usuarios};
@@ -72,39 +72,61 @@ impl EscritorioRepositorio for AdminRepositorioDiesel {
             .map_err(|_| RepositorioError::Dados)
     }
 
-    fn listar(&self) -> Result<Vec<EscritorioResumo>, RepositorioError> {
+    fn listar(
+        &self,
+        paginacao: &Paginacao,
+    ) -> Result<(Vec<EscritorioResumo>, i64), RepositorioError> {
         use self::escritorios::dsl::*;
 
         let mut conexao = self.conexao()?;
-        escritorios
-            .order_by(criado_em.asc())
-            .select((id, slug, nome, cnpj, modo_trial_serpro, criado_em))
+        let limite = i64::from(paginacao.por_pagina);
+        let deslocamento = i64::from(paginacao.pagina - 1) * limite;
+
+        let total = escritorios
+            .count()
+            .get_result::<i64>(&mut conexao)
+            .map_err(|_| RepositorioError::Dados)?;
+
+        let itens = escritorios
+            .order_by((atualizado_em.desc(), id.asc()))
+            .limit(limite)
+            .offset(deslocamento)
+            .select((id, slug, nome, modo_trial_serpro, versao, atualizado_em))
             .load::<(
                 Uuid,
                 String,
                 String,
-                Option<String>,
                 bool,
+                i64,
                 chrono::DateTime<chrono::Utc>,
             )>(&mut conexao)
             .map(|linhas| {
                 linhas
                     .into_iter()
                     .map(
-                        |(id_linha, slug_linha, nome_linha, cnpj_linha, modo_trial, criado)| {
+                        |(
+                            id_linha,
+                            slug_linha,
+                            nome_linha,
+                            modo_trial,
+                            versao_linha,
+                            renovacao,
+                        )| {
                             EscritorioResumo {
                                 id: id_linha,
                                 slug: slug_linha,
                                 nome: nome_linha,
-                                cnpj: cnpj_linha,
                                 modo_trial_serpro: modo_trial,
-                                criado_em: criado,
+                                versao: versao_linha,
+                                atualizado_em: renovacao,
                             }
                         },
                     )
                     .collect()
             })
-            .map_err(|_| RepositorioError::Dados)
+            .map_err(|_| RepositorioError::Dados)?;
+
+        Ok((itens, total))
     }
 }
 

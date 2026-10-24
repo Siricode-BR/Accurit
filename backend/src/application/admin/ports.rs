@@ -45,7 +45,39 @@ pub trait EscritorioRepositorio: Send + Sync {
 
     fn buscar_por_slug(&self, slug: &str) -> Result<Option<Uuid>, RepositorioError>;
 
-    fn listar(&self) -> Result<Vec<EscritorioResumo>, RepositorioError>;
+    /// Listagem paginada (SPEC §10.3: `page`/`pageSize`, ordenação
+    /// determinística). Devolve os itens da página e o total.
+    fn listar(
+        &self,
+        paginacao: &Paginacao,
+    ) -> Result<(Vec<EscritorioResumo>, i64), RepositorioError>;
+}
+
+/// Paginação da listagem de escritórios (SPEC §10.3): página 1-based,
+/// até 100 itens. A clamp acontece na apresentação antes do use case.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Paginacao {
+    pub pagina: u32,
+    pub por_pagina: u32,
+}
+
+impl Paginacao {
+    pub const POR_PAGINA_PADRAO: u32 = 20;
+    pub const POR_PAGINA_MAXIMO: u32 = 100;
+
+    #[must_use]
+    pub fn nova(pagina: u32, por_pagina: u32) -> Self {
+        let pagina = if pagina == 0 { 1 } else { pagina };
+        let por_pagina = if por_pagina == 0 {
+            Self::POR_PAGINA_PADRAO
+        } else {
+            por_pagina
+        };
+        Self {
+            pagina,
+            por_pagina: por_pagina.min(Self::POR_PAGINA_MAXIMO),
+        }
+    }
 }
 
 pub trait UsuarioAdminRepositorio: Send + Sync {
@@ -69,15 +101,15 @@ pub struct EscritorioNovo {
 }
 
 /// Resumo de escritório para listagem no backoffice (GET /admin/escritorios):
-/// suficiente para a tela de tenants mostrar o toggle SERPRO por linha.
+/// apenas metadados — sem CNPJ, contatos ou dados fiscais (SPEC §8, Fase 3).
 #[derive(Debug, Clone)]
 pub struct EscritorioResumo {
     pub id: Uuid,
     pub slug: String,
     pub nome: String,
-    pub cnpj: Option<String>,
     pub modo_trial_serpro: bool,
-    pub criado_em: chrono::DateTime<chrono::Utc>,
+    pub versao: i64,
+    pub atualizado_em: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Debug, Clone)]

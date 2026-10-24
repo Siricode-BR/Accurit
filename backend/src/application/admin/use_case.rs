@@ -2,15 +2,14 @@ use std::sync::Arc;
 
 use crate::application::admin::{
     AuditoriaAdminRepositorio, EscritorioNovo, EscritorioRepositorio, EscritorioResumo,
-    EventoAuditoriaAdmin, ProvisionarError, ProvisionarTenantCommand, ProvisionarTenantResultado,
-    RepositorioError, UsuarioAdminRepositorio, UsuarioNovo,
+    EventoAuditoriaAdmin, Paginacao, ProvisionarError, ProvisionarTenantCommand,
+    ProvisionarTenantResultado, RepositorioError, UsuarioAdminRepositorio, UsuarioNovo,
 };
 use crate::domain::auth::Papel;
 use crate::infrastructure::auth::HashArgon2;
 
-/// Listagem simples de tenants para o backoffice (GET /admin/escritorios):
-/// pré-requisito da tela do toggle SERPRO, que seleciona o escritório na
-/// lista e navega para o detalhe (remediação mínima da Fase 2B).
+/// Listagem paginada de tenants para o backoffice (GET /admin/escritorios):
+/// fonte da tela de tenants (lista com o toggle SERPRO por linha).
 #[derive(Clone)]
 pub struct ListarEscritoriosUseCase {
     escritorio_repo: Arc<dyn EscritorioRepositorio>,
@@ -21,8 +20,11 @@ impl ListarEscritoriosUseCase {
         Self { escritorio_repo }
     }
 
-    pub fn executar(&self) -> Result<Vec<EscritorioResumo>, RepositorioError> {
-        self.escritorio_repo.listar()
+    pub fn executar(
+        &self,
+        paginacao: &Paginacao,
+    ) -> Result<(Vec<EscritorioResumo>, i64), RepositorioError> {
+        self.escritorio_repo.listar(paginacao)
     }
 }
 

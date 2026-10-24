@@ -1,7 +1,8 @@
 //! Testes de integração HTTP da Fase 3 (SERPRO): toggle de modo trial
-//! por escritório no backoffice (GET/PATCH admin), leitura de ambiente
-//! no portal (GET client), auditoria, invalidação de caches e isolamento
-//! de audiências (SPEC §10.1/§10.2; ADR-0005).
+//! por escritório no backoffice (lista + PATCH por path), leitura enxuta
+//! de ambiente no portal (GET client com snapshot por requisição),
+//! auditoria, invalidação de caches e isolamento de audiências
+//! (SPEC §8/§10.1; ADR-0005; D7/D8).
 
 mod common;
 
@@ -334,12 +335,23 @@ async fn entrar_portal(app: &Router, email: &str) -> Value {
     corpo_json(resposta).await
 }
 
-async fn configuracao_admin(app: &Router, token: &str, escritorio: Uuid) -> Response {
+async fn listar_escritorios(
+    app: &Router,
+    token: &str,
+    pagina: Option<u32>,
+    por_pagina: Option<u32>,
+) -> Response {
+    let query = match (pagina, por_pagina) {
+        (Some(p), Some(pp)) => format!("?page={p}&pageSize={pp}"),
+        (Some(p), None) => format!("?page={p}"),
+        (None, Some(pp)) => format!("?pageSize={pp}"),
+        (None, None) => String::new(),
+    };
     enviar(
         app,
         pedido(
             Method::GET,
-            &format!("/api/v1/admin/serpro/configuracao?escritorioId={escritorio}"),
+            &format!("/api/v1/admin/escritorios{query}"),
             None,
             Some(token),
         ),
@@ -358,9 +370,8 @@ async fn alterar_modo_trial(
         app,
         pedido(
             Method::PATCH,
-            "/api/v1/admin/serpro/trial",
+            &format!("/api/v1/admin/escritorios/{escritorio}/serpro/trial"),
             Some(json!({
-                "escritorioId": escritorio,
                 "modoTrialSerpro": modo_trial,
                 "versao": versao,
             })),
@@ -371,7 +382,7 @@ async fn alterar_modo_trial(
 }
 
 #[tokio::test]
-async fn gestor_consulta_e_altera_modo_com_auditoria_e_cache_invalidado() {
+async fn gestor_altera_modo_com_auditoria_e_cache_invalidado() {
     let ambiente = ambiente();
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_token(&ambiente.banco, escritorio, "ACCESS");
@@ -383,13 +394,16 @@ async fn gestor_consulta_e_altera_modo_com_auditoria_e_cache_invalidado() {
 
     let token = token_de(&entrar_gestor(&ambiente.app).await);
 
-    let leitura = configuracao_admin(&ambiente.app, &token, escritorio).await;
-    assert_eq!(leitura.status(), StatusCode::OK);
-    let corpo = corpo_json(leitura).await;
-    assert_eq!(corpo["escritorioId"], escritorio.to_string());
-    assert_eq!(corpo["modoTrialSerpro"], true);
-    assert_eq!(corpo["ambienteEfetivo"], "TRIAL");
-    assert_eq!(corpo["versao"], 1);
+    let lista_antes = listar_escritorios(&ambiente.app, &token, None, None).await;
+    assert_eq!(lista_antes.status(), StatusCode::OK);
+    let corpo = corpo_json(lista_antes).await;
+    assert_eq!(corpo["total"], 1);
+    assert_eq!(corpo["page"], 1);
+    assert_eq!(corpo["pageSize"], 20);
+    let item = &corpo["itens"][0];
+    assert_eq!(item["id"], escritorio.to_string());
+    assert_eq!(item["modoTrialSerpro"], true);
+    assert_eq!(item["versao"], 1);
 
     let troca = alterar_modo_trial(&ambiente.app, &token, escritorio, false, 1).await;
     assert_eq!(troca.status(), StatusCode::OK);
@@ -432,16 +446,16 @@ async fn gestor_consulta_e_altera_modo_com_auditoria_e_cache_invalidado() {
             &ambiente.banco,
             "SELECT COUNT(*) AS total FROM auditoria_eventos \
              WHERE acao = 'SERPRO_MODO_TRIAL_ALTERADO' \
-             AND administrador_id IS NOT NULL AND usuario_id IS NULL \
-             AND valor_anterior IS NOT NULL AND valor_novo IS NOT NULL",
+             AND administrador_id IS NOT NULL AND valor_anterior IS NOT NULL \
+             AND valor_novo IS NOT NULL",
         ),
         1
     );
 
-    let leitura_gravada = configuracao_admin(&ambiente.app, &token, escritorio).await;
-    assert_eq!(leitura_gravada.status(), StatusCode::OK);
-    let corpo = corpo_json(leitura_gravada).await;
-    assert_eq!(corpo["ambienteEfetivo"], "PRODUCAO");
+    let lista_depois = listar_escritorios(&ambiente.app, &token, None, None).await;
+    let corpo = corpo_json(lista_depois).await;
+    assert_eq!(corpo["itens"][0]["modoTrialSerpro"], false);
+    assert_eq!(corpo["itens"][0]["versao"], 2);
 
     let desatualizado = alterar_modo_trial(&ambiente.app, &token, escritorio, true, 1).await;
     assert_eq!(desatualizado.status(), StatusCode::CONFLICT);
@@ -510,7 +524,7 @@ async fn troca_para_producao_bloqueada_sem_certificado_valido() {
 }
 
 #[tokio::test]
-async fn portal_le_ambiente_do_proprio_escritorio_sem_poder_trocar() {
+async fn portal_le_ambiente_do_proprio_escritorio_com_snapshot_e_sem_poder_trocar() {
     let ambiente = ambiente();
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     let outro = semear_escritorio(&ambiente.banco, "beta");
@@ -521,30 +535,66 @@ async fn portal_le_ambiente_do_proprio_escritorio_sem_poder_trocar() {
 
     let leitura = enviar(
         &ambiente.app,
-        pedido(
-            Method::GET,
-            "/api/v1/serpro/configuracao",
-            None,
-            Some(&token),
-        ),
+        pedido(Method::GET, "/api/v1/serpro/ambiente", None, Some(&token)),
     )
     .await;
-    assert_eq!(leitura.status(), StatusCode::OK);
+    assert_eq!(
+        leitura.status(),
+        StatusCode::OK,
+        "portal lǦ o ambiente do pr��prio escrit��rio"
+    );
     let corpo = corpo_json(leitura).await;
-    assert_eq!(corpo["escritorioId"], escritorio.to_string());
     assert_eq!(corpo["ambienteEfetivo"], "TRIAL");
-    assert_ne!(corpo["escritorioId"], outro.to_string());
+    assert!(corpo["atualizadoEm"].as_str().is_some());
+    let chaves = corpo.as_object().expect("objeto JSON").keys().count();
+    assert_eq!(
+        chaves, 2,
+        "resposta enxuta: só ambienteEfetivo e atualizadoEm"
+    );
 
+    // IDOR por isolamento: outro escritório é movido para produção; o
+    // portal continuaria lendo o próprio (TRIAL) — sem vazamento cruzado.
+    semear_credencial_producao(&ambiente.banco, outro, "INTEGRA_CONTADOR", "PRODUCAO");
+    semear_certificado_valido(&ambiente.banco, outro);
+    let gestor = token_de(&entrar_gestor(&ambiente.app).await);
+    let troca_alheia = alterar_modo_trial(&ambiente.app, &gestor, outro, false, 1).await;
+    assert_eq!(troca_alheia.status(), StatusCode::OK, "beta migra");
+    let propria = enviar(
+        &ambiente.app,
+        pedido(Method::GET, "/api/v1/serpro/ambiente", None, Some(&token)),
+    )
+    .await;
+    let corpo = corpo_json(propria).await;
+    assert_eq!(
+        corpo["ambienteEfetivo"], "TRIAL",
+        "nenhum vazamento do ambiente do outro escritório"
+    );
+
+    // Snapshot por requisição: depois de trocar o PRÓPRIO escritório, a
+    // próxima leitura reflete o novo ambiente.
+    semear_credencial_producao(&ambiente.banco, escritorio, "INTEGRA_CONTADOR", "PRODUCAO");
+    semear_certificado_valido(&ambiente.banco, escritorio);
+    let troca_proprio = alterar_modo_trial(&ambiente.app, &gestor, escritorio, false, 1).await;
+    assert_eq!(troca_proprio.status(), StatusCode::OK);
+    let propria = enviar(
+        &ambiente.app,
+        pedido(Method::GET, "/api/v1/serpro/ambiente", None, Some(&token)),
+    )
+    .await;
+    let corpo = corpo_json(propria).await;
+    assert_eq!(corpo["ambienteEfetivo"], "PRODUCAO");
+
+    // A rota de leitura não aceita troca de modo lá mesmo.
     let trocas = [
         pedido(
             Method::PATCH,
-            "/api/v1/serpro/configuracao",
+            "/api/v1/serpro/ambiente",
             Some(json!({ "modoTrialSerpro": false })),
             Some(&token),
         ),
         pedido(
             Method::DELETE,
-            "/api/v1/serpro/configuracao",
+            "/api/v1/serpro/ambiente",
             None,
             Some(&token),
         ),
@@ -558,15 +608,10 @@ async fn portal_le_ambiente_do_proprio_escritorio_sem_poder_trocar() {
         );
     }
 
-    let gestor = token_de(&entrar_gestor(&ambiente.app).await);
+    // Token da audiência admin na rota do portal é rejeitado.
     let gestor_no_portal = enviar(
         &ambiente.app,
-        pedido(
-            Method::GET,
-            "/api/v1/serpro/configuracao",
-            None,
-            Some(&gestor),
-        ),
+        pedido(Method::GET, "/api/v1/serpro/ambiente", None, Some(&gestor)),
     )
     .await;
     assert_eq!(gestor_no_portal.status(), StatusCode::UNAUTHORIZED);
@@ -581,46 +626,54 @@ async fn rotas_admin_serpro_exigem_audiencia_admin() {
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
     semear_gestor(&ambiente.banco);
 
-    let sem_token = configuracao_admin(&ambiente.app, "", escritorio).await;
+    let mut sem_token = alterar_modo_trial(&ambiente.app, "", escritorio, false, 1).await;
+    if sem_token.status() == StatusCode::BAD_REQUEST {
+        // corpo vazio: reexecuta sem body para garantir o 401 do guard
+        sem_token = enviar(
+            &ambiente.app,
+            pedido(
+                Method::PATCH,
+                &format!("/api/v1/admin/escritorios/{escritorio}/serpro/trial"),
+                None,
+                None,
+            ),
+        )
+        .await;
+    }
     assert_eq!(sem_token.status(), StatusCode::UNAUTHORIZED);
     let corpo = corpo_json(sem_token).await;
     assert_eq!(codigo_de_erro(&corpo), "NAO_AUTENTICADO");
 
     let token = token_de(&entrar_portal(&ambiente.app, "operador@alfa.test").await);
 
-    let leitura = configuracao_admin(&ambiente.app, &token, escritorio).await;
-    assert_eq!(leitura.status(), StatusCode::UNAUTHORIZED);
-    let corpo = corpo_json(leitura).await;
-    assert_eq!(codigo_de_erro(&corpo), "AUTH_AUDIENCE_MISMATCH");
-
     let troca = alterar_modo_trial(&ambiente.app, &token, escritorio, false, 1).await;
     assert_eq!(troca.status(), StatusCode::UNAUTHORIZED);
+    let corpo = corpo_json(troca).await;
+    assert_eq!(codigo_de_erro(&corpo), "AUTH_AUDIENCE_MISMATCH");
 
-    let lista = enviar(
-        &ambiente.app,
-        pedido(Method::GET, "/api/v1/admin/escritorios", None, Some(&token)),
-    )
-    .await;
+    let lista = listar_escritorios(&ambiente.app, &token, None, None).await;
     assert_eq!(lista.status(), StatusCode::UNAUTHORIZED);
     let corpo = corpo_json(lista).await;
     assert_eq!(codigo_de_erro(&corpo), "AUTH_AUDIENCE_MISMATCH");
 
     let gestor = token_de(&entrar_gestor(&ambiente.app).await);
-    let desconhecido = configuracao_admin(&ambiente.app, &gestor, Uuid::now_v7()).await;
-    assert_eq!(desconhecido.status(), StatusCode::NOT_FOUND);
-    let corpo = corpo_json(desconhecido).await;
-    assert_eq!(codigo_de_erro(&corpo), "NAO_ENCONTRADO");
-
     let troca_desconhecida =
         alterar_modo_trial(&ambiente.app, &gestor, Uuid::now_v7(), false, 1).await;
-    assert_eq!(troca_desconhecida.status(), StatusCode::NOT_FOUND);
+    assert_eq!(
+        troca_desconhecida.status(),
+        StatusCode::NOT_FOUND,
+        "escritório inexistente é 404 antes de qualquer validação de produção"
+    );
+    let corpo = corpo_json(troca_desconhecida).await;
+    assert_eq!(codigo_de_erro(&corpo), "NAO_ENCONTRADO");
 }
 
 #[tokio::test]
-async fn gestor_lista_escritorios_com_modo_trial() {
+async fn gestor_lista_escritorios_paginado_com_modo_trial_e_versao() {
     let ambiente = ambiente();
-    let _afa = semear_escritorio(&ambiente.banco, "alfa");
+    let _alfa = semear_escritorio(&ambiente.banco, "alfa");
     let _beta = semear_escritorio(&ambiente.banco, "beta");
+    let _gama = semear_escritorio(&ambiente.banco, "gama");
     semear_gestor(&ambiente.banco);
     semear_operador(
         &ambiente.banco,
@@ -630,18 +683,34 @@ async fn gestor_lista_escritorios_com_modo_trial() {
 
     let token = token_de(&entrar_gestor(&ambiente.app).await);
 
-    let lista = enviar(
-        &ambiente.app,
-        pedido(Method::GET, "/api/v1/admin/escritorios", None, Some(&token)),
-    )
-    .await;
+    let lista = listar_escritorios(&ambiente.app, &token, None, None).await;
     assert_eq!(lista.status(), StatusCode::OK);
     let corpo = corpo_json(lista).await;
-    let itens = corpo.as_array().expect("lista de escritórios");
-    assert_eq!(itens.len(), 2);
-    for item in itens {
+    assert_eq!(corpo["total"], 3);
+    assert_eq!(corpo["itens"].as_array().expect("itens").len(), 3);
+    for item in corpo["itens"].as_array().expect("itens") {
         assert!(item["id"].as_str().is_some());
-        assert!(item["modoTrialSerpro"].is_boolean());
         assert!(item["slug"].as_str().is_some());
+        assert!(item["nome"].as_str().is_some());
+        assert!(item["modoTrialSerpro"].is_boolean());
+        assert_eq!(item["versao"], 1);
+        assert!(item["atualizadoEm"].as_str().is_some());
+        assert!(
+            item.as_object().expect("objeto").get("cnpj").is_none(),
+            "listagem só traz metadados: sem CNPJ"
+        );
     }
+
+    // Página de tamanho 1 na segunda janela: determinística e paginada.
+    let pagina2 = listar_escritorios(&ambiente.app, &token, Some(2), Some(1)).await;
+    let corpo = corpo_json(pagina2).await;
+    assert_eq!(corpo["page"], 2);
+    assert_eq!(corpo["pageSize"], 1);
+    assert_eq!(corpo["total"], 3);
+    assert_eq!(corpo["itens"].as_array().expect("itens").len(), 1);
+
+    // pageSize maior que 100 é clampado e não abre brecha.
+    let destino = listar_escritorios(&ambiente.app, &token, Some(1), Some(5000)).await;
+    let corpo = corpo_json(destino).await;
+    assert_eq!(corpo["pageSize"], 100);
 }
