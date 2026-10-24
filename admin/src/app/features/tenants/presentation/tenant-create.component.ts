@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, ActivatedRoute } from '@angular/router';
+import { Router } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -224,7 +224,7 @@ export class TenantCreateComponent {
     };
 
     this.tenantService.criar(request).subscribe({
-      next: (response) => {
+      next: () => {
         this.snackBar.open('Escritório cadastrado com sucesso!', 'Fechar', { duration: 3000 });
         this.router.navigate(['/tenants']);
       },

@@ -83,7 +83,7 @@ export class TenantsStore {
       this.aplicarResposta(entidade.id, resposta);
       return { tipo: 'ok' };
     } catch (erro) {
-      return await this.classificar(erro, entidade.id);
+      return await this.classificar(erro);
     } finally {
       this.trocando.update((emCurso) => {
         const copia = new Set(emCurso);
@@ -114,7 +114,7 @@ export class TenantsStore {
     });
   }
 
-  private async classificar(erro: unknown, id: string): Promise<ResultadoTroca> {
+  private async classificar(erro: unknown): Promise<ResultadoTroca> {
     const resposta = erro instanceof HttpErrorResponse ? erro : null;
     // 409: versão divergiu — recarregamos a página efetiva (SPEC §8).
     if (resposta?.status === 409) {
