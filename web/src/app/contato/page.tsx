@@ -45,7 +45,7 @@ export default function ContatoPage() {
 
       setStatus('success');
       setFormData({ nome: '', email: '', telefone: '', escritorio: '', mensagem: '' });
-    } catch (error) {
+    } catch {
       setStatus('error');
       setErrorMessage('Erro ao enviar. Tente novamente mais tarde.');
     }
