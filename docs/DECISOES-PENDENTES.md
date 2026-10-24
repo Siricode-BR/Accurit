@@ -16,6 +16,8 @@
 | D4 | Allowlist de serviços (parcelamentos/SICALC) | **Decidido** | Alto | Ver [ADR-0002](ADR/0002-escopo-consultivo-divida-ativa.md) |
 | D5 | URL de produção da Dívida Ativa | **Não confirmado** | Alto | Bloquear com `SERPRO_PROD_NOT_CONFIGURED` |
 | D6 | Modelo de atores e separação do ADMIN SaaS | **Decidido** | Alto | Ver [ADR-0010](ADR/0010-revisao-atores-papeis-e-provisionamento.md) |
+| D7 | Rota de troca do Trial com `escritorio_id` no path | **Decidido** (Fase 3) | Baixo | `PATCH /api/v1/admin/escritorios/{id}/serpro/trial` |
+| D8 | Leitura de ambiente do portal enxuta | **Decidido** (Fase 3) | Baixo | `GET /api/v1/serpro/ambiente` (`{ ambienteEfetivo, atualizadoEm }`) |
 | P1 | Conversão dos docs oficiais para Markdown | Pendente | Baixo | Conferir com PDF e remover aviso |
 | P2 | Formato de “sem pendências” (200 vazio vs 404) | **Não confirmado** | Médio | Teste live opt-in |
 | P3 | Formato multi-inscrição de `/devedor` | **Não confirmado** | Médio | DTO tolerante; teste live |
@@ -167,6 +169,32 @@ O fluxo SAPI (endpoint, `Role-Type: TERCEIROS`, `Content-Type`, mTLS e-CNPJ, `ac
 O modelo B (contratante central, autor diferente) exige Termo de Autorização, procuração e
 `autenticar_procurador_token`. Não será habilitado sem necessidade concreta, revisão jurídica e
 aprovação de arquitetura.
+
+## D7 — Rota de troca do Trial com `escritorio_id` no path
+
+**Status:** DECIDIDO (Fase 3). Sem pendência externa.
+
+- **Conflito:** ADR-0005 §3 descrevia `PATCH /api/v1/admin/serpro/trial` com o escritório alvo no
+  corpo; o ROADMAP da Fase 3 não fixava a rota.
+- **Decisão:** mover para `PATCH /api/v1/admin/escritorios/{id}/serpro/trial` — o ADMIN não tem
+  `escritorio_id` no token (ADR-0010, D3), e o alvo na rota explicita a validação por path antes
+  da validação de produção (404 antes de 400). Corpo ergue-se para
+  `{ modoTrialSerpro, versao }`.
+- **JSON:** camelCase mantido, pela convenção de payloads já documentada na §10.1 (`accessToken`,
+  `usuario.escritorioId`). Nenhum doc exige snake_case no JSON; o snake_case fica para SQL/colunas.
+- **Referência:** [SPEC §8](../../SPEC.md), [ADR-0005 §3](ADR/0005-alternador-modo-trial-serpro.md).
+
+## D8 — Leitura de ambiente do portal enxuta
+
+**Status:** DECIDIDO (Fase 3). Sem pendência externa.
+
+- **Conflito:** o primeiro corte da Fase 3 expunha `GET /api/v1/serpro/configuracao` completo
+  (`escritorioId`, `modoTrialSerpro`, `versao`…), mais do que o escritório precisa visualizar.
+- **Decisão:** substituir por `GET /api/v1/serpro/ambiente`, respondendo **somente**
+  `{ ambienteEfetivo, atualizadoEm }` do escritório do token (`escritorio_id` do
+  `RequestContext` — sem possibilidade de IDOR). Minimização de dados (SPEC §9.11) e base do
+  componente compartilhado de selo para as fases 4/5.
+- **Referência:** [SPEC §8](../../SPEC.md), [SPEC §10.1](../../SPEC.md).
 
 ## Itens de infraestrutura já resolvidos
 

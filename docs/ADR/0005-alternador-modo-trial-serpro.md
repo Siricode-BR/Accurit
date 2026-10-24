@@ -119,18 +119,23 @@ Regras:
 
 Implementação (Fase 3):
 
-- Os exemplos acima usam `modo_trial_serpro`; o contrato entregue usa **snake_case no Rust,
-  camelCase no JSON**: `GET .../configuracao?escritorioId=...` (o token do backoffice não tem
-  `escritorio_id`, ADR-0010 D3) e `PATCH .../trial` com corpo
-  `{ escritorioId, modoTrialSerpro, versao }` (concorrência otimista por coluna `versao`).
+- Os exemplos acima usam `modo_trial_serpro`; o contrato entregue usa **camelCase no JSON**
+  (convenção de §10.1, ex. `accessToken`): `GET /api/v1/admin/escritorios` lista os escritórios
+  com `modoTrialSerpro`/`versao`/`atualizadoEm` (paginado) e
+  `PATCH /api/v1/admin/escritorios/{id}/serpro/trial` recebe `{ modoTrialSerpro, versao }` —
+  o escritório alvo vem no path do PATCH (rota revisada por D7 de DECISOES-PENDENTES).
 - A existência do escritório é verificada **antes** da validação de produção: alvo inexistente
   responde `404` mesmo que a produção não esteja configurada.
 - Pré-requisitos de produção: credencial `INTEGRA_CONTADOR`/`PRODUCAO` e certificado A1 em
   validade; Dívida Ativa em produção responde sempre `SERPRO_PROD_NOT_CONFIGURED`.
 - Após a troca persistida, os caches voláteis (token de procuração/produto) do escritório são
-  invalidados antes de responder (§6, 7).
-- Versão de referência da tela: `admin/src/app/features/serpro/serpro-page.component.ts`
-  (recarrega automaticamente em `409`).
+  invalidados antes de responder (§6, 7). O ambiente da requisição é resolvido uma única vez
+  (snapshot no `RequestContext`) — trocas não afetam requisições em andamento.
+- A plataforma do escritório consome `GET /api/v1/serpro/ambiente`
+  (apenas `{ ambienteEfetivo, atualizadoEm }`, revisado por D8) para o selo permanente na
+  página inicial e para os componentes das fases seguintes.
+- Versão de referência da tela: `admin/src/app/features/tenants` (toggle pessimista por linha,
+  modal de confirmação para produção, recarrega em `409`).
 
 ### 4. Toggle reativo no Admin com Angular Signals
 
