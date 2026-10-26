@@ -47,6 +47,44 @@ pub async fn run(config: Config) -> Result<(), StartupError> {
         .map_err(|_| StartupError::Tarefa)??;
 
     let auth = AuthState::novo(pool.clone(), &config)?;
+
+    // Expurgo do histórico `consultas_fiscais` (SPEC §9.11): roda em
+    // background a cada 24h, apagando registros mais velhos que
+    // `CONSULTAS_RETENCAO_DIAS`. Falhas são logadas e tentadas de novo
+    // no próximo ciclo — não derrubam a aplicação.
+    let repositorio_expurgo =
+        crate::infrastructure::divida_ativa::repositorio::ConsultasFiscaisRepositorioDiesel::novo(
+            pool.clone(),
+        );
+    let retencao_dias = config.consultas_retencao_dias;
+    tokio::spawn(async move {
+        let intervalo = tokio::time::Duration::from_secs(24 * 60 * 60);
+        let mut ciclo = tokio::time::interval(intervalo);
+        ciclo.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            ciclo.tick().await;
+            let limite = chrono::Utc::now()
+                - chrono::Duration::days(i64::try_from(retencao_dias).unwrap_or(90));
+            let expurgo = repositorio_expurgo.clone();
+            let apagados = tokio::task::spawn_blocking(move || {
+                use crate::application::divida_ativa::ports::RepositorioConsultasFiscais;
+                expurgo.expurgar_antes_de(limite)
+            })
+            .await;
+            match apagados {
+                Ok(Ok(quantidade)) => {
+                    tracing::debug!(quantidade, "expurgo do histórico de consultas concluído")
+                }
+                Ok(Err(erro)) => {
+                    tracing::warn!(erro = %erro, "expurgo do histórico de consultas falhou")
+                }
+                Err(_) => {
+                    tracing::warn!("tarefa de expurgo do histórico de consultas falhou");
+                }
+            }
+        }
+    });
+
     let estado = AppState::novo(
         ConsultarSaude::novo(PostgresSaudeBanco::novo(pool.clone())),
         pool,

@@ -14,6 +14,9 @@ use crate::application::clientes::{
     AtualizarClienteUseCase, CriarClienteUseCase, ExcluirClienteUseCase, ListarClientesUseCase,
     ObterClienteUseCase, PoliticaClientes,
 };
+use crate::application::divida_ativa::use_cases::{
+    ConsultarDevedorUseCase, ConsultarInscricaoUseCase,
+};
 use crate::application::ports::SaudeBanco;
 use crate::application::serpro::{
     AlterarModoTrialSerproUseCase, CredencialFallbackGlobal, ObterConfiguracaoSerproUseCase,
@@ -212,7 +215,7 @@ where
                 // `exigir` (audiência client) deve rodar primeiro para inserir
                 // o RequestContext; o snapshot entra logo depois, mais interno.
                 .route_layer(axum_middleware::from_fn_with_state(
-                    estado_ambiente,
+                    estado_ambiente.clone(),
                     resolver_ambiente,
                 ))
                 .route_layer(axum_middleware::from_fn_with_state(
@@ -223,6 +226,90 @@ where
                     exigir,
                 ))
                 .with_state(serpro_state),
+        );
+
+        // ===== Dívida Ativa (Fase 4, SPEC §4.3–§4.5) =====
+        let http_serpro = reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(
+                config.serpro.http_connect_timeout_secs,
+            ))
+            .timeout(std::time::Duration::from_secs(
+                config.serpro.http_request_timeout_secs,
+            ))
+            .build()
+            .expect("cliente HTTP SERPRO deve inicializar");
+        let fornecedor_tokens = std::sync::Arc::new(
+            crate::infrastructure::divida_ativa::tokens::FornecedorDeTokensHttp::novo(
+                http_serpro.clone(),
+            ),
+        );
+        let cliente_http_divida = std::sync::Arc::new(
+            crate::infrastructure::divida_ativa::cliente_http::ClienteDividaAtivaHttp::novo(
+                http_serpro,
+                fornecedor_tokens,
+            ),
+        );
+        let endpoints_serpro = std::sync::Arc::new(
+            crate::infrastructure::serpro::SerproEndpointResolverImpl::novo(config.serpro.clone()),
+        );
+        let consultas_repo = std::sync::Arc::new(
+            crate::infrastructure::divida_ativa::repositorio::ConsultasFiscaisRepositorioDiesel::novo(
+                pool.clone(),
+            ),
+        );
+        let limitador_consultas = std::sync::Arc::new(
+            crate::infrastructure::divida_ativa::rate::LimitadorPorEscritorio::novo(
+                config.serpro.rate_limit_consultas_por_segundo,
+            ),
+        );
+        let catalogo_clientes_consulta = std::sync::Arc::new(
+            crate::infrastructure::divida_ativa::repositorio::CatalogoClientesDiesel::novo(
+                pool.clone(),
+            ),
+        );
+        let catalogo_operadores_consulta = std::sync::Arc::new(
+            crate::infrastructure::divida_ativa::repositorio::CatalogoOperadoresDiesel::novo(
+                pool.clone(),
+            ),
+        );
+
+        let mut consultar_devedor_uc = ConsultarDevedorUseCase::novo(
+            endpoints_serpro.clone(),
+            cliente_http_divida.clone(),
+            consultas_repo.clone(),
+            limitador_consultas.clone(),
+        )
+        .com_catalogo_clientes(catalogo_clientes_consulta)
+        .com_operadores(
+            catalogo_operadores_consulta.clone(),
+            config.serpro.operator_header_enabled,
+        );
+        // Fallback D2: só no fio quando a flag estiver habilitada; sem
+        // catálogo interno, a segunda tentativa nunca acontece (D2).
+        if config.serpro.divida_ativa_fallback_codigo_contribuinte {
+            consultar_devedor_uc = consultar_devedor_uc.com_fallback(std::sync::Arc::new(
+                crate::infrastructure::divida_ativa::repositorio::ResolvedorChaveAlternativaSemCatalogo,
+            ));
+        }
+        let consultar_inscricao_uc = ConsultarInscricaoUseCase::novo(
+            endpoints_serpro,
+            cliente_http_divida,
+            consultas_repo,
+            limitador_consultas,
+        )
+        .com_operadores(
+            catalogo_operadores_consulta,
+            config.serpro.operator_header_enabled,
+        );
+
+        api = api.nest(
+            "/divida-ativa",
+            crate::presentation::divida_ativa::router::construir(
+                std::sync::Arc::new(consultar_devedor_uc),
+                std::sync::Arc::new(consultar_inscricao_uc),
+                auth_state.clone(),
+                estado_ambiente,
+            ),
         );
     }
 

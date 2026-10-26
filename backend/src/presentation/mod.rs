@@ -2,6 +2,7 @@ pub mod admin;
 pub mod auth;
 pub mod certificados;
 pub mod clientes;
+pub mod divida_ativa;
 pub mod dto;
 pub mod error;
 pub mod handlers;

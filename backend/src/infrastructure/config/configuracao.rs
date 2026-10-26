@@ -56,6 +56,9 @@ pub struct SerproConfig {
     pub consumer_secret: Option<SecretString>,
     pub operator_header_enabled: bool,
     pub divida_ativa_fallback_codigo_contribuinte: bool,
+    /// Rate limit local de consultas da Dívida Ativa por escritório
+    /// (SPEC §3.3): `SERPRO_RATE_LIMIT_CONSULTAS_POR_SEGUNDO`.
+    pub rate_limit_consultas_por_segundo: u32,
     pub http_connect_timeout_secs: u64,
     pub http_request_timeout_secs: u64,
     pub procuracao_cache_ttl_secs: u64,
@@ -71,6 +74,9 @@ pub struct Config {
     pub cors_allowed_origins: Vec<String>,
     pub auth: AuthConfig,
     pub serpro: SerproConfig,
+    /// Retenção do histórico `consultas_fiscais`, em dias (SPEC
+    /// §9.11): `CONSULTAS_RETENCAO_DIAS`.
+    pub consultas_retencao_dias: u64,
     pub log_filter: String,
 }
 
@@ -198,6 +204,11 @@ impl Config {
                 "DIVIDA_ATIVA_FALLBACK_CODIGO_CONTRIBUINTE",
                 false,
             )?,
+            rate_limit_consultas_por_segundo: inteiro_positivo_u32(
+                &mapa,
+                "SERPRO_RATE_LIMIT_CONSULTAS_POR_SEGUNDO",
+                4,
+            )?,
             http_connect_timeout_secs: inteiro_positivo(
                 &mapa,
                 "SERPRO_HTTP_CONNECT_TIMEOUT_SECS",
@@ -217,6 +228,8 @@ impl Config {
 
         let log_filter = opcional(&mapa, "RUST_LOG").unwrap_or_else(|| "info".to_owned());
 
+        let consultas_retencao_dias = inteiro_positivo(&mapa, "CONSULTAS_RETENCAO_DIAS", 90)?;
+
         Ok(Self {
             app_env,
             port,
@@ -226,6 +239,7 @@ impl Config {
             cors_allowed_origins,
             auth,
             serpro,
+            consultas_retencao_dias,
             log_filter,
         })
     }
@@ -586,6 +600,48 @@ mod tests {
             config(mapa),
             Err(ConfigError::Invalida("SERPRO_HTTP_REQUEST_TIMEOUT_SECS", _))
         ));
+    }
+
+    #[test]
+    fn padrao_consultas_divida_ativa() {
+        let cfg = config(base()).expect("config válida");
+        assert_eq!(cfg.serpro.rate_limit_consultas_por_segundo, 4);
+        assert_eq!(cfg.consultas_retencao_dias, 90);
+        assert!(!cfg.serpro.divida_ativa_fallback_codigo_contribuinte);
+    }
+
+    #[test]
+    fn rejeita_rate_limit_consultas_zero() {
+        let mut mapa = base();
+        mapa.insert("SERPRO_RATE_LIMIT_CONSULTAS_POR_SEGUNDO".into(), "0".into());
+        assert!(matches!(
+            config(mapa),
+            Err(ConfigError::Invalida(
+                "SERPRO_RATE_LIMIT_CONSULTAS_POR_SEGUNDO",
+                _
+            ))
+        ));
+    }
+
+    #[test]
+    fn rejeita_retenciao_zero() {
+        let mut mapa = base();
+        mapa.insert("CONSULTAS_RETENCAO_DIAS".into(), "0".into());
+        assert!(matches!(
+            config(mapa),
+            Err(ConfigError::Invalida("CONSULTAS_RETENCAO_DIAS", _))
+        ));
+    }
+
+    #[test]
+    fn fallback_divida_ativa_aceita_fio() {
+        let mut mapa = base();
+        mapa.insert(
+            "DIVIDA_ATIVA_FALLBACK_CODIGO_CONTRIBUINTE".into(),
+            "true".into(),
+        );
+        let cfg = config(mapa).expect("config válida");
+        assert!(cfg.serpro.divida_ativa_fallback_codigo_contribuinte);
     }
 
     #[test]
