@@ -23,6 +23,8 @@ diesel_migrations = { version = "2.3.2", features = ["postgres"] }
 governor = "0.10.4"
 jsonwebtoken = "9.3.1"
 rand = "0.8.5"
+reqwest = { version = "0.12.24", default-features = false, features = ["rustls-tls", "json", "charset"] }
+rust_decimal = { version = "1.39.0", default-features = false, features = ["std"] }
 secrecy = "0.10.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
