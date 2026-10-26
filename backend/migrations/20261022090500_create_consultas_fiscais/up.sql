@@ -19,3 +19,5 @@ CREATE TABLE consultas_fiscais (
 CREATE INDEX idx_consultas_escritorio_criado
     ON consultas_fiscais(escritorio_id, criado_em DESC);
 CREATE INDEX idx_consultas_cliente ON consultas_fiscais(cliente_id);
+CREATE INDEX idx_consultas_escritorio_estado
+    ON consultas_fiscais(escritorio_id, estado);
