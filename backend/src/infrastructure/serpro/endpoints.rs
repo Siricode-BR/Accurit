@@ -69,14 +69,22 @@ fn resolver_trial_integra(config: &SerproConfig) -> Result<EndpointSerpro, ErroE
 }
 
 fn resolver_trial_divida(config: &SerproConfig) -> Result<EndpointSerpro, ErroEndpoint> {
+    // SPEC §8 e quick-start SERPRO: o trial de ambos os produtos usa o Bearer
+    // público de demo (`SERPRO_TRIAL_BEARER_TOKEN`). A decisão D2 é sobre o
+    // fallback do "Código de Contribuinte" — não dispensa autenticação.
+    let token = config
+        .trial_bearer_token
+        .as_ref()
+        .filter(|valor| !valor.expose_secret().trim().is_empty())
+        .ok_or(ErroEndpoint::Indefinido(String::from(
+            "SERPRO_TRIAL_BEARER_TOKEN ausente para Dívida Ativa trial",
+        )))?;
+
     Ok(EndpointSerpro {
         produto: ProdutoSerpro::DividaAtiva,
         ambiente: AmbienteSerpro::Trial,
         url_base: config.divida_ativa_trial_url.clone(),
-        // A Dívida Ativa exige a identificação do contribuinte no
-        // request (decisão D2), não credencial OAuth — a fase de
-        // integração cuida do detalhe do corpo.
-        autenticacao: EstrategiaAutenticacaoSerpro::SemCredencial,
+        autenticacao: EstrategiaAutenticacaoSerpro::BearerFixo(token.clone()),
     })
 }
 
@@ -186,8 +194,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn divida_trial_nao_exige_credencial() {
+    async fn divida_trial_exige_bearer_configurado() {
         let config = Config::from_pairs(pares(&[])).expect("config válida");
+        let resolver = SerproEndpointResolverImpl::novo(config.serpro);
+
+        let erro = resolver
+            .resolver(ProdutoSerpro::DividaAtiva, AmbienteSerpro::Trial)
+            .await
+            .unwrap_err();
+
+        assert!(matches!(erro, ErroEndpoint::Indefinido(_)));
+    }
+
+    #[tokio::test]
+    async fn divida_trial_resolve_com_token() {
+        let config =
+            Config::from_pairs(pares(&[("SERPRO_TRIAL_BEARER_TOKEN", "Bearer demo-token")]))
+                .expect("config válida");
         let resolver = SerproEndpointResolverImpl::novo(config.serpro);
 
         let endpoint = resolver
@@ -196,10 +219,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(endpoint.url_base.as_str(), "https://serpro.test/divida");
-        assert!(matches!(
-            endpoint.autenticacao,
-            EstrategiaAutenticacaoSerpro::SemCredencial
-        ));
+        match endpoint.autenticacao {
+            EstrategiaAutenticacaoSerpro::BearerFixo(token) => {
+                assert_eq!(token.expose_secret(), "Bearer demo-token");
+            }
+            _ => panic!("esperava BearerFixo no trial da Dívida Ativa"),
+        }
     }
 
     #[tokio::test]

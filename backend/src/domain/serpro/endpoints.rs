@@ -50,18 +50,17 @@ impl EndpointError {
 
 #[derive(Debug, Clone)]
 pub enum EstrategiaAutenticacaoSerpro {
-    /// Integra Contador trial: token bearer fixo da configuração
-    /// (`SERPRO_TRIAL_BEARER_TOKEN`, token de demo da SERPRO).
+    /// Trial (Integra Contador e Dívida Ativa): token bearer fixo da
+    /// configuração (`SERPRO_TRIAL_BEARER_TOKEN`, token público de demo da
+    /// SERPRO — SPEC §8 e quick-start "Consulta Dívida Ativa").
     BearerFixo(SecretString),
-    /// Integra Contador produção: consumer key/secret via fluxo OAuth2/SAPI.
+    /// Produção: consumer key/secret via OAuth2 client credentials
+    /// (Dívida Ativa exigirá também mTLS com A1 na fase de produção).
     Oauth2Producao {
         token_url: Url,
         consumer_key: Arc<SecretString>,
         consumer_secret: Arc<SecretString>,
     },
-    /// Dívida Ativa trial: não usa credencial OAuth — a identificação do
-    /// contribuinte vai no corpo do request (decisão D2); fase 4 cuida disso.
-    SemCredencial,
 }
 
 #[cfg(test)]
