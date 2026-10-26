@@ -2,9 +2,8 @@
 
 [![Repositório](https://img.shields.io/badge/GitHub-Siricode--BR%2FAccurit-181717?logo=github&logoColor=white)](https://github.com/Siricode-BR/Accurit)
 [![Rust](https://img.shields.io/badge/Rust-2024-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
-[![Axum](https://img.shields.io/badge/Axum-0.8-2f6f8f)](https://github.com/tokio-rs/axum)
 [![Angular](https://img.shields.io/badge/Angular-21-DD0031?logo=angular&logoColor=white)](https://angular.dev/)
-[![Next.js](https://img.shields.io/badge/Next.js-16-App%20Router-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
