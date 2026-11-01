@@ -150,3 +150,22 @@ pub enum AlterarModoTrialError {
     #[error("auditoria: {0}")]
     Auditoria(String),
 }
+
+pub trait FornecedorTokenSerpro: Send + Sync {
+    async fn obter_token(
+        &self,
+        escritorio_id: Uuid,
+        produto: ProdutoSerpro,
+        ambiente: AmbienteSerpro,
+    ) -> Result<String, ErroTokenSerpro>;
+}
+
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum ErroTokenSerpro {
+    #[error("falha ao obter token: {0}")]
+    Falha(String),
+    #[error("token inválido")]
+    Invalido,
+    #[error("serviço indisponível")]
+    Indisponivel,
+}
