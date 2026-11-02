@@ -238,17 +238,7 @@ where
             ))
             .build()
             .expect("cliente HTTP SERPRO deve inicializar");
-        let fornecedor_tokens = std::sync::Arc::new(
-            crate::infrastructure::divida_ativa::tokens::FornecedorDeTokensHttp::novo(
-                http_serpro.clone(),
-            ),
-        );
-        let cliente_http_divida = std::sync::Arc::new(
-            crate::infrastructure::divida_ativa::cliente_http::ClienteDividaAtivaHttp::novo(
-                http_serpro,
-                fornecedor_tokens,
-            ),
-        );
+
         let endpoints_serpro = std::sync::Arc::new(
             crate::infrastructure::serpro::SerproEndpointResolverImpl::novo(config.serpro.clone()),
         );
@@ -262,6 +252,17 @@ where
                 config.serpro.rate_limit_consultas_por_segundo,
             ),
         );
+        let hash_chave_consultas = std::sync::Arc::new(
+            crate::infrastructure::divida_ativa::hash::HashChaveSha256::novo(
+                config.serpro.consultas_chave_pepper.clone(),
+            ),
+        );
+        let consultas_repositorio_trait = consultas_repo.clone();
+        let cliente_http_divida = std::sync::Arc::new(
+            crate::infrastructure::divida_ativa::cliente_http::ClienteDividaAtivaHttp::novo(
+                http_serpro,
+            ),
+        );
         let catalogo_clientes_consulta = std::sync::Arc::new(
             crate::infrastructure::divida_ativa::repositorio::CatalogoClientesDiesel::novo(
                 pool.clone(),
@@ -273,19 +274,23 @@ where
             ),
         );
 
+        // Ambiente: o snapshot de ambiente entra via middleware no
+        // router (`EstadoAmbiente` compartilhado com `/serpro`).
+
+        // Fallback D2: só no fio quando a flag estiver habilitada; sem
+        // catálogo interno, a segunda tentativa nunca acontece (D2).
         let mut consultar_devedor_uc = ConsultarDevedorUseCase::novo(
             endpoints_serpro.clone(),
-            cliente_http_divida.clone(),
-            consultas_repo.clone(),
             limitador_consultas.clone(),
+            consultas_repositorio_trait.clone(),
+            hash_chave_consultas.clone(),
+            cliente_http_divida.clone(),
         )
         .com_catalogo_clientes(catalogo_clientes_consulta)
         .com_operadores(
             catalogo_operadores_consulta.clone(),
             config.serpro.operator_header_enabled,
         );
-        // Fallback D2: só no fio quando a flag estiver habilitada; sem
-        // catálogo interno, a segunda tentativa nunca acontece (D2).
         if config.serpro.divida_ativa_fallback_codigo_contribuinte {
             consultar_devedor_uc = consultar_devedor_uc.com_fallback(std::sync::Arc::new(
                 crate::infrastructure::divida_ativa::repositorio::ResolvedorChaveAlternativaSemCatalogo,
@@ -293,9 +298,10 @@ where
         }
         let consultar_inscricao_uc = ConsultarInscricaoUseCase::novo(
             endpoints_serpro,
-            cliente_http_divida,
-            consultas_repo,
             limitador_consultas,
+            consultas_repositorio_trait,
+            hash_chave_consultas,
+            cliente_http_divida,
         )
         .com_operadores(
             catalogo_operadores_consulta,
@@ -307,7 +313,10 @@ where
             crate::presentation::divida_ativa::router::construir(
                 std::sync::Arc::new(consultar_devedor_uc),
                 std::sync::Arc::new(consultar_inscricao_uc),
-                auth_state.clone(),
+                ExigirAudiencia::novo(
+                    auth_state.tokens.clone(),
+                    crate::domain::auth::Audiencia::Client,
+                ),
                 estado_ambiente,
             ),
         );

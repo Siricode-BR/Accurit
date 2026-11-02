@@ -1,190 +1,264 @@
-//! DTOs de saída do consultivo de Dívida Ativa: apenas serialização
-//! de leitura — a API transporta valores canônicos (Decimal como
-//! string com ponto decimal, conforme SPEC §4.5) e a UI formata em
-//! pt-BR. Sem campos de negociação/parcelamento (não existem).
+//! DTOs de resposta e mapeamento de erros do uso da Dívida Ativa.
+//! Sempre derivados dos VOs de domínio — nunca do JSON bruto da SERPRO.
 
+use axum::http::StatusCode;
+use chrono::{DateTime, SecondsFormat, Utc};
 use rust_decimal::Decimal;
 use serde::Serialize;
+use uuid::Uuid;
 
-use crate::domain::divida_ativa::devedor::InscricaoDevedor as DadoInscricao;
-use crate::domain::divida_ativa::inscricao::{
-    InscricaoDetalhe, ReceitaPrincipal, SistemaOrigem, UnidadeServico,
+use crate::domain::divida_ativa::{
+    ErroDividaAtiva, EstadoConsulta, InscricaoDetalhe, InscricaoResumo, ResultadoConsultaDevedor,
 };
+use crate::presentation::error::ApiError;
 
-/// Inscrição retornada por `/devedor/{cpfCnpj}` (SPEC §4.3/§4.5).
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct InscricaoDevedorDto {
-    pub numero_inscricao: Option<String>,
+pub struct InscricaoResumoDto {
+    pub numero_inscricao: String,
     pub numero_processo: Option<String>,
-    pub situacao_inscricao: Option<String>,
-    pub situacao_descricao: Option<String>,
+    pub situacao_descricao: String,
     pub nome_devedor: Option<String>,
-    pub tipo_devedor: Option<String>,
-    /// Decimal canônico (`4457.56`) — nunca f32/f64.
-    pub valor_total_consolidado: Option<String>,
-    /// Documento do item em dígitos (DV validado no domínio).
-    pub cpf_cnpj: Option<String>,
-    pub codigo_sida: Option<String>,
-    pub nome_unidade: Option<String>,
-    pub codigo_comprot: Option<String>,
-    pub codigo_uorg: Option<String>,
+    pub tipo_devedor: String,
+    pub valor_total_consolidado: ValorDinheiro,
 }
 
-impl InscricaoDevedorDto {
-    pub fn do_dominio(dado: &DadoInscricao) -> Self {
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ValorDinheiro {
+    /// Valor decimal (nunca `f32`/`f64`): string pt-BR padronizada.
+    pub valor: String,
+    remarca: &'static str,
+}
+
+impl From<Decimal> for ValorDinheiro {
+    fn from(valor: Decimal) -> Self {
         Self {
-            numero_inscricao: dado.numero_inscricao.clone(),
-            numero_processo: dado.numero_processo.clone(),
-            situacao_inscricao: dado.situacao_inscricao.clone(),
-            situacao_descricao: dado.situacao_descricao.clone(),
-            nome_devedor: dado.nome_devedor.clone(),
-            tipo_devedor: dado.tipo_devedor.clone(),
-            valor_total_consolidado: moeda(dado.valor_total_consolidado),
-            cpf_cnpj: dado
-                .cpf_cnpj
-                .as_ref()
-                .map(|documento| documento.como_str().to_owned()),
-            codigo_sida: dado.codigo_sida.clone(),
-            nome_unidade: dado.nome_unidade.clone(),
-            codigo_comprot: dado.codigo_comprot.clone(),
-            codigo_uorg: dado.codigo_uorg.clone(),
+            valor: formatar_ptbr(valor),
+            remarca: "BRL",
         }
     }
 }
 
-fn moeda(valor: Option<Decimal>) -> Option<String> {
-    valor.map(|valor| valor.to_string())
-}
+fn formatar_ptbr(valor: Decimal) -> String {
+    let texto = valor.round_dp(2).to_string();
+    let (inteira, decimal) = match texto.split_once('.') {
+        Some((inteira, decimal)) => (inteira.to_owned(), Some(decimal.to_owned())),
+        None => (texto, None),
+    };
 
-/// Unidade SERPRO (PFN) — código e nome, leitura pura.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UnidadeServicoDto {
-    pub numero: String,
-    pub nome: Option<String>,
-}
-
-impl UnidadeServicoDto {
-    pub fn do_dominio(unidade: &Option<UnidadeServico>) -> Option<Self> {
-        unidade.as_ref().map(|u| Self {
-            numero: u.numero.clone(),
-            nome: u.nome.clone(),
-        })
-    }
-}
-
-/// Receita principal — código/nome, leitura pura.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReceitaPrincipalDto {
-    pub codigo: String,
-    pub nome: Option<String>,
-}
-
-impl ReceitaPrincipalDto {
-    pub fn do_dominio(receita: &Option<ReceitaPrincipal>) -> Option<Self> {
-        receita.as_ref().map(|r| Self {
-            codigo: r.codigo.clone(),
-            nome: r.nome.clone(),
-        })
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SistemaOrigemDto {
-    pub codigo: String,
-    pub descricao: Option<String>,
-}
-
-impl SistemaOrigemDto {
-    pub fn do_dominio(origem: &Option<SistemaOrigem>) -> Option<Self> {
-        origem.as_ref().map(|o| Self {
-            codigo: o.codigo.clone(),
-            descricao: o.descricao.clone(),
-        })
-    }
-}
-
-/// Detalhe de `/inscricao/{numeroInscricao}` (SPEC §4.3/§4.5):
-/// exibição integral dos dados de leitura.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InscricaoDetalheDto {
-    /// Formatação fiel do retorno: `90 6 17 000964-19`.
-    #[serde(rename = "inscricao")]
-    pub inscricao_formatada: String,
-    /// Dígitos (URL de nova consulta na UI).
-    pub inscricao_digitos: String,
-    pub processo_administrativo: Option<String>,
-    pub situacao: Option<String>,
-    pub data_inscricao: Option<String>,
-    pub numero_pfn_responsavel: Option<String>,
-    pub nome_pfn_responsavel: Option<String>,
-    pub numero_pfn_inscricao: Option<String>,
-    pub nome_pfn_inscricao: Option<String>,
-    pub receita_principal: Option<ReceitaPrincipalDto>,
-    /// `indicadorPrescricaoSV8` traduzido (`SIM`/`NAO` → bool).
-    pub prescrito: Option<bool>,
-    pub valor_inscrito: Option<String>,
-    pub valor_consolidado: Option<String>,
-    pub valor_remanescente: Option<String>,
-    pub nome_devedor: Option<String>,
-    pub tipo_devedor: Option<String>,
-    pub nome_unidade: Option<String>,
-    pub sistema_origem: Option<SistemaOrigemDto>,
-}
-
-impl InscricaoDetalheDto {
-    pub fn do_dominio(dado: &InscricaoDetalhe) -> Self {
-        Self {
-            inscricao_formatada: dado.inscricao_formatada.clone(),
-            inscricao_digitos: dado.inscricao_digitos.clone(),
-            processo_administrativo: dado.processo_administrativo.clone(),
-            situacao: dado.situacao_descricao.clone(),
-            data_inscricao: dado.data_inscricao.clone(),
-            numero_pfn_responsavel: dado.unidade_responsavel.as_ref().map(|u| u.numero.clone()),
-            nome_pfn_responsavel: dado
-                .unidade_responsavel
-                .as_ref()
-                .and_then(|u| u.nome.clone()),
-            numero_pfn_inscricao: dado.unidade_inscricao.as_ref().map(|u| u.numero.clone()),
-            nome_pfn_inscricao: dado.unidade_inscricao.as_ref().and_then(|u| u.nome.clone()),
-            receita_principal: ReceitaPrincipalDto::do_dominio(&dado.receita_principal),
-            prescrito: dado.prescrito,
-            valor_inscrito: moeda(dado.valor_inscrito),
-            valor_consolidado: moeda(dado.valor_consolidado),
-            valor_remanescente: moeda(dado.valor_remanescente),
-            nome_devedor: dado.nome_devedor.clone(),
-            tipo_devedor: dado.tipo_devedor.clone(),
-            nome_unidade: dado.nome_unidade.clone(),
-            sistema_origem: SistemaOrigemDto::do_dominio(&dado.sistema_origem),
+    let digitos: Vec<char> = inteira.chars().collect();
+    let mut agrupada = String::new();
+    for (indice, caractere) in digitos.iter().enumerate() {
+        if indice > 0 && (digitos.len() - indice) % 3 == 0 {
+            agrupada.push('.');
         }
+        agrupada.push(*caractere);
+    }
+
+    match decimal {
+        Some(decimal) => format!("{agrupada},{decimal}"),
+        None => agrupada,
     }
 }
 
-/// Corpo da resposta de `/divida-ativa/devedor/{cpfCnpj}` (SPEC
-/// §4.4/§4.5: ambiente e horário explícitos; estados distintos).
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DevedorResponse {
-    pub ambiente: crate::domain::serpro::ambiente::AmbienteSerpro,
+pub struct RespostaDevedor {
+    pub ambiente: &'static str,
     pub estado: &'static str,
     pub fonte_consulta: &'static str,
     pub chave_mascarada: String,
     pub horario_consulta: String,
-    pub tentativas: u8,
-    pub inscricoes: Vec<InscricaoDevedorDto>,
+    pub tentativas: u32,
+    pub aviso: &'static str,
+    pub inscricoes: Vec<InscricaoResumoDto>,
 }
 
-/// Corpo da resposta de `/divida-ativa/inscricao/{numeroInscricao}`.
-#[derive(Debug, Clone, Serialize)]
+/// Aviso permanente: consulta informativa, sem ações transacionais.
+pub const AVISO_CONSULTIVO: &str =
+    "Consulta informativa. Não realiza negociação, parcelamento nem emissão de DARF.";
+
+impl RespostaDevedor {
+    pub fn de(consulta: &ResultadoConsultaDevedor) -> Self {
+        Self {
+            ambiente: consulta.ambiente.as_str(),
+            estado: consulta.estado.como_str(),
+            fonte_consulta: consulta.fonte.as_str(),
+            chave_mascarada: consulta.chave_mascarada.clone(),
+            horario_consulta: horario(&consulta.horario_consulta),
+            tentativas: consulta.tentativas,
+            aviso: AVISO_CONSULTIVO,
+            inscricoes: consulta
+                .inscricoes
+                .iter()
+                .map(|inscricao| inscricao_resumo_dto(inscricao))
+                .collect(),
+        }
+    }
+}
+
+fn horario(data_horario: &DateTime<Utc>) -> String {
+    data_horario.to_rfc3339_opts(SecondsFormat::Secs, true)
+}
+
+fn inscricao_resumo_dto(inscricao: &InscricaoResumo) -> InscricaoResumoDto {
+    InscricaoResumoDto {
+        numero_inscricao: inscricao.numero_inscricao.clone(),
+        numero_processo: inscricao.numero_processo.clone(),
+        situacao_descricao: inscricao.situacao_descricao.clone(),
+        nome_devedor: inscricao.nome_devedor.clone(),
+        tipo_devedor: inscricao.tipo_devedor.clone(),
+        valor_total_consolidado: inscricao.valor_total_consolidado.into(),
+    }
+}
+
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct InscricaoResponse {
-    pub ambiente: crate::domain::serpro::ambiente::AmbienteSerpro,
+pub struct RespostaInscricao {
+    pub ambiente: &'static str,
     pub estado: &'static str,
+    pub fonte_consulta: &'static str,
     pub chave_mascarada: String,
     pub horario_consulta: String,
-    pub detalhe: InscricaoDetalheDto,
+    pub tentativas: u32,
+    pub aviso: &'static str,
+    pub numero_inscricao: String,
+    pub processo_administrativo: Option<String>,
+    pub situacao: String,
+    pub data_inscricao: Option<String>,
+    pub orgao_origem: Option<String>,
+    pub codigo_natureza_receita: Option<String>,
+    pub nome_receita: Option<String>,
+    pub valor_total_inscrito: Option<ValorDinheiro>,
+    pub valor_total_consolidado: Option<ValorDinheiro>,
+    pub valor_remanescente: Option<ValorDinheiro>,
+    pub indicador_prescricao: Option<bool>,
+    pub nome_unidade: Option<String>,
+}
+
+impl EstadoConsulta {
+    pub const fn como_str(self) -> &'static str {
+        self.as_str()
+    }
+}
+
+impl RespostaInscricao {
+    pub fn de(detalhe: &InscricaoDetalhe) -> Self {
+        Self {
+            ambiente: detalhe.ambiente.as_str(),
+            estado: detalhe.estado.como_str(),
+            fonte_consulta: detalhe.fonte.as_str(),
+            chave_mascarada: detalhe.chave_mascarada.clone(),
+            horario_consulta: horario(&detalhe.horario_consulta),
+            tentativas: detalhe.tentativas,
+            aviso: AVISO_CONSULTIVO,
+            numero_inscricao: detalhe.numero_inscricao.clone(),
+            processo_administrativo: detalhe.processo_administrativo.clone(),
+            situacao: detalhe.situacao.clone(),
+            data_inscricao: detalhe.data_inscricao.clone(),
+            orgao_origem: detalhe.orgao_origem.clone(),
+            codigo_natureza_receita: detalhe.codigo_natureza_receita.clone(),
+            nome_receita: detalhe.nome_receita.clone(),
+            valor_total_inscrito: detalhe.valor_total_inscrito.map(ValorDinheiro::from),
+            valor_total_consolidado: detalhe.valor_total_consolidado.map(ValorDinheiro::from),
+            valor_remanescente: detalhe.valor_remanescente.map(ValorDinheiro::from),
+            indicador_prescricao: detalhe.indicador_prescricao,
+            nome_unidade: detalhe.nome_unidade.clone(),
+        }
+    }
+}
+
+/// Histórico paginado (`GET /divida-ativa/historico`).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntradaHistoricoDto {
+    pub id: Uuid,
+    pub ambiente: String,
+    pub servico: String,
+    pub estado: String,
+    pub fonte_consulta: Option<String>,
+    pub chave_mascarada: Option<String>,
+    pub status_code: Option<i32>,
+    pub criado_em: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RespostaHistorico {
+    pub pagina: u32,
+    pub itens_pagina: u32,
+    pub itens: Vec<EntradaHistoricoDto>,
+}
+
+/// Mapeamento erro de domínio → envelope estável (SPEC §10.3).
+pub fn mapear_erro_divida(erro: ErroDividaAtiva) -> ApiError {
+    match erro {
+        ErroDividaAtiva::ChaveInvalida => {
+            ApiError::validacao("CPF/CNPJ ou número de inscrição inválido")
+        }
+        ErroDividaAtiva::LimiteLocalAtingido => ApiError::muitas_requisicoes(),
+        ErroDividaAtiva::LimiteSerproAtingido => ApiError::nova(
+            StatusCode::TOO_MANY_REQUESTS,
+            "SERPRO_RATE_LIMITED",
+            "Consultas em excesso na SERPRO; tente novamente mais tarde",
+        ),
+        ErroDividaAtiva::TrialNaoConfigurado => ApiError::nova(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "SERPRO_TRIAL_NOT_CONFIGURED",
+            "Ambiente trial da SERPRO não configurado para este escritório",
+        ),
+        ErroDividaAtiva::ProducaoNaoConfigurada => ApiError::nova(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "SERPRO_PROD_NOT_CONFIGURED",
+            "Produção da Dívida Ativa indisponível até decisão da SERPRO (D5)",
+        ),
+        ErroDividaAtiva::NaoAutorizado => ApiError::nova(
+            StatusCode::BAD_GATEWAY,
+            "SERPRO_UNAUTHORIZED",
+            "Autenticação na SERPRO falhou",
+        ),
+        ErroDividaAtiva::ProxyNegado => ApiError::nova(
+            StatusCode::BAD_GATEWAY,
+            "SERPRO_PROXY_DENIED",
+            "Acesso negado pelo proxy SERPRO",
+        ),
+        ErroDividaAtiva::ServicoIndisponivel => ApiError::nova(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "SERPRO_UNAVAILABLE",
+            "Serviço SERPRO indisponível; tente novamente em instantes",
+        ),
+        ErroDividaAtiva::RespostaInvalida | ErroDividaAtiva::RespostaInvalidaDetalhada(_) => {
+            ApiError::nova(
+                StatusCode::BAD_GATEWAY,
+                "SERPRO_BAD_RESPONSE",
+                "Resposta da SERPRO fora do contrato",
+            )
+        }
+        ErroDividaAtiva::NaoEncontrado => ApiError::nova(
+            StatusCode::NOT_FOUND,
+            "SERPRO_NOT_FOUND",
+            "Pendência não encontrada na Dívida Ativa",
+        ),
+        ErroDividaAtiva::ErroInterno(_) => ApiError::erro_interno(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn formata_valores_ptbr() {
+        assert_eq!(formatar_ptbr(Decimal::new(240_359, 2)), "2.403,59");
+        assert_eq!(formatar_ptbr(Decimal::new(80_506, 2)), "805,06");
+        assert_eq!(formatar_ptbr(Decimal::new(1200, 0)), "1.200,00");
+        assert_eq!(formatar_ptbr(Decimal::new(5, 0)), "5,00");
+    }
+
+    #[test]
+    fn horario_rfc3339() {
+        let agora = DateTime::<Utc>::from_timestamp(0, 0).expect("época");
+        assert_eq!(horario(&agora), "1970-01-01T00:00:00Z");
+    }
 }

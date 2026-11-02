@@ -102,7 +102,7 @@ impl InscricaoDetalhe {
                         parse_moeda_ptbr_estrito(valor_bruto)
                             .map(Some)
                             .map_err(|_| {
-                                ErroConsultaDivida::RespostaInvalida(format!(
+                                ErroConsultaDivida::RespostaInvalidaDetalhada(format!(
                                     "valor monetário inválido em {rotulo}: {valor_bruto}"
                                 ))
                             })
@@ -121,7 +121,7 @@ impl InscricaoDetalhe {
             Some("SIM") => Some(true),
             Some("NAO") => Some(false),
             Some(outro) => {
-                return Err(ErroConsultaDivida::RespostaInvalida(format!(
+                return Err(ErroConsultaDivida::RespostaInvalidaDetalhada(format!(
                     "indicadorPrescricaoSV8 inválido: {outro}"
                 )));
             }
@@ -308,7 +308,7 @@ mod tests {
 
         assert!(matches!(
             detalhe,
-            Err(ErroConsultaDivida::RespostaInvalida(_))
+            Err(ErroConsultaDivida::RespostaInvalidaDetalhada(_))
         ));
     }
 }
