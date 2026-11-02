@@ -1,20 +1,20 @@
-//! Persistência da Fase 4: histórico `consultas_fiscais` (registro
-//! por tentativa + expurgo de retenção, SPEC §9.11), catálogo de
-//! clientes por documento (vínculo do histórico) e CPF do operador.
+//! Persistência da Fase 4: histórico `consultas_fiscais` (registro por
+//! tentativa + expurgo de retenção, SPEC §9.11), catálogo de clientes
+//! por documento (vínculo do histórico) e CPF do operador (D3).
 //! O resolvedor de chave alternativa D2 fica sem fio por enquanto:
 //! o teste live decide se 200 vazio ou 404 (DECISOES-PENDENTES D2).
 
-use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::{BoolExpressionMethods, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use uuid::Uuid;
 
-use crate::application::divida_ativa::ports::{
-    CatalogoClientesPorDocumento, CatalogoOperadores, RegistroConsultaFiscal,
-    RepositorioConsultasFiscais, ResolvedorChaveAlternativa,
-};
 use crate::application::serpro::ports::RepositorioError;
+use crate::domain::divida_ativa::ports::{
+    CatalogoClientesPorDocumento, CatalogoOperadores, RepositorioConsultasFiscais,
+    ResolvedorChaveAlternativa,
+};
+use crate::domain::divida_ativa::{RegistroConsultaFiscal, mascarar_documento};
 use crate::infrastructure::persistence::pool::DbPool;
+use crate::infrastructure::persistence::schema::consultas_fiscais::dsl as dsl_consultas;
 use crate::infrastructure::persistence::schema::{clientes, usuarios};
 
 #[derive(Clone)]
@@ -38,8 +38,8 @@ impl ConsultasFiscaisRepositorioDiesel {
 }
 
 impl RepositorioConsultasFiscais for ConsultasFiscaisRepositorioDiesel {
-    fn registrar(&self, registro: RegistroConsultaFiscal) -> Result<Uuid, RepositorioError> {
-        use crate::infrastructure::persistence::schema::consultas_fiscais::dsl::*;
+    fn registrar(&self, registro: &RegistroConsultaFiscal) -> Result<Uuid, RepositorioError> {
+        use dsl_consultas::*;
 
         let novo_id = Uuid::now_v7();
         let mut conexao = self.conexao()?;
@@ -48,26 +48,29 @@ impl RepositorioConsultasFiscais for ConsultasFiscaisRepositorioDiesel {
                 id.eq(novo_id),
                 escritorio_id.eq(registro.escritorio_id),
                 cliente_id.eq(registro.cliente_id),
-                produto.eq(registro.produto),
-                servico.eq(registro.servico),
-                verbo.eq(registro.verbo),
-                ambiente.eq(registro.ambiente),
-                chave_consulta_hash.eq(registro.chave_consulta_hash),
-                chave_consulta_mascarada.eq(registro.chave_consulta_mascarada),
-                fonte_consulta.eq(registro.fonte_consulta),
+                produto.eq(registro.produto.as_str()),
+                servico.eq(registro.servico.as_str()),
+                verbo.eq(registro.verbo.as_str()),
+                ambiente.eq(registro.ambiente.as_str()),
+                chave_consulta_hash.eq(registro.chave_consulta_hash.as_deref()),
+                chave_consulta_mascarada.eq(registro.chave_consulta_mascarada.as_deref()),
+                fonte_consulta.eq(registro.fonte_consulta.as_deref()),
                 status_code.eq(registro.status_code),
-                estado.eq(registro.estado),
-                protocolo.eq(registro.protocolo),
-                request_redigido.eq(registro.request_redigido),
-                response_redigido.eq(registro.response_redigido),
+                estado.eq(registro.estado.as_str()),
+                protocolo.eq(registro.protocolo.as_deref()),
+                request_redigido.eq(&registro.request_redigido),
+                response_redigido.eq(&registro.response_redigido),
             ))
             .returning(id)
             .get_result(&mut conexao)
             .map_err(|_| RepositorioError::Dados)
     }
 
-    fn expurgar_antes_de(&self, limite: DateTime<Utc>) -> Result<u64, RepositorioError> {
-        use crate::infrastructure::persistence::schema::consultas_fiscais::dsl::*;
+    fn expurgar_antes_de(
+        &self,
+        limite: chrono::DateTime<chrono::Utc>,
+    ) -> Result<u64, RepositorioError> {
+        use dsl_consultas::*;
 
         let mut conexao = self.conexao()?;
         diesel::delete(consultas_fiscais.filter(criado_em.lt(limite)))
@@ -137,30 +140,34 @@ impl CatalogoOperadores for CatalogoOperadoresDiesel {
     }
 }
 
+/// D2 sem catálogo: a segunda tentativa nunca acontece quando a flag
+/// está habilitada mas não foi conectado um resolvedor real.
 #[derive(Clone, Default)]
 pub struct ResolvedorChaveAlternativaSemCatalogo;
 
-#[async_trait]
 impl ResolvedorChaveAlternativa for ResolvedorChaveAlternativaSemCatalogo {
-    async fn resolver(
-        &self,
-        _escritorio_id: Uuid,
-        _cliente_id: Option<Uuid>,
-        _cpf_cnpj_digitos: &str,
-    ) -> Result<Option<String>, RepositorioError> {
-        Ok(None)
+    fn resolver(&self, _chave: &crate::domain::clientes::CpfCnpj) -> Option<String> {
+        None
     }
+}
+
+/// Reexport da máscara do domínio para os testes de infraestrutura.
+pub fn mascarar_chave_resultado(digitos: &str) -> String {
+    mascarar_documento(digitos)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn resolvedor_sem_catalogo_devolve_none() {
-        let resultado = ResolvedorChaveAlternativaSemCatalogo
-            .resolver(Uuid::now_v7(), Some(Uuid::nil()), "52998224725")
-            .await;
-        assert_eq!(resultado, Ok(None));
+    #[test]
+    fn resolvedor_sem_catalogo_devolve_none() {
+        let chave = crate::domain::clientes::CpfCnpj::novo("52998224725").expect("CPF válido");
+        assert_eq!(ResolvedorChaveAlternativaSemCatalogo.resolver(&chave), None);
+    }
+
+    #[test]
+    fn mascara_reusa_utilitario_do_dominio() {
+        assert_eq!(mascarar_chave_resultado("52998224725"), "***.***.247-**");
     }
 }

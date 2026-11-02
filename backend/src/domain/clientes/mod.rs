@@ -1,5 +1,5 @@
-mod cliente;
-mod cpf_cnpj;
+pub mod cliente;
+pub mod cpf_cnpj;
 mod filtro;
 
 pub use cliente::{Cliente, ClienteInvalido, NovoCliente, PorteRegime, TipoCliente};

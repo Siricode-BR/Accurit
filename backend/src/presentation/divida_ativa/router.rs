@@ -1,44 +1,51 @@
-//! Router `/divida-ativa` (Fase 4): leituras autenticadas do portal
-//! com audiência `Client`, snapshot de ambiente uma vez por
-//! requisição (SPEC §8) e rate limit global preservado.
+//! Router da Dívida Ativa: apenas `GET` (ADR-0002 — serviço
+//! estritamente consultivo). Middleware: `exigir` (audiência client,
+//! RequestContext) e `resolver_ambiente` (snapshot do ambiente, SPEC
+//! §8), nessa ordem.
 
+use axum::Router;
 use std::sync::Arc;
-
-use axum::middleware as axum_middleware;
-use axum::{Router, routing::get};
 
 use crate::application::divida_ativa::use_cases::{
     ConsultarDevedorUseCase, ConsultarInscricaoUseCase,
 };
-use crate::domain::auth::Audiencia;
-use crate::presentation::auth::{AuthState, ExigirAudiencia, exigir};
-use crate::presentation::divida_ativa::handlers::{consultar_devedor, consultar_inscricao};
+use crate::presentation::auth::ExigirAudiencia;
+use crate::presentation::auth::exigir;
+use crate::presentation::divida_ativa::handlers::EstadoDividaAtiva;
 use crate::presentation::serpro::ambiente::{EstadoAmbiente, resolver_ambiente};
+use axum::middleware as axum_middleware;
+use axum::routing::get;
 
-#[derive(Clone)]
-pub struct EstadoDivida {
-    pub devedor: Arc<ConsultarDevedorUseCase>,
-    pub inscricao: Arc<ConsultarInscricaoUseCase>,
-}
-
-/// Constrói o sub-router. Os middleware seguem a mesma ordem do
-/// portal SERPRO (SPEC §8): `exigir` (insere RequestContext) é o mais
-/// externo; o snapshot `resolver_ambiente` é o mais interno.
 pub fn construir(
-    devedor: Arc<ConsultarDevedorUseCase>,
-    inscricao: Arc<ConsultarInscricaoUseCase>,
-    auth_state: AuthState,
+    consultar_devedor: Arc<ConsultarDevedorUseCase>,
+    consultar_inscricao: Arc<ConsultarInscricaoUseCase>,
+    exigir_audiencia: ExigirAudiencia,
     estado_ambiente: EstadoAmbiente,
 ) -> Router {
-    let exigencia = ExigirAudiencia::novo(auth_state.tokens.clone(), Audiencia::Client);
+    let estado = EstadoDividaAtiva {
+        consultar_devedor,
+        consultar_inscricao,
+    };
 
     Router::new()
-        .route("/devedor/{cpf_cnpj}", get(consultar_devedor))
-        .route("/inscricao/{numero}", get(consultar_inscricao))
+        .route(
+            "/devedores/{cpf_cnpj}",
+            get(crate::presentation::divida_ativa::handlers::consultar_devedor),
+        )
+        .route(
+            "/inscricoes/{numero_inscricao}",
+            get(crate::presentation::divida_ativa::handlers::consultar_inscricao),
+        )
+        // Ordem dos route_layer: o último é o mais externo. `exigir`
+        // roda primeiro (insere RequestContext); o snapshot entra
+        // logo depois, mais interno (SPEC §8).
         .route_layer(axum_middleware::from_fn_with_state(
             estado_ambiente,
             resolver_ambiente,
         ))
-        .route_layer(axum_middleware::from_fn_with_state(exigencia, exigir))
-        .with_state(EstadoDivida { devedor, inscricao })
+        .route_layer(axum_middleware::from_fn_with_state(
+            exigir_audiencia,
+            exigir,
+        ))
+        .with_state(estado)
 }

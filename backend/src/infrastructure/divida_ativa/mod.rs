@@ -1,8 +1,7 @@
-//! Infraestrutura da Fase 4 (consultivo de Dívida Ativa): transporte
-//! HTTP com tokens OAuth2, rate limit por escritório e repositório
-//! Diesel do histórico consultas_fiscais.
+//! Adapters de infraestrutura da Fase 4: HTTP SERPRO, rate limit,
+//! persistência Diesel e hash com pepper (SPEC §9.11).
 
 pub mod cliente_http;
+pub mod hash;
 pub mod rate;
 pub mod repositorio;
-pub mod tokens;

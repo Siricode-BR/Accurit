@@ -16,9 +16,9 @@ CREATE TABLE consultas_fiscais (
     response_redigido JSONB,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_consultas_escritorio_criado
+CREATE INDEX IF NOT EXISTS idx_consultas_escritorio_criado
     ON consultas_fiscais(escritorio_id, criado_em DESC);
-CREATE INDEX idx_consultas_cliente ON consultas_fiscais(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_consultas_cliente ON consultas_fiscais(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_consultas_escritorio_estado ON consultas_fiscais(escritorio_id, estado);
 CREATE INDEX idx_consultas_escritorio_estado
     ON consultas_fiscais(escritorio_id, estado);

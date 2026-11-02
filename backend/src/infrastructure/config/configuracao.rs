@@ -59,6 +59,10 @@ pub struct SerproConfig {
     /// Rate limit local de consultas da Dívida Ativa por escritório
     /// (SPEC §3.3): `SERPRO_RATE_LIMIT_CONSULTAS_POR_SEGUNDO`.
     pub rate_limit_consultas_por_segundo: u32,
+    /// Pepper do hash de `chave_consulta_hash` (SPEC §9.11):
+    /// `CONSULTAS_CHAVE_PEPPER`. Opcional — sem pepper, o histórico é
+    /// gravado sem hash (comportamento documentado em GO-LIVE-SERPRO).
+    pub consultas_chave_pepper: Option<SecretString>,
     pub http_connect_timeout_secs: u64,
     pub http_request_timeout_secs: u64,
     pub procuracao_cache_ttl_secs: u64,
@@ -209,6 +213,7 @@ impl Config {
                 "SERPRO_RATE_LIMIT_CONSULTAS_POR_SEGUNDO",
                 4,
             )?,
+            consultas_chave_pepper: segredo_opcional(&mapa, "CONSULTAS_CHAVE_PEPPER"),
             http_connect_timeout_secs: inteiro_positivo(
                 &mapa,
                 "SERPRO_HTTP_CONNECT_TIMEOUT_SECS",
