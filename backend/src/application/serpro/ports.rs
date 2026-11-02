@@ -152,12 +152,12 @@ pub enum AlterarModoTrialError {
 }
 
 pub trait FornecedorTokenSerpro: Send + Sync {
-    async fn obter_token(
+    fn obter_token(
         &self,
         escritorio_id: Uuid,
         produto: ProdutoSerpro,
         ambiente: AmbienteSerpro,
-    ) -> Result<String, ErroTokenSerpro>;
+    ) -> impl std::future::Future<Output = Result<String, ErroTokenSerpro>> + Send;
 }
 
 #[derive(Debug, Clone, thiserror::Error)]
