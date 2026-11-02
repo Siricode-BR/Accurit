@@ -21,6 +21,7 @@ use crate::presentation::divida_ativa::dto::{
     RespostaDevedor, RespostaInscricao, mapear_erro_divida,
 };
 use crate::presentation::error::ApiError;
+use crate::presentation::middleware::request_id::RequestId;
 use crate::presentation::serpro::ambiente::AmbienteResolvido;
 
 /// Handlers recebem o use case já composto — só extração e resposta.
@@ -49,6 +50,7 @@ pub async fn consultar_devedor(
     State(estado): State<EstadoDividaAtiva>,
     Extension(contexto): Extension<RequestContext>,
     Extension(snapshot): Extension<AmbienteResolvido>,
+    request_id: RequestId,
     Path(chave): Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
     let cpf_cnpj = CpfCnpj::novo(&chave)
@@ -63,7 +65,7 @@ pub async fn consultar_devedor(
 
     let resultado = estado
         .consultar_devedor
-        .executar(comando, snapshot.ambiente)
+        .executar(comando, snapshot.ambiente, request_id.como_str())
         .await
         .map_err(mapear_erro_divida)?;
 
@@ -75,6 +77,7 @@ pub async fn consultar_inscricao(
     State(estado): State<EstadoDividaAtiva>,
     Extension(contexto): Extension<RequestContext>,
     Extension(snapshot): Extension<AmbienteResolvido>,
+    request_id: RequestId,
     Path(numero): Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
     let escritorio_id = contexto_do_escritorio(&contexto)?;
@@ -83,7 +86,7 @@ pub async fn consultar_inscricao(
 
     let detalhe = estado
         .consultar_inscricao
-        .executar(comando, snapshot.ambiente)
+        .executar(comando, snapshot.ambiente, request_id.como_str())
         .await
         .map_err(mapear_erro_divida)?;
 

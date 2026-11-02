@@ -24,6 +24,24 @@ export const routes: Routes = [
     loadComponent: () => import('./features/inicio/inicio').then((m) => m.Inicio),
   },
   {
+    path: 'divida-ativa/inscricoes/:numero',
+    title: 'Detalhe da inscrição | Accurit Cliente',
+    canActivate: [autenticadoGuard],
+    loadComponent: () =>
+      import('./features/divida-ativa/inscricao-detalhe.component').then(
+        (m) => m.InscricaoDetalheComponent,
+      ),
+  },
+  {
+    path: 'divida-ativa',
+    title: 'Consulta Dívida Ativa | Accurit Cliente',
+    canActivate: [autenticadoGuard],
+    loadComponent: () =>
+      import('./features/divida-ativa/consulta-divida-ativa.component').then(
+        (m) => m.ConsultaDividaAtivaComponent,
+      ),
+  },
+  {
     path: 'clientes',
     title: 'Clientes | Accurit Cliente',
     canActivate: [autenticadoGuard],

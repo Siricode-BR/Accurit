@@ -20,6 +20,8 @@ pub enum ErroDividaAtiva {
     ProxyNegado,
     #[error("serviço SERPRO indisponível após tentativas")]
     ServicoIndisponivel,
+    #[error("resultado da consulta é indeterminado após HTTP 504")]
+    Indeterminado,
     #[error("resposta da SERPRO fora do contrato")]
     RespostaInvalida,
     #[error("resposta da SERPRO fora do contrato: {0}")]
@@ -44,6 +46,7 @@ impl ErroDividaAtiva {
             Self::NaoAutorizado => "SERPRO_UNAUTHORIZED",
             Self::ProxyNegado => "SERPRO_PROXY_DENIED",
             Self::ServicoIndisponivel => "SERPRO_UNAVAILABLE",
+            Self::Indeterminado => "SERPRO_INDETERMINATE",
             Self::RespostaInvalida => "SERPRO_BAD_RESPONSE",
             Self::RespostaInvalidaDetalhada(_) => "SERPRO_BAD_RESPONSE",
             Self::NaoEncontrado => "SERPRO_NOT_FOUND",

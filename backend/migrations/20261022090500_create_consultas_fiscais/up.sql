@@ -8,7 +8,10 @@ CREATE TABLE consultas_fiscais (
     ambiente VARCHAR(16) NOT NULL CHECK (ambiente IN ('TRIAL', 'PRODUCAO')),
     chave_consulta_hash CHAR(64),
     chave_consulta_mascarada VARCHAR(20),
-    fonte_consulta VARCHAR(32),
+    fonte_consulta VARCHAR(32) CHECK (
+        fonte_consulta IS NULL OR
+        fonte_consulta IN ('CPF_CNPJ', 'CODIGO_CONTRIBUINTE')
+    ),
     status_code INTEGER,
     estado VARCHAR(32) NOT NULL,
     protocolo TEXT,
@@ -19,6 +22,7 @@ CREATE TABLE consultas_fiscais (
 CREATE INDEX IF NOT EXISTS idx_consultas_escritorio_criado
     ON consultas_fiscais(escritorio_id, criado_em DESC);
 CREATE INDEX IF NOT EXISTS idx_consultas_cliente ON consultas_fiscais(cliente_id);
-CREATE INDEX IF NOT EXISTS idx_consultas_escritorio_estado ON consultas_fiscais(escritorio_id, estado);
-CREATE INDEX idx_consultas_escritorio_estado
-    ON consultas_fiscais(escritorio_id, estado);
+CREATE INDEX idx_consultas_escritorio_cliente_criado
+    ON consultas_fiscais(escritorio_id, cliente_id, criado_em DESC);
+CREATE INDEX idx_consultas_escritorio_estado_criado
+    ON consultas_fiscais(escritorio_id, estado, criado_em DESC);

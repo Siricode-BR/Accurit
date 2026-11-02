@@ -1010,7 +1010,10 @@ CREATE TABLE consultas_fiscais (
     ambiente VARCHAR(16) NOT NULL CHECK (ambiente IN ('TRIAL', 'PRODUCAO')),
     chave_consulta_hash CHAR(64),
     chave_consulta_mascarada VARCHAR(20),
-    fonte_consulta VARCHAR(32),
+    fonte_consulta VARCHAR(32) CHECK (
+        fonte_consulta IS NULL OR
+        fonte_consulta IN ('CPF_CNPJ', 'CODIGO_CONTRIBUINTE')
+    ),
     status_code INTEGER,
     estado VARCHAR(32) NOT NULL,
     protocolo TEXT,
@@ -1021,6 +1024,10 @@ CREATE TABLE consultas_fiscais (
 CREATE INDEX idx_consultas_escritorio_criado
     ON consultas_fiscais(escritorio_id, criado_em DESC);
 CREATE INDEX idx_consultas_cliente ON consultas_fiscais(cliente_id);
+CREATE INDEX idx_consultas_escritorio_cliente_criado
+    ON consultas_fiscais(escritorio_id, cliente_id, criado_em DESC);
+CREATE INDEX idx_consultas_escritorio_estado_criado
+    ON consultas_fiscais(escritorio_id, estado, criado_em DESC);
 ```
 
 `chave_consulta_hash` guarda SHA-256 da chave consultada; `chave_consulta_mascarada` guarda apenas
@@ -1083,7 +1090,9 @@ O isolamento continua por `escritorio_id`. A sessão do backoffice vive em `sess
 
 - Não registrar CPF/CNPJ completo, certificados, tokens ou payloads sensíveis sem política explícita.
 - `request_redigido`/`response_redigido` guardam apenas o necessário para auditoria e suporte.
-- Definir prazo de retenção por tipo de consulta e rotina de expurgo.
+- O histórico de consultas da Dívida Ativa é retido por 90 dias por padrão
+  (`CONSULTAS_RETENCAO_DIAS`) e expurgado diariamente; o prazo pode ser ajustado
+  por ambiente, sempre com valor positivo.
 - Backups devem seguir a mesma classificação de sensibilidade e controle de acesso.
 
 ### 9.12 `administradores`

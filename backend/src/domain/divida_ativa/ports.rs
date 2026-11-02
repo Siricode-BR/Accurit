@@ -23,6 +23,7 @@ pub trait ClienteDividaAtiva: Send + Sync {
         endpoint: &EndpointSerpro,
         chave: &CpfCnpj,
         cpf_operador: Option<String>,
+        request_id: &str,
     ) -> Result<ResultadoConsultaDevedor, ErroDividaAtiva>;
 
     async fn consultar_inscricao(
@@ -30,6 +31,7 @@ pub trait ClienteDividaAtiva: Send + Sync {
         endpoint: &EndpointSerpro,
         numero_inscricao: &str,
         cpf_operador: Option<String>,
+        request_id: &str,
     ) -> Result<InscricaoDetalhe, ErroDividaAtiva>;
 }
 

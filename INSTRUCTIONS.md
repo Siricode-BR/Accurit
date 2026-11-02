@@ -103,6 +103,7 @@ Copie `.env.example` para `.env` e preencha os valores. Nunca versione `.env`, c
 | `SERPRO_CONSUMER_KEY` / `SERPRO_CONSUMER_SECRET` | Não | Fallback global de desenvolvimento; produção usa `credenciais_serpro` por escritório |
 | `SERPRO_OPERATOR_HEADER_ENABLED` | Não | `true` envia `x-cpf-usuario`; header não confirmado oficialmente |
 | `DIVIDA_ATIVA_FALLBACK_CODIGO_CONTRIBUINTE` | Não | `false` por padrão; habilita fallback não confirmado |
+| `CONSULTAS_RETENCAO_DIAS` | Não | Retenção do histórico fiscal em dias (padrão 90; expurgo diário) |
 | `SERPRO_HTTP_CONNECT_TIMEOUT_SECS` | Não | Timeout de conexão (padrão 5) |
 | `SERPRO_HTTP_REQUEST_TIMEOUT_SECS` | Não | Timeout de requisição (padrão 30) |
 | `SERPRO_PROCURACAO_CACHE_TTL_SECS` | Não | TTL do cache de procuração (padrão 300) |

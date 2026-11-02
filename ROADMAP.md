@@ -15,6 +15,12 @@ clientes/provisionamento existem, mas pendem remediação de qualidade (`cargo f
 `clippy -D warnings` violados no último commit), testes HTTP de IDOR/isolamento multi-tenant e o
 frontend (telas de `/admin` e `/app`); certificados A1 cifrados e procurações não foram iniciados.
 
+Além disso, as camadas de banco, backend e frontend da Fase 4 (Consulta Dívida Ativa) estão
+implementadas e validadas: testes Angular, testes Rust e integração HTTP com PostgreSQL/Docker
+passaram. O fallback por Código de Contribuinte continua bloqueado até confirmação oficial da
+SERPRO (D2), e produção continua bloqueada por D5. A Fase 5 segue como próxima etapa de extensão do
+SERPRO, sem bloquear a operação consultiva em modo trial.
+
 ---
 
 ## Fase 0 — Reconciliação documental e configuração
@@ -134,33 +140,35 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 ## Fase 4 — Consulta Dívida Ativa (somente leitura)
 
 ### 1. Banco de Dados
-- [ ] Criar histórico de consultas com tenant, cliente, endpoint/tipo, ambiente, status, timestamps e protocolo/referência.
-- [ ] Adicionar `fonte_consulta` (`CPF_CNPJ`/`CODIGO_CONTRIBUINTE`) para rastrear o fallback.
-- [ ] Criar índices por `escritorio_id`, cliente, data e status.
-- [ ] Definir rotina de expurgo conforme a política de retenção.
+- [x] Criar histórico de consultas com tenant, cliente, endpoint/tipo, ambiente, status, timestamp e protocolo/referência.
+- [x] Restringir `fonte_consulta` a `CPF_CNPJ`/`CODIGO_CONTRIBUINTE` para rastrear o fallback.
+- [x] Criar índices por `escritorio_id`, cliente, data e status.
+- [x] Definir expurgo diário configurável (`CONSULTAS_RETENCAO_DIAS`, padrão de 90 dias).
 
 ### 2. Backend (Rust / DDD)
-- [ ] Implementar cliente OAuth2 (Client Credentials) e cache de token com renovação em HTTP 401.
-- [ ] Implementar cliente HTTP para `GET {base}/devedor/{cpfCnpj}` (base termina em `/api/v1`).
-- [ ] Implementar cliente HTTP para `GET {base}/inscricao/{numeroInscricao}`.
-- [ ] Enviar `x-cpf-usuario` somente quando `SERPRO_OPERATOR_HEADER_ENABLED=true`, a partir de `usuarios.cpf`.
-- [ ] Criar DTOs Serde para resumo por devedor (objeto plano ou lista, via `untagged`) e detalhe de inscrição conforme o contrato oficial.
-- [ ] Mapear `numeroInscricao`, `situacaoDescricao`, `valorTotalConsolidadoMoeda`, `nomeDevedor`, `tipoDevedor`, `nomeUnidade`, `numeroPFNResponsavel`, `nomePFNResponsavel`, `numeroPFNInscricao`, `nomePFNInscricao` e `indicadorPrescricaoSV8` com renames explícitos.
-- [ ] Higienizar CPF/CNPJ e valores monetários antes da serialização, com `parse_moeda_ptbr_estrito` para respostas da API.
-- [ ] Manter o fallback por Código de Contribuinte desabilitado por padrão; implementar `ResolvedorChaveAlternativa` para habilitá-lo com `DIVIDA_ATIVA_FALLBACK_CODIGO_CONTRIBUINTE=true`.
-- [ ] Implementar timeout, rate limiting, correlação, redaction e tratamento de 401/404/429/5xx.
-- [ ] Bloquear a produção da Dívida Ativa com `SERPRO_PROD_NOT_CONFIGURED` até confirmação da URL.
-- [ ] Expor endpoints internos de consulta por CPF/CNPJ e por número de inscrição.
-- [ ] Garantir que não existam casos de uso/endpoints para parcelar, negociar, cobrar ou emitir DARF de dívida ativa.
+- [x] Implementar cliente OAuth2 (Client Credentials) e cache de token com renovação em HTTP 401 (em modo trial e produção via `EndpointSerpro`).
+- [x] Implementar cliente HTTP para `GET {base}/devedor/{cpfCnpj}` (base termina em `/api/v1`).
+- [x] Implementar cliente HTTP para `GET {base}/inscricao/{numeroInscricao}`.
+- [x] Enviar `x-cpf-usuario` somente quando `SERPRO_OPERATOR_HEADER_ENABLED=true`, a partir de `usuarios.cpf`.
+- [x] Criar DTOs Serde para resumo por devedor (objeto plano ou lista, via `untagged`) e detalhe de inscrição conforme o contrato oficial.
+- [x] Mapear `numeroInscricao`, `situacaoDescricao`, `valorTotalConsolidadoMoeda`, `nomeDevedor`, `tipoDevedor`, `nomeUnidade`, `numeroPFNResponsavel`, `nomePFNResponsavel`, `numeroPFNInscricao`, `nomePFNInscricao` e `indicadorPrescricaoSV8` com renames explícitos.
+- [x] Higienizar CPF/CNPJ e valores monetários antes da serialização, com `parse_moeda_ptbr_estrito` para respostas da API.
+- [x] Manter o fallback por Código de Contribuinte desabilitado por padrão e registrar a fonte da chave; sua ativação permanece bloqueada pela pendência D2, sem contrato SERPRO confirmado.
+- [x] Implementar timeout, rate limiting, correlação, redaction, registro de sucesso/falha e tratamento de 401/404/429/5xx/504 (504 indeterminado, sem retry).
+- [x] Bloquear a produção da Dívida Ativa com `SERPRO_PROD_NOT_CONFIGURED` até confirmação da URL.
+- [x] Expor endpoints internos de consulta por CPF/CNPJ e por número de inscrição.
+- [x] Garantir que não existam casos de uso/endpoints para parcelar, negociar, cobrar ou emitir DARF de dívida ativa.
+
+> Status operacional: banco, backend e frontend implementados e validados; suporte a Trial/sem-SERPRO e comportamento exclusivamente consultivo. Testes Rust, Angular e integração HTTP/PostgreSQL/Docker passaram. O fallback alternativo não pode ser ativado até confirmação oficial da SERPRO (D2).
 
 ### 3. Frontend (Angular / Next.js)
-- [ ] Criar busca por CPF/CNPJ e tela de inscrições/pendências.
-- [ ] Criar detalhe de inscrição com processo administrativo, receita principal, prescrição e valores retornados.
-- [ ] Exibir data, ambiente e estado da consulta, incluindo a fonte do fallback.
-- [ ] Exibir mensagens claras para ausência de pendências, erro de integração e dados de trial.
-- [ ] Não exibir ações de negociação, parcelamento ou emissão de DARF.
+- [x] Criar busca por CPF/CNPJ e tela de inscrições/pendências.
+- [x] Criar detalhe de inscrição com processo administrativo, receita principal, prescrição e valores retornados.
+- [x] Exibir data, ambiente e estado da consulta, incluindo a fonte da chave quando aplicável.
+- [x] Exibir mensagens claras para ausência de pendências, erro de integração e dados de trial.
+- [x] Não exibir ações de negociação, parcelamento ou emissão de DARF.
 
-**Aceite:** consulta por devedor e por inscrição funciona no ambiente habilitado, o fallback por Código de Contribuinte permanece desabilitado por padrão e, quando habilitado, é rastreável; a UI é exclusivamente consultiva.
+**Aceite:** consulta por devedor e por inscrição funciona no ambiente habilitado; fallback por Código de Contribuinte permanece inativo até confirmação oficial D2 e, depois de autorizado, deve ser rastreável; produção permanece bloqueada por D5; a UI é exclusivamente consultiva.
 
 ---
 

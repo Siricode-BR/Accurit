@@ -17,7 +17,7 @@ use axum::routing::get;
 use diesel::QueryableByName;
 use diesel::RunQueryDsl;
 use diesel::sql_query;
-use diesel::sql_types::{BigInt, Nullable, Text};
+use diesel::sql_types::{BigInt, Integer, Nullable, Text};
 use secrecy::SecretString;
 use serde_json::{Value, json};
 use std::collections::VecDeque;
@@ -26,9 +26,9 @@ use tower::ServiceExt;
 use url::Url;
 use uuid::Uuid;
 
-use accurit_backend::application::saude::ConsultarSaude;
 use accurit_backend::application::divida_ativa::ports::RepositorioConsultasFiscais;
 use accurit_backend::application::ports::{SaudeBanco, SaudeBancoError};
+use accurit_backend::application::saude::ConsultarSaude;
 use accurit_backend::infrastructure::auth::HashArgon2;
 use accurit_backend::infrastructure::config::Config;
 use accurit_backend::infrastructure::divida_ativa::repositorio::ConsultasFiscaisRepositorioDiesel;
@@ -71,7 +71,12 @@ struct Captura {
     operador: Option<String>,
 }
 
-fn capturar(estado: &Arc<Mutex<EstadoMock>>, servico: &'static str, chave: &str, header: &HeaderMap) {
+fn capturar(
+    estado: &Arc<Mutex<EstadoMock>>,
+    servico: &'static str,
+    chave: &str,
+    header: &HeaderMap,
+) {
     let autorizacao = header
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
@@ -149,10 +154,12 @@ impl MockSerpro {
             capturas: Vec::new(),
         }));
 
-        // Bind síncrono com socket padrão (válido dentro do runtime
-        // do teste); o servidor `axum` roda em task separada.
-        let listener = std::net::TcpListener::bind("127.0.0.1:0")
-            .expect("mock deve ouvir");
+        // O socket std precisa ser não bloqueante antes da conversão
+        // para o listener Tokio.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("mock deve ouvir");
+        listener
+            .set_nonblocking(true)
+            .expect("socket do mock não bloqueante");
         let porta = listener.local_addr().expect("porta local").port();
 
         let estado_router = estado.clone();
@@ -162,8 +169,7 @@ impl MockSerpro {
             .with_state(estado_router);
 
         tokio::spawn(async move {
-            let listener =
-                tokio::net::TcpListener::from_std(listener).expect("socket do mock");
+            let listener = tokio::net::TcpListener::from_std(listener).expect("socket do mock");
             axum::serve(listener, app)
                 .await
                 .expect("mock SERPRO deve servir");
@@ -188,7 +194,10 @@ struct Ambiente {
     banco: BancoTemporario,
 }
 
-fn ambiente_com(_respostas: &[(u16, Option<Value>)], ajustes: impl FnOnce(&mut Config)) -> Ambiente {
+fn ambiente_com(
+    _respostas: &[(u16, Option<Value>)],
+    ajustes: impl FnOnce(&mut Config),
+) -> Ambiente {
     let banco = BancoTemporario::novo();
     aplicar_migrations_com_lock(banco.conexao(), MIGRATIONS).expect("migrations devem aplicar");
 
@@ -229,7 +238,9 @@ fn semear_operador(banco: &BancoTemporario, escritorio: Uuid, email: &str) {
     let mut conexao = banco.conexao();
     let config = configuracao_com_extras("", &[]);
     let argon2 = HashArgon2::novo(&config.auth).expect("argon2 deve inicializar");
-    let hash = argon2.gerar_hash(SENHA_PORTAL).expect("hash deve ser gerado");
+    let hash = argon2
+        .gerar_hash(SENHA_PORTAL)
+        .expect("hash deve ser gerado");
 
     sql_query(
         "INSERT INTO usuarios (id, escritorio_id, email, cpf, senha_hash, papel, ativo) \
@@ -256,12 +267,7 @@ fn apontar_producao(banco: &BancoTemporario, escritorio: Uuid) {
 
 // ===== utilitários HTTP =====
 
-fn pedido(
-    metodo: Method,
-    caminho: &str,
-    token: &str,
-    extras: &[(&str, &str)],
-) -> Request<Body> {
+fn pedido(metodo: Method, caminho: &str, token: &str, extras: &[(&str, &str)]) -> Request<Body> {
     let mut construtor = Request::builder()
         .method(metodo)
         .uri(caminho)
@@ -276,7 +282,10 @@ fn pedido(
 }
 
 async fn enviar(app: &Router, requisicao: Request<Body>) -> Response {
-    app.clone().oneshot(requisicao).await.expect("resposta deve existir")
+    app.clone()
+        .oneshot(requisicao)
+        .await
+        .expect("resposta deve existir")
 }
 
 async fn corpo_json(resposta: Response) -> Value {
@@ -319,12 +328,17 @@ async fn entrar_portal(app: &Router, escritorio: &str, email: &str) -> String {
     token_de(&corpo_json(resposta).await)
 }
 
-async fn consultar_devedor(app: &Router, token: &str, chave: &str, extras: &[(&str, &str)]) -> Response {
+async fn consultar_devedor(
+    app: &Router,
+    token: &str,
+    chave: &str,
+    extras: &[(&str, &str)],
+) -> Response {
     enviar(
         app,
         pedido(
             Method::GET,
-            &format!("/api/v1/divida-ativa/devedor/{chave}"),
+            &format!("/api/v1/divida-ativa/devedores/{chave}"),
             token,
             extras,
         ),
@@ -337,7 +351,7 @@ async fn consultar_inscricao(app: &Router, token: &str, numero: &str) -> Respons
         app,
         pedido(
             Method::GET,
-            &format!("/api/v1/divida-ativa/inscricao/{numero}"),
+            &format!("/api/v1/divida-ativa/inscricoes/{numero}"),
             token,
             &[],
         ),
@@ -374,8 +388,8 @@ struct LinhaConsultas {
     fonte_consulta: Option<String>,
     #[diesel(sql_type = Nullable<Text>)]
     protocolo: Option<String>,
-    #[diesel(sql_type = Nullable<BigInt>)]
-    status_code: Option<i64>,
+    #[diesel(sql_type = Nullable<Integer>)]
+    status_code: Option<i32>,
 }
 
 fn consultas(banco: &BancoTemporario) -> Vec<LinhaConsultas> {
@@ -407,13 +421,12 @@ fn registrar_consulta_antiga(banco: &BancoTemporario, escritorio: Uuid) {
 
 fn corpo_sucesso_devedor() -> Value {
     json!([{
-        "numero_inscricao": "90 6 17 000964-19",
-        "valor_total_consolidado_moeda": "4.457,56",
-        "situacao_descricao": "DEVEDOR CONCILIADO EM DIVIDA ATIVA",
-        "nome_devedor": "EMPRESA TESTE LTDA",
-        "tipo_devedor": "CNPJ",
-        "cpf_cnpj": "52998224725",
-        "codigo_sida": "1000"
+        "numeroInscricao": "90 6 17 000964-19",
+        "valorTotalConsolidadoMoeda": "4.457,56",
+        "situacaoDescricao": "DEVEDOR CONCILIADO EM DIVIDA ATIVA",
+        "nomeDevedor": "EMPRESA TESTE LTDA",
+        "tipoDevedor": "CNPJ",
+        "cpfCnpj": "52998224725"
     }])
 }
 
@@ -440,47 +453,59 @@ fn corpo_sucesso_inscricao() -> Value {
 
 #[tokio::test]
 async fn devedor_sucesso_com_historico_e_persistencia() {
-    let (ambiente, _mock) = ambiente_mock(&[
-        (200, Some(corpo_sucesso_devedor())),
-    ]);
+    let (ambiente, _mock) = ambiente_mock(&[(200, Some(corpo_sucesso_devedor()))]);
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
     let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
 
-    let resposta =
-        consultar_devedor(&ambiente.app, &token, "52998224725", &[]).await;
+    let resposta = consultar_devedor(&ambiente.app, &token, "52998224725", &[]).await;
     assert_eq!(resposta.status(), StatusCode::OK);
 
     let corpo = corpo_json(resposta).await;
     assert_eq!(corpo["ambiente"], "TRIAL");
-    assert_eq!(corpo["estado"], "SUCESSO");
-    assert_eq!(corpo["fonteConsulta"], "CHAVE_CONTRIBUINTE");
-    assert_eq!(corpo["chaveMascarada"], "***.***.247-25");
+    assert_eq!(corpo["estado"], "COM_PENDENCIAS");
+    assert_eq!(corpo["fonteConsulta"], "CPF_CNPJ");
+    assert_eq!(corpo["chaveMascarada"], "***.***.247-**");
     assert_eq!(corpo["tentativas"], 1);
-    assert_eq!(corpo["inscricoes"][0]["numeroInscricao"], "90 6 17 000964-19");
-    assert_eq!(corpo["inscricoes"][0]["valorTotalConsolidado"], "4457.56");
-    assert_eq!(corpo["inscricoes"][0]["cpfCnpj"], "52998224725");
+    assert_eq!(
+        corpo["inscricoes"][0]["numeroInscricao"],
+        "90 6 17 000964-19"
+    );
+    assert_eq!(
+        corpo["inscricoes"][0]["valorTotalConsolidado"]["valor"],
+        "4.457,56"
+    );
+    assert_eq!(
+        corpo["inscricoes"][0]["valorTotalConsolidado"]["remarca"],
+        "BRL"
+    );
+    assert!(corpo["inscricoes"][0].get("cpfCnpj").is_none());
 
     let linhas = consultas(&ambiente.banco);
     assert_eq!(linhas.len(), 1, "uma consulta em consultas_fiscais");
-    assert_eq!(linhas[0].estado, "SUCESSO");
+    assert_eq!(linhas[0].estado, "COM_PENDENCIAS");
     assert_eq!(linhas[0].ambiente, "TRIAL");
-    assert_eq!(linhas[0].fonte_consulta.as_deref(), Some("CHAVE_CONTRIBUINTE"));
+    assert_eq!(linhas[0].fonte_consulta.as_deref(), Some("CPF_CNPJ"));
     assert!(linhas[0].protocolo.is_none(), "protocolo NULL");
-    let request = linhas[0].request_redigido_texto.as_deref().unwrap_or_default();
-    let response = linhas[0].response_redigido_texto.as_deref().unwrap_or_default();
+    let request = linhas[0]
+        .request_redigido_texto
+        .as_deref()
+        .unwrap_or_default();
+    let response = linhas[0]
+        .response_redigido_texto
+        .as_deref()
+        .unwrap_or_default();
     assert!(
-        request.contains("247-25"),
+        request.contains("247-**"),
         "request redigido só tem chave mascarada"
     );
     assert!(
         !request.contains("52998224725"),
         "não pode ter documento completo"
     );
-    assert!(
-        response.contains(r#""quantidade":1"#),
-        "response redigido é só a contagem"
-    );
+    let response_json: Value =
+        serde_json::from_str(response).expect("response redigido deve ser JSON");
+    assert_eq!(response_json, json!({ "quantidade": 1 }));
     assert!(
         !response.contains("4457"),
         "response redigido não tem valor"
@@ -508,10 +533,10 @@ async fn devedor_404_e_estado_historico() {
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
     let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
 
-    let resposta = consultar_devedor(&ambiente.app, &token, "11111111111", &[]).await;
+    let resposta = consultar_devedor(&ambiente.app, &token, "52998224725", &[]).await;
     assert_eq!(resposta.status(), StatusCode::NOT_FOUND);
     let corpo = corpo_json(resposta).await;
-    assert_eq!(codigo_de_erro(&corpo), "SERPRO_NAO_ENCONTRADO");
+    assert_eq!(codigo_de_erro(&corpo), "SERPRO_NOT_FOUND");
 
     let linhas = consultas(&ambiente.banco);
     assert_eq!(linhas.len(), 1, "consultas com 404 também são registradas");
@@ -519,25 +544,18 @@ async fn devedor_404_e_estado_historico() {
 }
 
 #[tokio::test]
-async fn devedor_429_ecoa_retry_after() {
-    let (ambiente, _mock) = ambiente_mock(&[(429, None)]);
+async fn devedor_429_respeita_retry_after() {
+    let (ambiente, mock) = ambiente_mock(&[(429, None), (429, None), (429, None)]);
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
     let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
 
     let resposta = consultar_devedor(&ambiente.app, &token, "52998224725", &[]).await;
     assert_eq!(resposta.status(), StatusCode::TOO_MANY_REQUESTS);
-    let retry_after = resposta
-        .headers()
-        .get(header::RETRY_AFTER)
-        .and_then(|v| v.to_str().ok())
-        .map(|v| v.to_owned())
-        .expect("Retry-After presente");
-    assert_eq!(retry_after, "7");
-
     let corpo = corpo_json(resposta).await;
-    assert_eq!(codigo_de_erro(&corpo), "SERPRO_LIMITE_EXCEDIDO");
+    assert_eq!(codigo_de_erro(&corpo), "SERPRO_RATE_LIMITED");
     assert!(corpo["error"]["message"].as_str().unwrap().len() > 5);
+    assert_eq!(mock.capturas().len(), 3, "três tentativas no limite");
 
     let linhas = consultas(&ambiente.banco);
     assert_eq!(linhas.len(), 1);
@@ -553,14 +571,14 @@ async fn devedor_401_sem_renovacao_em_trial_ignora_upstream() {
     let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
 
     let resposta = consultar_devedor(&ambiente.app, &token, "52998224725", &[]).await;
-    assert_eq!(resposta.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(resposta.status(), StatusCode::BAD_GATEWAY);
     let corpo = corpo_json(resposta).await;
-    assert_eq!(codigo_de_erro(&corpo), "SERPRO_NAO_AUTORIZADO");
+    assert_eq!(codigo_de_erro(&corpo), "SERPRO_UNAUTHORIZED");
 }
 
 #[tokio::test]
 async fn devedor_5xx_e_indisponivel() {
-    let (ambiente, _mock) = ambiente_mock(&[(500, None)]);
+    let (ambiente, _mock) = ambiente_mock(&[(500, None), (500, None), (500, None)]);
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
     let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
@@ -568,7 +586,7 @@ async fn devedor_5xx_e_indisponivel() {
     let resposta = consultar_devedor(&ambiente.app, &token, "52998224725", &[]).await;
     assert_eq!(resposta.status(), StatusCode::SERVICE_UNAVAILABLE);
     let corpo = corpo_json(resposta).await;
-    assert_eq!(codigo_de_erro(&corpo), "SERPRO_INDISPONIVEL");
+    assert_eq!(codigo_de_erro(&corpo), "SERPRO_UNAVAILABLE");
 }
 
 #[tokio::test]
@@ -581,7 +599,11 @@ async fn devedor_504_e_indeterminado() {
     let resposta = consultar_devedor(&ambiente.app, &token, "52998224725", &[]).await;
     assert_eq!(resposta.status(), StatusCode::GATEWAY_TIMEOUT);
     let corpo = corpo_json(resposta).await;
-    assert_eq!(codigo_de_erro(&corpo), "SERPRO_INDETERMINADO");
+    assert_eq!(codigo_de_erro(&corpo), "SERPRO_INDETERMINATE");
+    assert_eq!(_mock.capturas().len(), 1, "504 não é reenviado");
+    let linha = consultas(&ambiente.banco).pop().expect("504 registrado");
+    assert_eq!(linha.status_code, Some(504));
+    assert_eq!(linha.estado, "INDETERMINADO");
 }
 
 #[tokio::test]
@@ -594,7 +616,7 @@ async fn devedor_200_fora_de_contrato_e_502() {
     let resposta = consultar_devedor(&ambiente.app, &token, "52998224725", &[]).await;
     assert_eq!(resposta.status(), StatusCode::BAD_GATEWAY);
     let corpo = corpo_json(resposta).await;
-    assert_eq!(codigo_de_erro(&corpo), "SERPRO_RESPOSTA_INVALIDA");
+    assert_eq!(codigo_de_erro(&corpo), "SERPRO_BAD_RESPONSE");
 }
 
 #[tokio::test]
@@ -607,10 +629,13 @@ async fn parametro_invalido_nao_bate_no_serpro() {
     let resposta = consultar_devedor(&ambiente.app, &token, "abc", &[]).await;
     assert_eq!(resposta.status(), StatusCode::BAD_REQUEST);
     let corpo = corpo_json(resposta).await;
-    assert_eq!(codigo_de_erro(&corpo), "PARAMETRO_INVALIDO");
+    assert_eq!(codigo_de_erro(&corpo), "VALIDACAO");
 
     assert_eq!(
-        contar(&ambiente.banco, "SELECT COUNT(*) AS total FROM consultas_fiscais"),
+        contar(
+            &ambiente.banco,
+            "SELECT COUNT(*) AS total FROM consultas_fiscais"
+        ),
         0,
         "chave inválida não chega ao SERPRO nem gera histórico"
     );
@@ -618,26 +643,22 @@ async fn parametro_invalido_nao_bate_no_serpro() {
 
 #[tokio::test]
 async fn inscricao_sucesso_com_detalhe_completo() {
-    let (ambiente, _mock) = ambiente_mock(&[
-        (200, Some(corpo_sucesso_inscricao())),
-    ]);
+    let (ambiente, _mock) = ambiente_mock(&[(200, Some(corpo_sucesso_inscricao()))]);
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
     let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
 
-    let resposta =
-        consultar_inscricao(&ambiente.app, &token, "9061700096419").await;
+    let resposta = consultar_inscricao(&ambiente.app, &token, "9061700096419").await;
     assert_eq!(resposta.status(), StatusCode::OK);
 
     let corpo = corpo_json(resposta).await;
     assert_eq!(corpo["ambiente"], "TRIAL");
-    assert_eq!(corpo["estado"], "SUCESSO");
-    assert_eq!(corpo["chaveMascarada"], "906*******419");
-    assert_eq!(corpo["detalhe"]["inscricao"], "90 6 17 000964-19");
-    assert_eq!(corpo["detalhe"]["inscricaoDigitos"], "9061700096419");
-    assert_eq!(corpo["detalhe"]["prescrito"], false);
-    assert_eq!(corpo["detalhe"]["valorInscrito"], "805.06");
-    assert_eq!(corpo["detalhe"]["sistemaOrigem"]["codigo"], "M");
+    assert_eq!(corpo["estado"], "COM_PENDENCIAS");
+    assert_eq!(corpo["chaveMascarada"], "***419");
+    assert_eq!(corpo["numeroInscricao"], "90 6 17 000964-19");
+    assert_eq!(corpo["indicadorPrescricao"], false);
+    assert_eq!(corpo["valorTotalInscrito"]["valor"], "805,06");
+    assert_eq!(corpo["fonteConsulta"], serde_json::Value::Null);
 
     let capturas = _mock.capturas();
     assert_eq!(capturas.len(), 1);
@@ -657,14 +678,12 @@ async fn inscricao_200_array_vazio_e_resposta_invalida() {
     let resposta = consultar_inscricao(&ambiente.app, &token, "9061700096419").await;
     assert_eq!(resposta.status(), StatusCode::BAD_GATEWAY);
     let corpo = corpo_json(resposta).await;
-    assert_eq!(codigo_de_erro(&corpo), "SERPRO_RESPOSTA_INVALIDA");
+    assert_eq!(codigo_de_erro(&corpo), "SERPRO_BAD_RESPONSE");
 }
 
 #[tokio::test]
 async fn header_operador_usa_cpf_do_operador_e_ignora_spoof() {
-    let (ambiente, _mock) = ambiente_mock(&[
-        (200, Some(corpo_sucesso_devedor())),
-    ]);
+    let (ambiente, _mock) = ambiente_mock(&[(200, Some(corpo_sucesso_devedor()))]);
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
     let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
@@ -689,9 +708,7 @@ async fn header_operador_usa_cpf_do_operador_e_ignora_spoof() {
 
 #[tokio::test]
 async fn historico_isola_por_escritorio() {
-    let (ambiente, _mock) = ambiente_mock(&[
-        (200, Some(corpo_sucesso_devedor())),
-    ]);
+    let (ambiente, _mock) = ambiente_mock(&[(200, Some(corpo_sucesso_devedor()))]);
     let _escritorio_a = semear_escritorio(&ambiente.banco, "alfa");
     let escritorio_b = semear_escritorio(&ambiente.banco, "bravo");
     semear_operador(&ambiente.banco, escritorio_b, "operador@bravo.test");
@@ -733,9 +750,22 @@ async fn producao_divida_ativa_e_bloqueada() {
     assert_eq!(codigo_de_erro(&corpo), "SERPRO_PROD_NOT_CONFIGURED");
 
     assert_eq!(
-        contar(&ambiente.banco, "SELECT COUNT(*) AS total FROM consultas_fiscais"),
+        contar(
+            &ambiente.banco,
+            "SELECT COUNT(*) AS total FROM consultas_fiscais"
+        ),
         1,
         "bloqueio também é registrado"
+    );
+    let linha = consultas(&ambiente.banco).pop().expect("falha registrada");
+    assert_eq!(linha.status_code, Some(503));
+    assert_eq!(linha.estado, "INDISPONIVEL");
+    assert!(
+        linha
+            .response_redigido_texto
+            .as_deref()
+            .unwrap_or_default()
+            .contains("SERPRO_PROD_NOT_CONFIGURED")
     );
 }
 
@@ -765,7 +795,7 @@ async fn limite_local_por_escritorio_e_429() {
         .expect("Retry-After do limite local");
     assert_eq!(retry_after, "1");
     let corpo = corpo_json(segunda).await;
-    assert_eq!(codigo_de_erro(&corpo), "LIMITE_REQUISICOES");
+    assert_eq!(codigo_de_erro(&corpo), "MUITAS_REQUISICOES");
 }
 
 #[tokio::test]
@@ -782,7 +812,7 @@ async fn flag_fallback_on_nao_cria_segunda_tentativa_sem_codigo() {
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
     let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
 
-    let resposta = consultar_devedor(&ambiente.app, &token, "11111111111", &[]).await;
+    let resposta = consultar_devedor(&ambiente.app, &token, "52998224725", &[]).await;
     assert_eq!(resposta.status(), StatusCode::NOT_FOUND);
 
     assert_eq!(
@@ -790,6 +820,12 @@ async fn flag_fallback_on_nao_cria_segunda_tentativa_sem_codigo() {
         1,
         "sem código alternativo não há segunda tentativa (D2)"
     );
+    let linha = consultas(&ambiente.banco)
+        .pop()
+        .expect("falha 404 registrada");
+    assert_eq!(linha.status_code, Some(404));
+    assert_eq!(linha.estado, "NAO_ENCONTRADO");
+    assert_eq!(linha.fonte_consulta.as_deref(), Some("CPF_CNPJ"));
 }
 
 #[tokio::test]
@@ -812,16 +848,19 @@ async fn expurgo_apaga_somente_acima_da_retencao() {
     .expect("consulta recente deve ser inserida");
     drop(conexao);
 
-    let repositorio =
-        ConsultasFiscaisRepositorioDiesel::novo(criar_pool(&ambiente.banco.database_url)
-            .expect("pool do expurgo"));
+    let repositorio = ConsultasFiscaisRepositorioDiesel::novo(
+        criar_pool(&ambiente.banco.database_url).expect("pool do expurgo"),
+    );
     let apagados = repositorio
         .expurgar_antes_de(chrono::Utc::now() - chrono::Duration::days(90))
         .expect("expurgo deve funcionar");
     assert_eq!(apagados, 2, "apaga as duas antigas (120 dias)");
 
     assert_eq!(
-        contar(&ambiente.banco, "SELECT COUNT(*) AS total FROM consultas_fiscais"),
+        contar(
+            &ambiente.banco,
+            "SELECT COUNT(*) AS total FROM consultas_fiscais"
+        ),
         1,
         "a recente (NOW) sobrevive"
     );

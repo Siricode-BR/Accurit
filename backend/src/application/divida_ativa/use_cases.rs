@@ -6,11 +6,112 @@ use crate::application::divida_ativa::ports::{
 };
 use crate::domain::divida_ativa::{
     ComandoConsultaDevedor, ComandoConsultaInscricao, ErroDividaAtiva, FonteConsulta,
-    InscricaoDetalhe, RegistroConsultaFiscal, ResultadoConsultaDevedor, mascarar_documento,
+    InscricaoDetalhe, NumeroInscricao, RegistroConsultaFiscal, ResultadoConsultaDevedor, TipoChave,
+    mascarar_chave, mascarar_documento,
 };
 use crate::domain::serpro::ambiente::AmbienteSerpro;
+use crate::domain::serpro::erros::ErroEndpoint;
 use crate::domain::serpro::ports::ResolverEndpointsSerpro;
 use crate::domain::serpro::produto::ProdutoSerpro;
+
+fn erro_endpoint(erro: ErroEndpoint, ambiente: AmbienteSerpro) -> ErroDividaAtiva {
+    match erro {
+        ErroEndpoint::DividaAtivaProducaoBloqueada => ErroDividaAtiva::ProducaoNaoConfigurada,
+        ErroEndpoint::Indefinido(_) if ambiente == AmbienteSerpro::Trial => {
+            ErroDividaAtiva::TrialNaoConfigurado
+        }
+        ErroEndpoint::Indefinido(_) => ErroDividaAtiva::ProducaoNaoConfigurada,
+        erro @ ErroEndpoint::Invalida { .. } => {
+            tracing::error!(erro = %erro, "configuração do endpoint da Dívida Ativa inválida");
+            ErroDividaAtiva::ErroInterno(erro.to_string())
+        }
+    }
+}
+
+fn registro_base(
+    escritorio_id: uuid::Uuid,
+    servico: &str,
+    ambiente: AmbienteSerpro,
+    chave_mascarada: String,
+    fonte_consulta: Option<&str>,
+) -> RegistroConsultaFiscal {
+    RegistroConsultaFiscal {
+        escritorio_id,
+        cliente_id: None,
+        produto: "DIVIDA_ATIVA".to_owned(),
+        servico: servico.to_owned(),
+        verbo: "GET".to_owned(),
+        ambiente: ambiente.as_str().to_owned(),
+        chave_consulta_hash: None,
+        chave_consulta_mascarada: Some(chave_mascarada.clone()),
+        fonte_consulta: fonte_consulta.map(str::to_owned),
+        status_code: None,
+        estado: "EM_ANDAMENTO".to_owned(),
+        protocolo: None,
+        request_redigido: Some(serde_json::json!({ "chaveMascarada": chave_mascarada })),
+        response_redigido: None,
+    }
+}
+
+fn status_historico(erro: &ErroDividaAtiva) -> (i32, &'static str) {
+    match erro {
+        ErroDividaAtiva::ChaveInvalida => (400, "CHAVE_INVALIDA"),
+        ErroDividaAtiva::LimiteLocalAtingido | ErroDividaAtiva::LimiteSerproAtingido => {
+            (429, "LIMITE_EXCEDIDO")
+        }
+        ErroDividaAtiva::TrialNaoConfigurado
+        | ErroDividaAtiva::ProducaoNaoConfigurada
+        | ErroDividaAtiva::ServicoIndisponivel => (503, "INDISPONIVEL"),
+        ErroDividaAtiva::Indeterminado => (504, "INDETERMINADO"),
+        ErroDividaAtiva::NaoAutorizado | ErroDividaAtiva::ProxyNegado => (502, "NAO_AUTORIZADO"),
+        ErroDividaAtiva::RespostaInvalida | ErroDividaAtiva::RespostaInvalidaDetalhada(_) => {
+            (502, "RESPOSTA_INVALIDA")
+        }
+        ErroDividaAtiva::NaoEncontrado => (404, "NAO_ENCONTRADO"),
+        ErroDividaAtiva::ErroInterno(_) => (500, "ERRO_INTERNO"),
+    }
+}
+
+fn registrar_falha(
+    repositorio: &dyn RepositorioConsultasFiscais,
+    mut registro: RegistroConsultaFiscal,
+    erro: ErroDividaAtiva,
+) -> ErroDividaAtiva {
+    let (status, estado) = status_historico(&erro);
+    registro.status_code = Some(status);
+    registro.estado = estado.to_owned();
+    registro.response_redigido = Some(serde_json::json!({ "codigo": erro.codigo() }));
+
+    match repositorio.registrar(&registro) {
+        Ok(_) => erro,
+        Err(falha_persistencia) => {
+            tracing::error!(
+                erro = %falha_persistencia,
+                "não foi possível persistir a falha da consulta de Dívida Ativa"
+            );
+            ErroDividaAtiva::ErroInterno("falha ao registrar consulta fiscal".to_owned())
+        }
+    }
+}
+
+fn cpf_operador(
+    catalogo: &Option<Arc<dyn CatalogoOperadores>>,
+    habilitado: bool,
+    usuario_id: uuid::Uuid,
+) -> Result<Option<String>, ErroDividaAtiva> {
+    if !habilitado {
+        return Ok(None);
+    }
+
+    let catalogo = catalogo.as_ref().ok_or_else(|| {
+        ErroDividaAtiva::ErroInterno("catálogo de operadores não configurado".to_owned())
+    })?;
+    catalogo
+        .buscar_cpf(usuario_id)
+        .map_err(|erro| ErroDividaAtiva::ErroInterno(erro.to_string()))?
+        .map(Some)
+        .ok_or_else(|| ErroDividaAtiva::ErroInterno("CPF do operador não encontrado".to_owned()))
+}
 
 #[derive(Clone)]
 pub struct ConsultarDevedorUseCase {
@@ -73,57 +174,69 @@ impl ConsultarDevedorUseCase {
         &self,
         comando: ComandoConsultaDevedor,
         ambiente: AmbienteSerpro,
+        request_id: &str,
     ) -> Result<ResultadoConsultaDevedor, ErroDividaAtiva> {
-        self.limitador.permitir(comando.escritorio_id)?;
+        let mut registro = registro_base(
+            comando.escritorio_id,
+            "DEVEDOR",
+            ambiente,
+            mascarar_documento(comando.chave.como_str()),
+            Some(FonteConsulta::CpfCnpj.as_str()),
+        );
+        registro.chave_consulta_hash = self.hash.hash(comando.chave.como_str());
 
-        let endpoint = self
+        if let Err(erro) = self.limitador.permitir(comando.escritorio_id) {
+            return Err(registrar_falha(&*self.repositorio, registro, erro));
+        }
+
+        let endpoint = match self
             .endpoint_resolver
             .resolver(ProdutoSerpro::DividaAtiva, ambiente)
             .await
-            .map_err(|erro| ErroDividaAtiva::ErroInterno(erro.to_string()))?;
-
-        let cpf_operador = if self.operador_header_habilitado {
-            self.catalogo_operadores
-                .as_ref()
-                .and_then(|catalogo| catalogo.buscar_cpf(comando.usuario_id).ok().flatten())
-        } else {
-            None
+        {
+            Ok(endpoint) => endpoint,
+            Err(erro) => {
+                return Err(registrar_falha(
+                    &*self.repositorio,
+                    registro,
+                    erro_endpoint(erro, ambiente),
+                ));
+            }
         };
 
-        let resultado = self
+        let operador = match cpf_operador(
+            &self.catalogo_operadores,
+            self.operador_header_habilitado,
+            comando.usuario_id,
+        ) {
+            Ok(cpf) => cpf,
+            Err(erro) => return Err(registrar_falha(&*self.repositorio, registro, erro)),
+        };
+
+        let resultado = match self
             .cliente
-            .consultar_devedor(&endpoint, &comando.chave, cpf_operador)
-            .await?;
-
-        let chave_hash = self
-            .hash
-            .hash(comando.chave.como_str())
-            .map(Some)
-            .unwrap_or(None);
-        let cliente_id = self.catalogo_clientes.as_ref().and_then(|catalogo| {
-            catalogo
-                .buscar_por_documento(comando.escritorio_id, comando.chave.como_str())
-                .ok()
-                .flatten()
-        });
-
-        let registro = RegistroConsultaFiscal {
-            escritorio_id: comando.escritorio_id,
-            cliente_id,
-            produto: "DIVIDA_ATIVA".to_owned(),
-            servico: "DEVEDOR".to_owned(),
-            verbo: "GET".to_owned(),
-            ambiente: ambiente.as_str().to_owned(),
-            chave_consulta_hash: chave_hash,
-            chave_consulta_mascarada: Some(mascarar_documento(comando.chave.como_str())),
-            fonte_consulta: Some(FonteConsulta::CpfCnpj.as_str().to_owned()),
-            status_code: Some(200),
-            estado: resultado.estado.as_str().to_owned(),
-            protocolo: None,
-            request_redigido: None,
-            response_redigido: None,
+            .consultar_devedor(&endpoint, &comando.chave, operador, request_id)
+            .await
+        {
+            Ok(resultado) => resultado,
+            Err(erro) => return Err(registrar_falha(&*self.repositorio, registro, erro)),
         };
 
+        if let Some(catalogo) = &self.catalogo_clientes {
+            match catalogo.buscar_por_documento(comando.escritorio_id, comando.chave.como_str()) {
+                Ok(cliente_id) => registro.cliente_id = cliente_id,
+                Err(erro) => tracing::warn!(
+                    erro = %erro,
+                    "não foi possível associar a consulta ao cliente do escritório"
+                ),
+            }
+        }
+
+        registro.status_code = Some(200);
+        registro.estado = resultado.estado.as_str().to_owned();
+        registro.response_redigido = Some(serde_json::json!({
+            "quantidade": resultado.inscricoes.len()
+        }));
         self.repositorio
             .registrar(&registro)
             .map_err(|erro| ErroDividaAtiva::ErroInterno(erro.to_string()))?;
@@ -176,49 +289,63 @@ impl ConsultarInscricaoUseCase {
         &self,
         comando: ComandoConsultaInscricao,
         ambiente: AmbienteSerpro,
+        request_id: &str,
     ) -> Result<InscricaoDetalhe, ErroDividaAtiva> {
-        self.limitador.permitir(comando.escritorio_id)?;
+        let numero = NumeroInscricao::novo(&comando.numero_inscricao)
+            .map_err(|_| ErroDividaAtiva::ChaveInvalida)?;
+        let chave_mascarada =
+            mascarar_chave(&TipoChave::Inscricao(numero), &comando.numero_inscricao);
+        let mut registro = registro_base(
+            comando.escritorio_id,
+            "INSCRICAO",
+            ambiente,
+            chave_mascarada,
+            None,
+        );
+        registro.chave_consulta_hash = self.hash.hash(&comando.numero_inscricao);
 
-        let endpoint = self
+        if let Err(erro) = self.limitador.permitir(comando.escritorio_id) {
+            return Err(registrar_falha(&*self.repositorio, registro, erro));
+        }
+
+        let endpoint = match self
             .endpoint_resolver
             .resolver(ProdutoSerpro::DividaAtiva, ambiente)
             .await
-            .map_err(|erro| ErroDividaAtiva::ErroInterno(erro.to_string()))?;
-
-        let cpf_operador = if self.operador_header_habilitado {
-            self.catalogo_operadores
-                .as_ref()
-                .and_then(|catalogo| catalogo.buscar_cpf(comando.usuario_id).ok().flatten())
-        } else {
-            None
+        {
+            Ok(endpoint) => endpoint,
+            Err(erro) => {
+                return Err(registrar_falha(
+                    &*self.repositorio,
+                    registro,
+                    erro_endpoint(erro, ambiente),
+                ));
+            }
         };
 
-        let detalhe = self
+        let operador = match cpf_operador(
+            &self.catalogo_operadores,
+            self.operador_header_habilitado,
+            comando.usuario_id,
+        ) {
+            Ok(cpf) => cpf,
+            Err(erro) => return Err(registrar_falha(&*self.repositorio, registro, erro)),
+        };
+
+        let detalhe = match self
             .cliente
-            .consultar_inscricao(&endpoint, &comando.numero_inscricao, cpf_operador)
-            .await?;
-
-        let registro = RegistroConsultaFiscal {
-            escritorio_id: comando.escritorio_id,
-            cliente_id: None,
-            produto: "DIVIDA_ATIVA".to_owned(),
-            servico: "INSCRICAO".to_owned(),
-            verbo: "GET".to_owned(),
-            ambiente: ambiente.as_str().to_owned(),
-            chave_consulta_hash: self
-                .hash
-                .hash(&comando.numero_inscricao)
-                .map(Some)
-                .unwrap_or(None),
-            chave_consulta_mascarada: Some(mascarar_documento(&comando.numero_inscricao)),
-            fonte_consulta: Some(FonteConsulta::CpfCnpj.as_str().to_owned()),
-            status_code: Some(200),
-            estado: detalhe.estado.as_str().to_owned(),
-            protocolo: None,
-            request_redigido: None,
-            response_redigido: None,
+            .consultar_inscricao(&endpoint, &comando.numero_inscricao, operador, request_id)
+            .await
+        {
+            Ok(detalhe) => detalhe,
+            Err(erro) => return Err(registrar_falha(&*self.repositorio, registro, erro)),
         };
 
+        registro.status_code = Some(200);
+        registro.estado = detalhe.estado.as_str().to_owned();
+        registro.response_redigido = Some(serde_json::json!({
+            "estado": detalhe.estado.as_str()
+        }));
         self.repositorio
             .registrar(&registro)
             .map_err(|erro| ErroDividaAtiva::ErroInterno(erro.to_string()))?;

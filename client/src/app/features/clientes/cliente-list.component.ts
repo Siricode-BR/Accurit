@@ -52,6 +52,10 @@ import { ClienteService, ListagemClientes, FiltroClientes, TipoCliente } from '.
             <mat-icon>person_add</mat-icon>
             Novo Cliente
           </button>
+          <button mat-stroked-button color="primary" routerLink="/divida-ativa">
+            <mat-icon>search</mat-icon>
+            Consultar Dívida Ativa
+          </button>
         </div>
 
         @if (carregando()) {

@@ -94,6 +94,7 @@ struct InscricaoSerproDto {
     valor_total_inscrito_moeda: Option<String>,
     valor_total_consolidado_moeda: Option<String>,
     valor_remanescente_moeda: Option<String>,
+    #[serde(rename = "indicadorPrescricaoSV8")]
     indicador_prescricao_sv8: Option<String>,
     nome_unidade: Option<String>,
 }
@@ -101,7 +102,7 @@ struct InscricaoSerproDto {
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum RespostaInscricaoSerpro {
-    Objeto(InscricaoSerproDto),
+    Objeto(Box<InscricaoSerproDto>),
     Lista(Vec<InscricaoSerproDto>),
     Nada,
 }
@@ -148,10 +149,11 @@ impl ClienteDividaAtivaHttp {
                 let chave_cache = token_url.as_str().to_owned();
                 {
                     let cache = self.tokens_oauth.lock().await;
-                    if let Some(entrada) = cache.get(&chave_cache) {
-                        if entrada.expiracao > Utc::now() {
-                            return Ok(Some(entrada.bearer.clone()));
-                        }
+                    if let Some(entrada) = cache
+                        .get(&chave_cache)
+                        .filter(|entrada| entrada.expiracao > Utc::now())
+                    {
+                        return Ok(Some(entrada.bearer.clone()));
                     }
                 }
 
@@ -220,6 +222,7 @@ impl ClienteDividaAtivaHttp {
         endpoint: &EndpointSerpro,
         cpf_operador: Option<String>,
         path_servico: &str,
+        request_id: &str,
     ) -> Result<(serde_json::Value, u32), ErroDividaAtiva> {
         let mut renovou = false;
 
@@ -231,7 +234,8 @@ impl ClienteDividaAtivaHttp {
             let mut pedido = self
                 .http
                 .get(url.clone())
-                .header("accept", "application/json");
+                .header("accept", "application/json")
+                .header("x-request-id", request_id);
             if let Some(bearer) = bearer {
                 pedido = pedido.header("Authorization", format!("Bearer {bearer}"));
             }
@@ -270,19 +274,26 @@ impl ClienteDividaAtivaHttp {
                     return Ok((corpo, esta_tentativa));
                 }
                 401 => {
-                    if let EstrategiaAutenticacaoSerpro::Oauth2Producao { token_url, .. } =
-                        &endpoint.autenticacao
+                    if matches!(
+                        &endpoint.autenticacao,
+                        EstrategiaAutenticacaoSerpro::Oauth2Producao { .. }
+                    ) && !renovou
                     {
-                        if !renovou {
-                            renovou = true;
-                            self.invalidar_token_oauth(token_url).await;
-                            continue;
-                        }
+                        let token_url = match &endpoint.autenticacao {
+                            EstrategiaAutenticacaoSerpro::Oauth2Producao { token_url, .. } => {
+                                token_url
+                            }
+                            _ => unreachable!("match garantiu o caso oauth"),
+                        };
+                        renovou = true;
+                        self.invalidar_token_oauth(token_url).await;
+                        continue;
                     }
                     return Err(ErroDividaAtiva::NaoAutorizado);
                 }
                 403 => return Err(ErroDividaAtiva::ProxyNegado),
                 404 => return Err(ErroDividaAtiva::NaoEncontrado),
+                504 => return Err(ErroDividaAtiva::Indeterminado),
                 429 => {
                     if esta_tentativa < MAX_TENTATIVAS {
                         let espera = resposta
@@ -352,7 +363,7 @@ impl ClienteDividaAtivaHttp {
             ambiente: AmbienteSerpro::Trial,
             estado: EstadoConsulta::SemPendencias,
             fonte: FonteConsulta::CpfCnpj,
-            chave_mascarada: mascarar_inscricao(&numero_inscricao_fallback),
+            chave_mascarada: mascarar_inscricao(numero_inscricao_fallback),
             horario_consulta: chrono::Utc::now(),
             tentativas: 1,
             numero_inscricao: dto
@@ -387,10 +398,11 @@ impl ClienteDividaAtiva for ClienteDividaAtivaHttp {
         endpoint: &EndpointSerpro,
         chave: &CpfCnpj,
         cpf_operador: Option<String>,
+        request_id: &str,
     ) -> Result<ResultadoConsultaDevedor, ErroDividaAtiva> {
         let url = montar_url(&endpoint.url_base, &format!("devedor/{}", chave.como_str()))?;
         let (corpo, tentativas) = self
-            .consultar_com_retentativas(&url, endpoint, cpf_operador, "devedor")
+            .consultar_com_retentativas(&url, endpoint, cpf_operador, "devedor", request_id)
             .await?;
 
         let dados: RespostaDevedorSerpro =
@@ -434,16 +446,17 @@ impl ClienteDividaAtiva for ClienteDividaAtivaHttp {
         endpoint: &EndpointSerpro,
         numero_inscricao: &str,
         cpf_operador: Option<String>,
+        request_id: &str,
     ) -> Result<InscricaoDetalhe, ErroDividaAtiva> {
         let url = montar_url(&endpoint.url_base, &format!("inscricao/{numero_inscricao}"))?;
         let (corpo, tentativas) = self
-            .consultar_com_retentativas(&url, endpoint, cpf_operador, "inscricao")
+            .consultar_com_retentativas(&url, endpoint, cpf_operador, "inscricao", request_id)
             .await?;
 
         let dados: RespostaInscricaoSerpro =
             serde_json::from_value(corpo).map_err(|_| ErroDividaAtiva::RespostaInvalida)?;
         let dto = match dados {
-            RespostaInscricaoSerpro::Objeto(dto) => dto,
+            RespostaInscricaoSerpro::Objeto(dto) => *dto,
             RespostaInscricaoSerpro::Lista(lista) => lista
                 .into_iter()
                 .next()

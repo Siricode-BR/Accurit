@@ -42,24 +42,36 @@ impl From<Decimal> for ValorDinheiro {
 
 fn formatar_ptbr(valor: Decimal) -> String {
     let texto = valor.round_dp(2).to_string();
-    let (inteira, decimal) = match texto.split_once('.') {
-        Some((inteira, decimal)) => (inteira.to_owned(), Some(decimal.to_owned())),
-        None => (texto, None),
+    let (inteira, decimal) = if let Some((inteira, decimal)) = texto.split_once('.') {
+        (inteira.to_owned(), Some(decimal.to_owned()))
+    } else {
+        (texto, None)
     };
 
-    let digitos: Vec<char> = inteira.chars().collect();
-    let mut agrupada = String::new();
-    for (indice, caractere) in digitos.iter().enumerate() {
-        if indice > 0 && (digitos.len() - indice) % 3 == 0 {
-            agrupada.push('.');
+    let inteira_agrupada = {
+        let digitos: Vec<char> = inteira.chars().collect();
+        let mut agrupada = String::new();
+        for (indice, caractere) in digitos.iter().enumerate() {
+            if indice > 0 && (digitos.len() - indice).is_multiple_of(3) {
+                agrupada.push('.');
+            }
+            agrupada.push(*caractere);
         }
-        agrupada.push(*caractere);
-    }
+        agrupada
+    };
 
-    match decimal {
-        Some(decimal) => format!("{agrupada},{decimal}"),
-        None => agrupada,
-    }
+    let decimal_texto = match decimal {
+        Some(decimal) => {
+            let mut decimal_pad = decimal;
+            if decimal_pad.len() == 1 {
+                decimal_pad.push('0');
+            }
+            decimal_pad
+        }
+        None => "00".to_owned(),
+    };
+
+    format!("{inteira_agrupada},{decimal_texto}")
 }
 
 #[derive(Debug, Serialize)]
@@ -92,7 +104,7 @@ impl RespostaDevedor {
             inscricoes: consulta
                 .inscricoes
                 .iter()
-                .map(|inscricao| inscricao_resumo_dto(inscricao))
+                .map(inscricao_resumo_dto)
                 .collect(),
         }
     }
@@ -118,7 +130,7 @@ fn inscricao_resumo_dto(inscricao: &InscricaoResumo) -> InscricaoResumoDto {
 pub struct RespostaInscricao {
     pub ambiente: &'static str,
     pub estado: &'static str,
-    pub fonte_consulta: &'static str,
+    pub fonte_consulta: Option<&'static str>,
     pub chave_mascarada: String,
     pub horario_consulta: String,
     pub tentativas: u32,
@@ -148,7 +160,7 @@ impl RespostaInscricao {
         Self {
             ambiente: detalhe.ambiente.as_str(),
             estado: detalhe.estado.como_str(),
-            fonte_consulta: detalhe.fonte.as_str(),
+            fonte_consulta: None,
             chave_mascarada: detalhe.chave_mascarada.clone(),
             horario_consulta: horario(&detalhe.horario_consulta),
             tentativas: detalhe.tentativas,
@@ -197,7 +209,7 @@ pub fn mapear_erro_divida(erro: ErroDividaAtiva) -> ApiError {
         ErroDividaAtiva::ChaveInvalida => {
             ApiError::validacao("CPF/CNPJ ou número de inscrição inválido")
         }
-        ErroDividaAtiva::LimiteLocalAtingido => ApiError::muitas_requisicoes(),
+        ErroDividaAtiva::LimiteLocalAtingido => ApiError::muitas_requisicoes().com_retry_after("1"),
         ErroDividaAtiva::LimiteSerproAtingido => ApiError::nova(
             StatusCode::TOO_MANY_REQUESTS,
             "SERPRO_RATE_LIMITED",
@@ -227,6 +239,11 @@ pub fn mapear_erro_divida(erro: ErroDividaAtiva) -> ApiError {
             StatusCode::SERVICE_UNAVAILABLE,
             "SERPRO_UNAVAILABLE",
             "Serviço SERPRO indisponível; tente novamente em instantes",
+        ),
+        ErroDividaAtiva::Indeterminado => ApiError::nova(
+            StatusCode::GATEWAY_TIMEOUT,
+            "SERPRO_INDETERMINATE",
+            "A SERPRO não confirmou o resultado da consulta; não repita automaticamente",
         ),
         ErroDividaAtiva::RespostaInvalida | ErroDividaAtiva::RespostaInvalidaDetalhada(_) => {
             ApiError::nova(

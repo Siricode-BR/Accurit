@@ -1,5 +1,5 @@
 use axum::Json;
-use axum::http::StatusCode;
+use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 
@@ -27,6 +27,7 @@ pub struct ApiError {
     code: &'static str,
     message: String,
     details: Vec<String>,
+    retry_after: Option<HeaderValue>,
 }
 
 impl ApiError {
@@ -36,7 +37,13 @@ impl ApiError {
             code,
             message: message.into(),
             details: Vec::new(),
+            retry_after: None,
         }
+    }
+
+    pub fn com_retry_after(mut self, segundos: &'static str) -> Self {
+        self.retry_after = Some(HeaderValue::from_static(segundos));
+        self
     }
 
     pub fn com_detalhe(mut self, detalhe: impl Into<String>) -> Self {
@@ -64,7 +71,13 @@ impl ApiError {
     }
 
     pub fn resposta(&self, request_id: &str) -> Response {
-        (self.status, Json(self.envelope(request_id))).into_response()
+        let mut response = (self.status, Json(self.envelope(request_id))).into_response();
+        if let Some(retry_after) = &self.retry_after {
+            response
+                .headers_mut()
+                .insert(header::RETRY_AFTER, retry_after.clone());
+        }
+        response
     }
 
     pub fn rota_nao_encontrada() -> Self {
@@ -202,8 +215,7 @@ impl ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let request_id = "desconhecido";
-        (self.status, Json(self.envelope(request_id))).into_response()
+        self.resposta("desconhecido")
     }
 }
 
