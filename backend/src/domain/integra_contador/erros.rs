@@ -1,166 +1,168 @@
 //! Erros do domínio Integra Contador.
+//!
+//! `ErroAssinatura` vive exclusivamente em `assinatura.rs`; aqui ele é
+//! apenas encapsulado. Erros de catálogo (SPEC §5.4) vêm encapsulados de
+//! `servicos.rs`. Fail-closed em toda a árvore.
 
 use thiserror::Error;
-use uuid::Uuid;
 
+use crate::domain::integra_contador::servicos::ErroCatalogo;
+
+/// Erros de fluxo de procuração e-CAC (SPEC §6).
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum ErroProcuracao {
+    #[error("procuração não se aplica ao serviço {0}")]
+    NaoSeAplica(String),
+
+    #[error("procuração vencida em {0}")]
+    Vencida(String),
+
+    #[error("procuração cancelada pelo outorgante")]
+    Cancelada,
+
+    #[error(
+        "nenhum dos códigos exigidos ({codigo}) cobre a procuração entre {contribuinte} e {procurador}"
+    )]
+    Incompativel {
+        contribuinte: String,
+        procurador: String,
+        codigo: String,
+    },
+
+    #[error("procuração não verificável: {motivo}")]
+    NaoVerificavel { motivo: String },
+
+    #[error("código de serviço não permitido para procuração: {0}")]
+    CodigoNaoPermitido(String),
+}
+
+/// Erros do domínio Integra Contador — classificados por fase do fluxo
+/// (catálogo → gates de idempotência → procuração → transporte →
+/// resposta), para mapeamento estável de códigos HTTP pela presentation.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum ErroIntegraContador {
-    #[error("configuração de endpoint ausente para {id_sistema}/{id_servico}")]
-    EndpointNaoConfigurado { id_sistema: String, id_servico: String },
+    // ===== Catálogo / allowlist (SPEC §5.4, D4, P4) =====
+    #[error("serviço inválido no catálogo: {0}")]
+    Catalogo(#[from] ErroCatalogo),
 
-    #[error("serviço não suportado: {id_sistema}/{id_servico}")]
-    ServicoNaoSuportado { id_sistema: String, id_servico: String },
+    // ===== Envelope / payload (SPEC §5.2) =====
+    #[error("payload inválido: {motivo}")]
+    PayloadInvalido { motivo: String },
 
-    #[error("versão de sistema inválida: {versao} para {id_sistema}/{id_servico}")]
-    VersaoInvalida { versao: String, id_sistema: String, id_servico: String },
+    // ===== Procuração (SPEC §6) =====
+    #[error("procuração necessária: autor {autor} difere do contribuinte {contribuinte}")]
+    ProcuracaoNecessaria { autor: String, contribuinte: String },
 
-    #[error("payload inválido para {id_sistema}/{id_servico}: {motivo}")]
-    PayloadInvalido { id_sistema: String, id_servico: String, motivo: String },
+    #[error("procuração: {0}")]
+    Procuracao(#[from] ErroProcuracao),
 
-    #[error("procuração necessária: autor {autor} difere do contribuinte {contribuinte} para serviço {id_servico}")]
-    ProcuracaoNecessaria { autor: String, contribuinte: String, id_servico: String },
+    // ===== Assinatura (SPEC §7.1) =====
+    #[error("assinatura eletrônica: {0}")]
+    Assinatura(#[from] crate::domain::integra_contador::assinatura::ErroAssinatura),
 
-    #[error("procuração inválida ou vencida: {motivo}")]
-    ProcuracaoInvalida { motivo: String },
-
-    #[error("procuração não encontrada para contribuinte {contribuinte}, procurador {procurador}, serviço {codigo_servico}")]
-    ProcuracaoNaoEncontrada { contribuinte: String, procurador: String, codigo_servico: String },
-
-    #[error("token de procurador ausente ou expirado")]
-    TokenProcuradorAusente,
-
-    #[error("assinatura XML inválida: {motivo}")]
-    AssinaturaInvalida { motivo: String },
-
-    #[error("certificado A1 não encontrado, expirado ou revogado")]
-    CertificadoInvalido,
-
-    #[error("falha na autenticação SAPI: {motivo}")]
-    AutenticacaoSapiFalhou { motivo: String },
-
-    #[error("token OAuth2 expirado ou inválido")]
+    // ===== Tokens / autenticação =====
+    #[error("token de acesso expirado ou inválido")]
     TokenExpirado,
 
-    #[error("requisição HTTP falhou: {status} - {mensagem}")]
+    #[error("autenticação SAPI falhou: {motivo}")]
+    AutenticacaoSapiFalhou { motivo: String },
+
+    // ===== Transporte =====
+    #[error("requisição falhou: HTTP {status} — {mensagem}")]
     RequisicaoFalhou { status: u16, mensagem: String },
 
     #[error("resposta inválida da SERPRO: {motivo}")]
     RespostaInvalida { motivo: String },
 
-    #[error("estado indeterminado (HTTP 504): não reenviar automaticamente")]
+    // ===== Semânticas de transporte da SPEC §7 =====
+    #[error(
+        "estado indeterminado (HTTP 504): a operação pode ou não ter sido aplicada; \
+         não reenviar automaticamente"
+    )]
     EstadoIndeterminado,
 
-    #[error("processamento assíncrono (HTTP 202): aguardar {tempo_espera}s antes de consultar")]
-    ProcessamentoAssincrono { tempo_espera: u32 },
+    #[error("processamento assíncrono (HTTP 202): consultar após {tempo_espera}s")]
+    ProcessamentoAssincrono { tempo_espera: u64 },
 
-    #[error("processamento não concluído (HTTP 204): aguardar tempo estimado no eTag")]
+    #[error("processamento não concluído (HTTP 204): reconsultar com eTag")]
     ProcessamentoNaoConcluido,
 
-    #[error("token de procurador ainda válido (HTTP 304): reutilizar token em cache")]
+    #[error("token do procurador ainda válido (HTTP 304): reutilizar token em cache")]
     TokenProcuradorValido,
 
-    #[error("acesso negado pela SERPRO (403/ICGERENCIADOR-022): {motivo}")]
+    // ===== Erros SERPRO =====
+    #[error("acesso negado pela SERPRO: {motivo}")]
     AcessoNegadoSerpro { motivo: String },
 
-    #[error("rate limit excedido (HTTP 429): aguardar {retry_after}s")]
+    #[error("limite de requisições excedido (HTTP 429): tentar novamente em {retry_after}s")]
     RateLimitExcedido { retry_after: u64 },
 
     #[error("serviço indisponível (HTTP 503): {motivo}")]
     ServicoIndisponivel { motivo: String },
 
+    // ===== Idempotência (verbos Declarar/Emitir, SPEC §5.4) =====
+    #[error("operação mutável requer confirmação explícita")]
+    ConfirmacaoExplicitaNecessaria,
+
+    #[error("operação mutável requer chave de idempotência")]
+    ChaveIdempotenciaNecessaria,
+
+    #[error("chave de idempotência reutilizada com payload diferente")]
+    IdempotenciaConflito,
+
+    // ===== Interno =====
     #[error("erro interno: {0}")]
     ErroInterno(String),
-
-    #[error("operação mutável requer confirmação explícita e idempotência")]
-    RequerConfirmacaoEIdempotencia,
-
-    #[error("chave de idempotência já processada: {chave}")]
-    IdempotenciaJaProcessada { chave: String },
-
-    #[error("auditoria falhou: {0}")]
-    AuditoriaFalhou(String),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
-pub enum ErroProcuracao {
-    #[error("procuração não se aplica ao serviço {codigo_servico}")]
-    NaoSeAplica { codigo_servico: String },
-
-    #[error("procuração vencida em {valido_ate}")]
-    Vencida { valido_ate: String },
-
-    #[error("procuração cancelada")]
-    Cancelada,
-
-    #[error("procuração incompatível: contribuinte {contribuinte}, procurador {procurador}, serviço {codigo_servico}")]
-    Incompativel { contribuinte: String, procurador: String, codigo_servico: String },
-
-    #[error("procuração não verificável: {motivo}")]
-    NaoVerificavel { motivo: String },
-
-    #[error("código de serviço não permitido para procuração: {codigo_servico}")]
-    CodigoNaoPermitido { codigo_servico: String },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
-pub enum ErroAssinatura {
-    #[error("certificado não é ICP-Brasil série A (A1/A3)")]
-    CertificadoNaoIcpBrasil,
-
-    #[error("certificado expirado em {valido_ate}")]
-    CertificadoExpirado { valido_ate: String },
-
-    #[error("certificado revogado")]
-    CertificadoRevogado,
-
-    #[error("cadeia de certificação inválida: {motivo}")]
-    CadeiaInvalida { motivo: String },
-
-    #[error("digest SHA-256 divergente")]
-    DigestDivergente,
-
-    #[error("assinatura RSA-SHA256 inválida")]
-    AssinaturaInvalida,
-
-    #[error("canonicalização C14N falhou: {motivo}")]
-    CanonicalizacaoFalhou { motivo: String },
-
-    #[error("transformação Enveloped Signature falhou: {motivo}")]
-    TransformacaoFalhou { motivo: String },
-
-    #[error("XML malformado: {motivo}")]
-    XmlMalformado { motivo: String },
-
-    #[error("texto do termo diverge do oficial: {campo}")]
-    TermoDivergente { campo: String },
-
-    #[error("chave privada não disponível para assinatura")]
-    ChavePrivadaIndisponivel,
+/// Mesma chave de idempotência com hash de payload diferente
+/// ⇒ jamais reaproveitar o resultado anterior.
+pub fn idempotencia_e_conflito(hash_antes: &str, hash_agora: &str) -> bool {
+    !hash_antes.eq_ignore_ascii_case(hash_agora)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::integra_contador::assinatura::ErroAssinatura;
+    use crate::domain::integra_contador::servicos::ErroCatalogo;
 
     #[test]
-    fn erro_procuracao_necessaria_display() {
-        let err = ErroIntegraContador::ProcuracaoNecessaria {
+    fn catalogo_encapsulado_display() {
+        let erro = ErroIntegraContador::from(ErroCatalogo::AguardandoDecisao(
+            "PGDASD/CONSDECLARACAO13".to_owned(),
+        ));
+        assert!(erro.to_string().contains("AguardandoDecisao"));
+    }
+
+    #[test]
+    fn procuracao_necessaria_display() {
+        let erro = ErroIntegraContador::ProcuracaoNecessaria {
             autor: "12345678000190".to_owned(),
             contribuinte: "98765432000190".to_owned(),
-            id_servico: "TRANSDECLARACAO11".to_owned(),
         };
-        assert!(err.to_string().contains("procuração necessária"));
+        assert!(erro.to_string().contains("procuração necessária"));
     }
 
     #[test]
-    fn erro_estado_indeterminado_codigo() {
-        let err = ErroIntegraContador::EstadoIndeterminado;
-        assert!(err.to_string().contains("504"));
+    fn estado_indeterminado_menciona_504() {
+        assert!(
+            ErroIntegraContador::EstadoIndeterminado
+                .to_string()
+                .contains("504")
+        );
     }
 
     #[test]
-    fn erro_assinatura_certificado_display() {
-        let err = ErroAssinatura::CertificadoNaoIcpBrasil;
-        assert!(err.to_string().contains("ICP-Brasil"));
+    fn assinatura_encapsulada_de_assinatura_rs() {
+        let erro = ErroIntegraContador::from(ErroAssinatura::CertificadoNaoIcpBrasil);
+        assert!(erro.to_string().contains("assinatura eletrônica"));
+        assert!(erro.to_string().contains("ICP-Brasil"));
+    }
+
+    #[test]
+    fn conflito_idempotencia_detectado() {
+        assert!(idempotencia_e_conflito("abc", "abd"));
+        assert!(!idempotencia_e_conflito("ABC", "abc"));
     }
 }

@@ -42,6 +42,8 @@ ring = "0.17.13"
 zeroize = { version = "1.7.0", features = ["derive"] }
 hex = "0.4.3"
 async-trait = "0.1.83"
+p12-keystore = "0.4.1"
+rsa = "0.9.10"
 
 [dev-dependencies]
 async-trait = "0.1.83"

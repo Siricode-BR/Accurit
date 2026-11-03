@@ -3,6 +3,7 @@ pub mod auth;
 pub mod certificados;
 pub mod clientes;
 pub mod divida_ativa;
+pub mod integra_contador;
 pub mod ports;
 pub mod saude;
 pub mod serpro;

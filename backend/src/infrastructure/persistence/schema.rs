@@ -133,6 +133,33 @@ diesel::table! {
 }
 
 diesel::table! {
+    idempotencia_operacoes (id) {
+        id -> Uuid,
+        escritorio_id -> Uuid,
+        #[max_length = 64]
+        chave_idempotencia -> Varchar,
+        #[max_length = 16]
+        verbo -> Varchar,
+        #[max_length = 32]
+        id_sistema -> Varchar,
+        #[max_length = 32]
+        id_servico -> Varchar,
+        #[max_length = 16]
+        versao_sistema -> Varchar,
+        #[max_length = 16]
+        ambiente -> Varchar,
+        #[max_length = 64]
+        payload_hash -> Bpchar,
+        #[max_length = 32]
+        estado -> Varchar,
+        resposta_redigida -> Nullable<Jsonb>,
+        resposta_status -> Nullable<Int4>,
+        processado_em -> Nullable<Timestamptz>,
+        criado_em -> Timestamptz,
+    }
+}
+
+diesel::table! {
     procuracoes (id) {
         id -> Uuid,
         escritorio_id -> Uuid,
@@ -230,6 +257,7 @@ diesel::joinable!(clientes -> escritorios (escritorio_id));
 diesel::joinable!(consultas_fiscais -> clientes (cliente_id));
 diesel::joinable!(consultas_fiscais -> escritorios (escritorio_id));
 diesel::joinable!(credenciais_serpro -> escritorios (escritorio_id));
+diesel::joinable!(idempotencia_operacoes -> escritorios (escritorio_id));
 diesel::joinable!(procuracoes -> escritorios (escritorio_id));
 diesel::joinable!(sessoes -> escritorios (escritorio_id));
 diesel::joinable!(sessoes -> usuarios (usuario_id));
@@ -245,6 +273,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     consultas_fiscais,
     credenciais_serpro,
     escritorios,
+    idempotencia_operacoes,
     procuracoes,
     sessoes,
     sessoes_admin,

@@ -1,6 +1,7 @@
 pub mod admin;
 pub mod certificados;
 pub mod clientes;
+pub mod integra_contador;
 pub mod migrations;
 pub mod pool;
 pub mod saude;
