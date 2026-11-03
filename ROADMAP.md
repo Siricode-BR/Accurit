@@ -177,8 +177,8 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 ### 1. Banco de Dados
 - [ ] Ajustar `tokens_serpro` para token cifrado, escopo, expiração, ambiente, `tipo_token` (`ACCESS`/`JWT`/`AUTENTICAR_PROCURADOR`), `autor_pedido_dados` e timestamps.
 - [ ] Ajustar `procuracoes` com ambiente, contribuinte, procurador, código de serviço, validade, status e data de verificação.
-- [ ] Registrar chamadas operacionais com verbo, `idSistema`, `idServico`, ambiente, estado e referência de resposta.
-- [ ] Criar tabela/chave de idempotência para `Declarar` e `Emitir`.
+- [x] Registrar chamadas operacionais com verbo, `idSistema`, `idServico`, ambiente, estado e referência de resposta.
+- [x] Criar tabela/chave de idempotência para `Declarar` e `Emitir`.
 - [ ] Auditar alterações de configuração e execuções potencialmente mutáveis.
 
 ### 2. Backend (Rust / DDD)
@@ -186,31 +186,33 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 - [ ] Implementar autenticação do Integra Contador em produção via SAPI (`https://autenticacao.sapi.serpro.gov.br/authenticate`), com mTLS e-CNPJ, `Role-Type: TERCEIROS`, `Content-Type: application/x-www-form-urlencoded`, `access_token` e `jwt_token`.
 - [ ] Cachear `access_token`/`jwt_token` com expiração calculada de `expires_in`; invalidar e renovar em 401 com retry limitado.
 - [ ] Implementar obtenção/renovação do `autenticar_procurador_token` (via `ENVIOXMLASSINADO81`), com validade até a meia-noite seguinte.
-- [ ] Implementar DTOs `Identificacao`, `PedidoDados`, `IntegraContadorRequest` e envelope de resposta, preservando `pedidoDados.dados` como string JSON.
-- [ ] Implementar adaptador POST para `/Apoiar`, `/Consultar`, `/Declarar`, `/Emitir` e `/Monitorar`.
+- [x] Implementar DTOs `Identificacao`, `PedidoDados`, `IntegraContadorRequest` e envelope de resposta, preservando `pedidoDados.dados` como string JSON.
+- [x] Implementar adaptador POST para `/Apoiar`, `/Consultar`, `/Declarar`, `/Emitir` e `/Monitorar` (envio comum; apenas catálogo confirmado fica habilitado).
 - [ ] Validar `idSistema`, `idServico`, `versaoSistema` e payload contra o catálogo/contrato oficial de cada serviço.
 - [ ] Suportar os serviços de referência: `SICALC CONSULTAAPOIORECEITAS52`, `PROCURACOES OBTERPROCURACAO41`, `SITFIS RELATORIOSITFIS92` (**Emitir**), `PGDASD CONSDECLARACAO13`, `PGDASD TRANSDECLARACAO11`, `DCTFWEB GERARGUIA31`, `CAIXAPOSTAL INNOVAMSG63` e `AUTENTICAPROCURADOR ENVIOXMLASSINADO81`.
-- [ ] Enviar `x-cpf-usuario` somente quando `SERPRO_OPERATOR_HEADER_ENABLED=true`.
+- [x] Enviar `x-cpf-usuario` somente quando `SERPRO_OPERATOR_HEADER_ENABLED=true`.
 - [ ] Implementar checagem `PROCURACOES / OBTERPROCURACAO41` antes de operações protegidas, **somente quando `autorPedidoDados` difere do contribuinte**.
 - [ ] Modelar `RegraProcuracao` (`NaoSeAplica`, `AnyOf`, `Condicional`) e validar os códigos PGDASD `00146`, DCTFWeb `00103`, SITFIS `00002`, Caixa Postal `00006`, DTE `00050`, PAGTOWEB `00004`, REGIMEAPURACAO `00060`, DASNSIMEI `00229` e EPROCESSO `00051`, confirmando-os no catálogo vigente.
 - [ ] Negar execução quando a procuração estiver ausente, vencida, cancelada ou não verificável; tratar `403 / AcessoNegado-ICGERENCIADOR-022` como backstop.
 - [ ] Implementar assinatura XMLDSig com `<Signature>` e `<Transform>` no namespace default (sem prefixo `ds:`), validação de digest e cadeia ICP-Brasil.
 - [ ] Cifrar o certificado A1 em repouso e decifrá-lo apenas em memória, com `zeroize` após o uso.
-- [ ] Adotar idempotência e auditoria para operações mutáveis; não repetir `Declarar`/`Emitir` automaticamente sem proteção.
+- [x] Adotar idempotência e auditoria para operações mutáveis; não repetir `Declarar`/`Emitir` automaticamente sem proteção.
 - [ ] Cobrir falhas de token, 401, 403, 429, timeout, envelope inválido, XML inválido e erros de negócio.
-- [ ] Tratar HTTP 504 como estado indeterminado: não reenviar automaticamente; consultar o status antes de repetir.
-- [ ] Tratar `202` (`tempoEspera`), `204` (`eTag`) e `304` (`etag: autenticar_procurador_token:<token>` + `expires`) com polling controlado e sem retry automático para `Declarar`/`Emitir`.
-- [ ] Não bilhetar `204`, `304`, `400`, `401`, `404`, `429`, `500`, `503`, `504`, `/Apoiar` e `/Monitorar`.
+- [x] Tratar HTTP 504 como estado indeterminado e bloquear nova execução com a mesma chave idempotente; a repetição depende de consulta/manual explícita.
+- [x] Tratar `202` (`tempoEspera`), `204` (`eTag`) e `304` (`etag: autenticar_procurador_token:<token>` + `expires`) sem polling/retry automático; o acompanhamento permanece manual e controlado.
+- [x] Não bilhetar `204`, `304`, `400`, `401`, `404`, `429`, `500`, `503`, `504`, `/Apoiar` e `/Monitorar`.
 
 ### 3. Frontend (Angular / Next.js)
-- [ ] Criar fluxo de consultas por sistema/serviço habilitado.
+- [x] Criar fluxo de consultas por sistema/serviço habilitado (somente `PROCURACOES / OBTERPROCURACAO41` está liberado).
 - [ ] Exibir estado da autorização/procuração e motivo de bloqueio sem expor segredos.
 - [ ] Apresentar status de processamento e resultados de `Monitorar` quando aplicável.
 - [ ] Exigir confirmação explícita para ações que transmitam declarações ou emitam documentos.
-- [ ] Distinguir falha de autorização, falha de transporte e rejeição de negócio.
+- [x] Distinguir falha de autorização, falha de transporte e rejeição de negócio.
 - [ ] Exibir feedback de assinatura/validação do certificado sem expor dados sensíveis.
 
 **Aceite:** os cinco verbos são encaminhados pelo envelope comum, `x-cpf-usuario` é enviado quando habilitado, serviços protegidos são bloqueados antes da chamada quando não há procuração válida (e o autor difere do contribuinte) e o XML assinado passa na validação ICP-Brasil.
+
+**Estado de implementação:** o fluxo Trial conservador, persistência operacional tenant-scoped, catálogo allowlist, interface autenticada e bloqueios fail-closed estão implementados. A Fase 5 **não está concluída**: produção e serviços adicionais seguem desabilitados até confirmação do contrato SERPRO e aprovação de D5; SAPI/mTLS, cache/renovação de tokens, validação oficial de procuração e XMLDSig com validação ICP-Brasil/LCR continuam pendentes. A SPEC define retenção de 90 dias para consultas da Dívida Ativa, mas não define prazo para chamadas operacionais/idempotência da Fase 5; esse prazo e a auditoria de mudanças de configuração precisam de decisão antes da produção. Não habilitar operações mutáveis nem tratar consulta como prova de autorização enquanto esses bloqueios permanecerem.
 
 ---
 

@@ -34,6 +34,31 @@ diesel::table! {
 }
 
 diesel::table! {
+    chamadas_operacionais (id) {
+        id -> Uuid,
+        escritorio_id -> Uuid,
+        usuario_id -> Nullable<Uuid>,
+        #[max_length = 16]
+        verbo -> Varchar,
+        #[max_length = 32]
+        id_sistema -> Varchar,
+        #[max_length = 64]
+        id_servico -> Varchar,
+        #[max_length = 16]
+        ambiente -> Varchar,
+        #[max_length = 32]
+        estado -> Varchar,
+        status_code -> Nullable<Int4>,
+        #[max_length = 128]
+        referencia_resposta -> Nullable<Varchar>,
+        #[max_length = 64]
+        request_id -> Nullable<Varchar>,
+        bilhetavel -> Bool,
+        criado_em -> Timestamptz,
+    }
+}
+
+diesel::table! {
     certificados_a1 (id) {
         id -> Uuid,
         escritorio_id -> Uuid,
@@ -252,6 +277,7 @@ diesel::table! {
 }
 
 diesel::joinable!(auditoria_eventos -> escritorios (escritorio_id));
+diesel::joinable!(chamadas_operacionais -> escritorios (escritorio_id));
 diesel::joinable!(certificados_a1 -> escritorios (escritorio_id));
 diesel::joinable!(clientes -> escritorios (escritorio_id));
 diesel::joinable!(consultas_fiscais -> clientes (cliente_id));
@@ -268,6 +294,7 @@ diesel::joinable!(usuarios -> escritorios (escritorio_id));
 diesel::allow_tables_to_appear_in_same_query!(
     administradores,
     auditoria_eventos,
+    chamadas_operacionais,
     certificados_a1,
     clientes,
     consultas_fiscais,

@@ -1,2 +1,2 @@
--- Rollback Fase 5
-DROP TABLE IF EXISTS idempotencia_operacoes;
+DROP TABLE chamadas_operacionais;
+DROP TABLE idempotencia_operacoes;

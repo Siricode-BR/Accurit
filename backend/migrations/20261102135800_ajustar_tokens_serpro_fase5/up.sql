@@ -1,9 +1,6 @@
--- Fase 5 (Integra Contador): idempotência de operações mutáveis
--- (SPEC §9 — `idempotencia_operacoes`). A bilhetagem operacional NÃO
--- recebe tabela nova: seus registros vão para `consultas_fiscais` com
--- `produto = 'INTEGRA_CONTADOR'` (mesma tabela/retenção da Fase 4) e as
--- operações mutáveis também registram eventos em `auditoria_eventos`.
-
+-- Os campos Fase 5 de tokens_serpro e procuracoes já estão nas migrations
+-- de criação. Esta migration adiciona apenas idempotência e metadados
+-- operacionais, sem alterar tabelas existentes.
 CREATE TABLE idempotencia_operacoes (
     id UUID PRIMARY KEY,
     escritorio_id UUID NOT NULL REFERENCES escritorios(id),
@@ -21,4 +18,27 @@ CREATE TABLE idempotencia_operacoes (
     criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (escritorio_id, chave_idempotencia)
 );
-CREATE INDEX idx_idempotencia_escritorio_criado ON idempotencia_operacoes(escritorio_id, criado_em DESC);
+CREATE INDEX idx_idempotencia_escritorio_criado
+    ON idempotencia_operacoes(escritorio_id, criado_em DESC);
+
+CREATE TABLE chamadas_operacionais (
+    id UUID PRIMARY KEY,
+    escritorio_id UUID NOT NULL REFERENCES escritorios(id),
+    usuario_id UUID,
+    verbo VARCHAR(16) NOT NULL CHECK (
+        verbo IN ('Apoiar', 'Consultar', 'Declarar', 'Emitir', 'Monitorar')
+    ),
+    id_sistema VARCHAR(32) NOT NULL,
+    id_servico VARCHAR(64) NOT NULL,
+    ambiente VARCHAR(16) NOT NULL CHECK (ambiente IN ('TRIAL', 'PRODUCAO')),
+    estado VARCHAR(32) NOT NULL,
+    status_code INTEGER,
+    referencia_resposta VARCHAR(128),
+    request_id VARCHAR(64),
+    bilhetavel BOOLEAN NOT NULL DEFAULT FALSE,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_chamadas_operacionais_escritorio_criado
+    ON chamadas_operacionais(escritorio_id, criado_em DESC);
+CREATE INDEX idx_chamadas_operacionais_escritorio_estado
+    ON chamadas_operacionais(escritorio_id, estado, criado_em DESC);

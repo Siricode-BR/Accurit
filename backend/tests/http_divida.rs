@@ -9,11 +9,11 @@
 mod common;
 
 use axum::Router;
-use axum::body::{Body, to_bytes};
+use axum::body::{Body, Bytes, to_bytes};
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, Method, Request, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use diesel::QueryableByName;
 use diesel::RunQueryDsl;
 use diesel::sql_query;
@@ -60,6 +60,14 @@ impl SaudeBanco for BancoFixo {
 struct EstadoMock {
     respostas: VecDeque<(u16, Option<Value>)>,
     capturas: Vec<Captura>,
+    capturas_integra: Vec<CapturaIntegra>,
+}
+
+#[derive(Clone, Debug)]
+struct CapturaIntegra {
+    autorizacao: String,
+    operador: Option<String>,
+    corpo: Value,
 }
 
 #[derive(Clone, Debug)]
@@ -140,6 +148,33 @@ async fn inscricao_mock(
     responder(&estado)
 }
 
+async fn integra_contador_mock(
+    State(estado): State<Arc<Mutex<EstadoMock>>>,
+    header: HeaderMap,
+    corpo: Bytes,
+) -> Response {
+    let autorizacao = header
+        .get(header::AUTHORIZATION)
+        .and_then(|valor| valor.to_str().ok())
+        .unwrap_or_default()
+        .to_owned();
+    let operador = header
+        .get("x-cpf-usuario")
+        .and_then(|valor| valor.to_str().ok())
+        .map(str::to_owned);
+    let corpo = serde_json::from_slice(&corpo).expect("envelope JSON do Integra Contador");
+    estado
+        .lock()
+        .expect("estado mock")
+        .capturas_integra
+        .push(CapturaIntegra {
+            autorizacao,
+            operador,
+            corpo,
+        });
+    responder(&estado)
+}
+
 /// Sobe o mock do gateway SERPRO em `127.0.0.1:0` com as rotas de
 /// consulta (`/api/v1/devedor/{chave}`, `/api/v1/inscricao/{chave}`).
 struct MockSerpro {
@@ -152,6 +187,7 @@ impl MockSerpro {
         let estado = Arc::new(Mutex::new(EstadoMock {
             respostas: respostas.iter().cloned().collect(),
             capturas: Vec::new(),
+            capturas_integra: Vec::new(),
         }));
 
         // O socket std precisa ser não bloqueante antes da conversão
@@ -166,6 +202,7 @@ impl MockSerpro {
         let app = Router::new()
             .route("/api/v1/devedor/{chave}", get(devedor_mock))
             .route("/api/v1/inscricao/{chave}", get(inscricao_mock))
+            .route("/api/v1/Consultar", post(integra_contador_mock))
             .with_state(estado_router);
 
         tokio::spawn(async move {
@@ -184,6 +221,14 @@ impl MockSerpro {
 
     fn capturas(&self) -> Vec<Captura> {
         self.estado.lock().expect("estado mock").capturas.clone()
+    }
+
+    fn capturas_integra(&self) -> Vec<CapturaIntegra> {
+        self.estado
+            .lock()
+            .expect("estado mock")
+            .capturas_integra
+            .clone()
     }
 }
 
@@ -216,7 +261,8 @@ fn ambiente_mock(respostas: &[(u16, Option<Value>)]) -> (Ambiente, MockSerpro) {
     let mock = MockSerpro::novo(respostas);
     let url_base = mock.url_base.clone();
     let ambiente = ambiente_com(respostas, |config| {
-        config.serpro.divida_ativa_trial_url = url_base;
+        config.serpro.divida_ativa_trial_url = url_base.clone();
+        config.serpro.integra_trial_url = url_base;
         config.serpro.trial_bearer_token = Some(SecretString::from(TOKEN_TRIAL));
     });
     (ambiente, mock)
@@ -255,6 +301,25 @@ fn semear_operador(banco: &BancoTemporario, escritorio: Uuid, email: &str) {
     .bind::<diesel::sql_types::Bool, _>(true)
     .execute(&mut conexao)
     .expect("usuário deve ser inserido");
+}
+
+fn semear_cliente_para_integracao(banco: &BancoTemporario, escritorio: Uuid) {
+    let mut conexao = banco.conexao();
+    sql_query("UPDATE escritorios SET cnpj = $1 WHERE id = $2")
+        .bind::<Text, _>("11222333000181")
+        .bind::<diesel::sql_types::Uuid, _>(escritorio)
+        .execute(&mut conexao)
+        .expect("CNPJ do escritório deve ser salvo");
+    sql_query(
+        "INSERT INTO clientes (id, escritorio_id, tipo, cpf_cnpj, nome_razao_social) \
+         VALUES ($1, $2, 'PF', $3, $4)",
+    )
+    .bind::<diesel::sql_types::Uuid, _>(Uuid::now_v7())
+    .bind::<diesel::sql_types::Uuid, _>(escritorio)
+    .bind::<Text, _>("52998224725")
+    .bind::<Text, _>("Cliente de teste")
+    .execute(&mut conexao)
+    .expect("cliente deve ser inserido");
 }
 
 fn apontar_producao(banco: &BancoTemporario, escritorio: Uuid) {
@@ -826,6 +891,65 @@ async fn flag_fallback_on_nao_cria_segunda_tentativa_sem_codigo() {
     assert_eq!(linha.status_code, Some(404));
     assert_eq!(linha.estado, "NAO_ENCONTRADO");
     assert_eq!(linha.fonte_consulta.as_deref(), Some("CPF_CNPJ"));
+}
+
+#[tokio::test]
+async fn integra_contador_consulta_pelo_envelope_comum_e_contexto_do_tenant() {
+    let resposta_serpro = json!({
+        "status": 200,
+        "mensagens": [],
+        "dados": "[]"
+    });
+    let (ambiente, mock) = ambiente_mock(&[(200, Some(resposta_serpro))]);
+    let escritorio = semear_escritorio(&ambiente.banco, "alfa");
+    semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
+    semear_cliente_para_integracao(&ambiente.banco, escritorio);
+    let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
+
+    let requisicao = Request::builder()
+        .method(Method::POST)
+        .uri("/api/v1/serpro/integra-contador/procuracoes/consultar")
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .header(header::CONTENT_TYPE, "application/json")
+        .header("x-real-ip", "10.9.0.1")
+        .body(Body::from(
+            json!({ "documentoContribuinte": "52998224725" }).to_string(),
+        ))
+        .expect("requisição válida");
+    let resposta = enviar(&ambiente.app, requisicao).await;
+    assert_eq!(resposta.status(), StatusCode::OK);
+    let corpo = corpo_json(resposta).await;
+    assert_eq!(corpo["statusSerpro"], 200);
+    assert_eq!(corpo["ambiente"], "TRIAL");
+    assert_eq!(corpo["estado"], "CONCLUIDO");
+
+    let captura = mock
+        .capturas_integra()
+        .pop()
+        .expect("a chamada Integra Contador deve chegar ao mock");
+    assert_eq!(captura.autorizacao, format!("Bearer {TOKEN_TRIAL}"));
+    assert_eq!(captura.operador.as_deref(), Some(CPF_OPERADOR));
+    assert_eq!(captura.corpo["contratante"]["numero"], "11222333000181");
+    assert_eq!(
+        captura.corpo["autorPedidoDados"]["numero"],
+        "11222333000181"
+    );
+    assert_eq!(captura.corpo["contribuinte"]["numero"], "52998224725");
+    let dados = captura.corpo["pedidoDados"]["dados"]
+        .as_str()
+        .expect("pedidoDados.dados deve permanecer string JSON");
+    let dados: Value = serde_json::from_str(dados).expect("dados deve conter JSON");
+    assert_eq!(dados["outorgante"], "52998224725");
+    assert_eq!(dados["tipoOutorgante"], "1");
+    assert_eq!(dados["outorgado"], "11222333000181");
+    assert_eq!(dados["tipoOutorgado"], "2");
+    assert_eq!(
+        contar(
+            &ambiente.banco,
+            "SELECT COUNT(*) AS total FROM chamadas_operacionais"
+        ),
+        1
+    );
 }
 
 #[tokio::test]

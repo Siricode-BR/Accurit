@@ -620,6 +620,67 @@ async fn portal_le_ambiente_do_proprio_escritorio_com_snapshot_e_sem_poder_troca
 }
 
 #[tokio::test]
+async fn portal_consulta_catalogo_integra_contador_protegido_e_conservador() {
+    let ambiente = ambiente();
+    let escritorio = semear_escritorio(&ambiente.banco, "alfa");
+    semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
+    semear_gestor(&ambiente.banco);
+
+    let sem_token = enviar(
+        &ambiente.app,
+        pedido(
+            Method::GET,
+            "/api/v1/serpro/integra-contador/status",
+            None,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(sem_token.status(), StatusCode::UNAUTHORIZED);
+
+    let token = token_de(&entrar_portal(&ambiente.app, "operador@alfa.test").await);
+    let resposta = enviar(
+        &ambiente.app,
+        pedido(
+            Method::GET,
+            "/api/v1/serpro/integra-contador/status",
+            None,
+            Some(&token),
+        ),
+    )
+    .await;
+    assert_eq!(resposta.status(), StatusCode::OK);
+    let corpo = corpo_json(resposta).await;
+    assert_eq!(corpo["ambienteEfetivo"], "TRIAL");
+    assert_eq!(corpo["producaoHabilitada"], false);
+    assert_eq!(corpo["assinaturaHabilitada"], false);
+    assert_eq!(
+        corpo["servicos"]
+            .as_array()
+            .expect("catálogo de serviços")
+            .iter()
+            .filter(|servico| servico["habilitado"] == true)
+            .count(),
+        1
+    );
+    assert_eq!(corpo["servicos"][1]["idServico"], "OBTERPROCURACAO41");
+    assert!(corpo["motivoBloqueioProducao"].is_string());
+
+    let gestor = token_de(&entrar_gestor(&ambiente.app).await);
+    let resposta = enviar(
+        &ambiente.app,
+        pedido(
+            Method::GET,
+            "/api/v1/serpro/integra-contador/status",
+            None,
+            Some(&gestor),
+        ),
+    )
+    .await;
+    assert_eq!(resposta.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
 async fn rotas_admin_serpro_exigem_audiencia_admin() {
     let ambiente = ambiente();
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");

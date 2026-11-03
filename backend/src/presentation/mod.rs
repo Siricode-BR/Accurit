@@ -6,6 +6,7 @@ pub mod divida_ativa;
 pub mod dto;
 pub mod error;
 pub mod handlers;
+pub mod integra_contador;
 pub mod middleware;
 pub mod routes;
 pub mod serpro;

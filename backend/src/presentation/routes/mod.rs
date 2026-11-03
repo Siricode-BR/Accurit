@@ -228,6 +228,57 @@ where
                 .with_state(serpro_state),
         );
 
+        let http_integra_contador = reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(
+                config.serpro.http_connect_timeout_secs,
+            ))
+            .timeout(std::time::Duration::from_secs(
+                config.serpro.http_request_timeout_secs,
+            ))
+            .build()
+            .expect("cliente HTTP Integra Contador deve inicializar");
+        let endpoints_integra_contador = std::sync::Arc::new(
+            crate::infrastructure::serpro::SerproEndpointResolverImpl::novo(config.serpro.clone()),
+        );
+        let repositorio_integra_contador =
+            crate::infrastructure::persistence::integra_contador::IntegraContadorRepositorioDiesel::novo(
+                pool.clone(),
+            );
+        let cliente_integra_contador = std::sync::Arc::new(
+            crate::infrastructure::integra_contador::ClienteIntegraContadorImpl::novo(
+                http_integra_contador,
+                endpoints_integra_contador,
+                config.serpro.operator_header_enabled,
+            ),
+        );
+        let executar_integra_contador = std::sync::Arc::new(
+            crate::application::integra_contador::ExecutarIntegraContadorUseCase::novo(
+                std::sync::Arc::new(repositorio_integra_contador.clone()),
+                cliente_integra_contador,
+                std::sync::Arc::new(repositorio_integra_contador.clone()),
+                std::sync::Arc::new(repositorio_integra_contador),
+                std::sync::Arc::new(
+                    crate::infrastructure::persistence::integra_contador::ProcuracaoNaoVerificavel,
+                ),
+                config.serpro.operator_header_enabled,
+            ),
+        );
+        let integra_contador_state =
+            crate::presentation::integra_contador::state::EstadoIntegraContador::novo(
+                executar_integra_contador,
+            );
+        api = api.nest(
+            "/serpro/integra-contador",
+            crate::presentation::integra_contador::construir(
+                integra_contador_state,
+                ExigirAudiencia::novo(
+                    auth_state.tokens.clone(),
+                    crate::domain::auth::Audiencia::Client,
+                ),
+                estado_ambiente.clone(),
+            ),
+        );
+
         // ===== Dívida Ativa (Fase 4, SPEC §4.3–§4.5) =====
         let http_serpro = reqwest::Client::builder()
             .connect_timeout(std::time::Duration::from_secs(

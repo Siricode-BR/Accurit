@@ -56,6 +56,10 @@ import { ClienteService, ListagemClientes, FiltroClientes, TipoCliente } from '.
             <mat-icon>search</mat-icon>
             Consultar Dívida Ativa
           </button>
+          <button mat-stroked-button color="primary" routerLink="/integra-contador">
+            <mat-icon>account_balance</mat-icon>
+            Integra Contador
+          </button>
         </div>
 
         @if (carregando()) {

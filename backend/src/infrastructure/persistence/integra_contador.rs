@@ -1,18 +1,17 @@
-use async_trait::async_trait;
 use diesel::prelude::*;
+use diesel::sql_types::{Bool, Integer, Jsonb, Nullable, Text, Uuid as SqlUuid};
 use serde_json::Value;
 use uuid::Uuid;
 
 use crate::application::integra_contador::ports::{
-    CatalogoEscritoriosIntegra, RepositorioIdempotencia, ReservaIdempotencia,
+    AuditoriaIntegraContador, CatalogoEscritoriosIntegra, ContextoIntegraContador,
+    EventoAuditoriaIntegra, EventoChamadaIntegra, RepositorioIdempotencia, ReservaIdempotencia,
+    ResultadoReservaIdempotencia,
 };
-use crate::application::serpro::ports::RepositorioError;
-use crate::domain::integra_contador::envelope::{IntegraContadorResponse, VerboIntegraContador};
+use crate::domain::integra_contador::envelope::Identificacao;
+use crate::domain::integra_contador::erros::ErroIntegraContador;
 use crate::domain::serpro::ambiente::AmbienteSerpro;
-use crate::infrastructure::persistence::pool::{DbConnection, DbPool};
-use crate::infrastructure::persistence::schema::{
-    escritorios as schema_escritorios, idempotencia_operacoes as schema_idempotencia,
-};
+use crate::infrastructure::persistence::pool::DbPool;
 
 #[derive(Clone)]
 pub struct IntegraContadorRepositorioDiesel {
@@ -24,209 +23,288 @@ impl IntegraContadorRepositorioDiesel {
         Self { pool }
     }
 
-    fn conexao(&self) -> Result<DbConnection, RepositorioError> {
-        self.pool.get().map_err(|_| RepositorioError::Indisponivel)
-    }
-
-    fn buscar_reserva(
+    fn conexao(
         &self,
-        escritorio: Uuid,
-        chave: &str,
-    ) -> Result<Option<ReservaDb>, RepositorioError> {
-        use schema_idempotencia::dsl::*;
-
-        idempotencia_operacoes
-            .filter(escritorio_id.eq(escritorio))
-            .filter(chave_idempotencia.eq(chave))
-            .select((payload_hash, estado, resposta_redigida, resposta_status))
-            .first::<ReservaDb>(&mut self.conexao()?)
-            .optional()
-            .map_err(|_| RepositorioError::Dados)
+    ) -> Result<
+        diesel::r2d2::PooledConnection<diesel::r2d2::ConnectionManager<diesel::PgConnection>>,
+        ErroIntegraContador,
+    > {
+        self.pool
+            .get()
+            .map_err(|_| ErroIntegraContador::Persistencia)
     }
 }
 
-#[derive(Queryable, Selectable)]
-#[diesel(table_name = crate::infrastructure::persistence::schema::idempotencia_operacoes)]
-struct ReservaDb {
-    payload_hash: String,
-    estado: String,
-    resposta_redigida: Option<Value>,
-    resposta_status: Option<i32>,
+#[derive(QueryableByName)]
+struct ContextoRow {
+    #[diesel(sql_type = Nullable<Text>)]
+    cnpj: Option<String>,
+    #[diesel(sql_type = Text)]
+    cpf_operador: String,
+    #[diesel(sql_type = Text)]
+    documento_contribuinte: String,
 }
 
-impl TryFrom<ReservaDb> for ReservaIdempotencia {
-    type Error = RepositorioError;
-
-    fn try_from(db: ReservaDb) -> Result<Self, Self::Error> {
-        let resposta = db
-            .resposta_redigida
-            .map(serde_json::from_value::<IntegraContadorResponse>)
-            .transpose()
-            .map_err(|_| RepositorioError::Dados)?;
-
-        Ok(Self {
-            payload_hash: db.payload_hash,
-            resposta,
-            http_status: db
-                .resposta_status
-                .and_then(|status| u16::try_from(status).ok()),
-            estado: db.estado,
-            criada_agora: false,
-        })
-    }
-}
-
-#[derive(Insertable)]
-#[diesel(table_name = crate::infrastructure::persistence::schema::idempotencia_operacoes)]
-struct NovaReserva<'a> {
-    id: Uuid,
-    escritorio_id: Uuid,
-    chave_idempotencia: &'a str,
-    verbo: &'a str,
-    id_sistema: &'a str,
-    id_servico: &'a str,
-    versao_sistema: &'a str,
-    ambiente: &'a str,
-    payload_hash: &'a str,
-    estado: &'a str,
-}
-
-#[async_trait]
-impl RepositorioIdempotencia for IntegraContadorRepositorioDiesel {
-    async fn verificar(
+#[async_trait::async_trait]
+impl CatalogoEscritoriosIntegra for IntegraContadorRepositorioDiesel {
+    async fn resolver_contexto(
         &self,
-        escritorio: Uuid,
-        chave: &str,
-    ) -> Result<Option<ReservaIdempotencia>, RepositorioError> {
+        escritorio_id: Uuid,
+        usuario_id: Uuid,
+        documento_contribuinte: &str,
+    ) -> Result<ContextoIntegraContador, ErroIntegraContador> {
+        let documento = crate::domain::clientes::CpfCnpj::novo(documento_contribuinte)
+            .map_err(|_| ErroIntegraContador::PayloadInvalido)?;
+        let documento = documento.como_str().to_owned();
         let repositorio = self.clone();
-        let chave = chave.to_owned();
+
         tokio::task::spawn_blocking(move || {
-            repositorio
-                .buscar_reserva(escritorio, &chave)?
-                .map(ReservaIdempotencia::try_from)
-                .transpose()
+            let mut conexao = repositorio.conexao()?;
+            let linha = diesel::sql_query(
+                "SELECT e.cnpj, u.cpf AS cpf_operador, c.cpf_cnpj AS documento_contribuinte \
+                 FROM escritorios e \
+                 INNER JOIN usuarios u \
+                   ON u.escritorio_id = e.id AND u.id = $2 AND u.ativo = TRUE \
+                 INNER JOIN clientes c \
+                   ON c.escritorio_id = e.id AND c.cpf_cnpj = $3 \
+                 WHERE e.id = $1",
+            )
+            .bind::<SqlUuid, _>(escritorio_id)
+            .bind::<SqlUuid, _>(usuario_id)
+            .bind::<Text, _>(documento)
+            .get_result::<ContextoRow>(&mut conexao)
+            .map_err(|_| ErroIntegraContador::ConfiguracaoIncompleta)?;
+
+            let cnpj = linha
+                .cnpj
+                .ok_or(ErroIntegraContador::ConfiguracaoIncompleta)?;
+            let contratante = Identificacao::nova(&cnpj)
+                .map_err(|_| ErroIntegraContador::ConfiguracaoIncompleta)?;
+            let contribuinte = Identificacao::nova(&linha.documento_contribuinte)
+                .map_err(|_| ErroIntegraContador::ConfiguracaoIncompleta)?;
+
+            Ok(ContextoIntegraContador {
+                contratante: contratante.clone(),
+                autor_pedido_dados: contratante,
+                contribuinte,
+                cpf_operador: Some(linha.cpf_operador),
+            })
         })
         .await
-        .map_err(|_| RepositorioError::Dados)?
+        .map_err(|_| ErroIntegraContador::Persistencia)?
     }
+}
 
+#[derive(QueryableByName)]
+struct IdempotenciaRow {
+    #[diesel(sql_type = Text)]
+    verbo: String,
+    #[diesel(sql_type = Text)]
+    id_sistema: String,
+    #[diesel(sql_type = Text)]
+    id_servico: String,
+    #[diesel(sql_type = Text)]
+    versao_sistema: String,
+    #[diesel(sql_type = Text)]
+    ambiente: String,
+    #[diesel(sql_type = Text)]
+    payload_hash: String,
+    #[diesel(sql_type = Text)]
+    estado: String,
+    #[diesel(sql_type = Nullable<Integer>)]
+    resposta_status: Option<i32>,
+    #[diesel(sql_type = Nullable<Jsonb>)]
+    resposta_redigida: Option<Value>,
+}
+
+#[async_trait::async_trait]
+impl RepositorioIdempotencia for IntegraContadorRepositorioDiesel {
     async fn reservar(
         &self,
-        escritorio: Uuid,
-        chave: &str,
-        verbo: VerboIntegraContador,
-        sistema: &str,
-        servico: &str,
-        versao: &str,
-        ambiente: AmbienteSerpro,
-        hash: &str,
-    ) -> Result<ReservaIdempotencia, RepositorioError> {
+        reserva: &ReservaIdempotencia,
+    ) -> Result<ResultadoReservaIdempotencia, ErroIntegraContador> {
         let repositorio = self.clone();
-        let chave = chave.to_owned();
-        let sistema = sistema.to_owned();
-        let servico = servico.to_owned();
-        let versao = versao.to_owned();
-        let hash = hash.to_owned();
-        let verbo_str = verbo.path().to_owned();
-        let ambiente_str = ambiente.as_str().to_owned();
+        let reserva = reserva.clone();
+
         tokio::task::spawn_blocking(move || {
-            use schema_idempotencia::dsl::*;
-
             let mut conexao = repositorio.conexao()?;
-            let inseridas = diesel::insert_into(idempotencia_operacoes)
-                .values(NovaReserva {
-                    id: Uuid::now_v7(),
-                    escritorio_id: escritorio,
-                    chave_idempotencia: &chave,
-                    verbo: &verbo_str,
-                    id_sistema: &sistema,
-                    id_servico: &servico,
-                    versao_sistema: &versao,
-                    ambiente: &ambiente_str,
-                    payload_hash: &hash,
-                    estado: "RESERVADA",
-                })
-                .on_conflict((escritorio_id, chave_idempotencia))
-                .do_nothing()
-                .execute(&mut conexao)
-                .map_err(|_| RepositorioError::Dados)?;
+            let inseridos = diesel::sql_query(
+                "INSERT INTO idempotencia_operacoes \
+                 (id, escritorio_id, chave_idempotencia, verbo, id_sistema, id_servico, \
+                  versao_sistema, ambiente, payload_hash, estado) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'EM_ANDAMENTO') \
+                 ON CONFLICT (escritorio_id, chave_idempotencia) DO NOTHING",
+            )
+            .bind::<SqlUuid, _>(Uuid::now_v7())
+            .bind::<SqlUuid, _>(reserva.escritorio_id)
+            .bind::<Text, _>(&reserva.chave)
+            .bind::<Text, _>(reserva.verbo.como_str())
+            .bind::<Text, _>(&reserva.id_sistema)
+            .bind::<Text, _>(&reserva.id_servico)
+            .bind::<Text, _>(&reserva.versao_sistema)
+            .bind::<Text, _>(reserva.ambiente.as_str())
+            .bind::<Text, _>(&reserva.payload_hash)
+            .execute(&mut conexao)
+            .map_err(|_| ErroIntegraContador::Persistencia)?;
+            if inseridos == 1 {
+                return Ok(ResultadoReservaIdempotencia::Nova);
+            }
 
-            let reserva = idempotencia_operacoes
-                .filter(escritorio_id.eq(escritorio))
-                .filter(chave_idempotencia.eq(&chave))
-                .select((payload_hash, estado, resposta_redigida, resposta_status))
-                .first::<ReservaDb>(&mut conexao)
-                .map_err(|_| RepositorioError::Dados)?;
-            let mut reserva = ReservaIdempotencia::try_from(reserva)?;
-            reserva.criada_agora = inseridas == 1;
-            Ok(reserva)
+            let existente = diesel::sql_query(
+                "SELECT verbo, id_sistema, id_servico, versao_sistema, ambiente, payload_hash, \
+                        estado, resposta_status, resposta_redigida \
+                 FROM idempotencia_operacoes \
+                 WHERE escritorio_id = $1 AND chave_idempotencia = $2",
+            )
+            .bind::<SqlUuid, _>(reserva.escritorio_id)
+            .bind::<Text, _>(&reserva.chave)
+            .get_result::<IdempotenciaRow>(&mut conexao)
+            .map_err(|_| ErroIntegraContador::Persistencia)?;
+
+            let mesmo_pedido = existente.verbo == reserva.verbo.como_str()
+                && existente.id_sistema == reserva.id_sistema
+                && existente.id_servico == reserva.id_servico
+                && existente.versao_sistema == reserva.versao_sistema
+                && existente.ambiente == reserva.ambiente.as_str()
+                && existente.payload_hash == reserva.payload_hash;
+            if !mesmo_pedido {
+                return Err(ErroIntegraContador::ConflitoIdempotencia);
+            }
+            if existente.estado == "CONCLUIDO" || existente.estado == "REJEITADO" {
+                return Ok(ResultadoReservaIdempotencia::Concluida {
+                    status: existente.resposta_status,
+                    resposta_redigida: existente.resposta_redigida,
+                });
+            }
+            Err(ErroIntegraContador::ConflitoIdempotencia)
         })
         .await
-        .map_err(|_| RepositorioError::Dados)?
+        .map_err(|_| ErroIntegraContador::Persistencia)?
     }
 
-    async fn finalizar(
+    async fn atualizar(
         &self,
-        escritorio: Uuid,
-        chave: &str,
-        novo_estado: &str,
-        resposta: Option<&IntegraContadorResponse>,
-        status_http: Option<u16>,
-    ) -> Result<(), RepositorioError> {
-        let resposta = resposta
-            .map(serde_json::to_value)
-            .transpose()
-            .map_err(|_| RepositorioError::Dados)?;
-        let status_http = status_http.map(i32::from);
-        let chave = chave.to_owned();
-        let novo_estado = novo_estado.to_owned();
+        reserva: &ReservaIdempotencia,
+        estado: &str,
+        status: Option<i32>,
+        resposta_redigida: Option<Value>,
+    ) -> Result<(), ErroIntegraContador> {
         let repositorio = self.clone();
+        let reserva = reserva.clone();
+        let estado = estado.to_owned();
 
         tokio::task::spawn_blocking(move || {
-            use schema_idempotencia::dsl::*;
-
             let mut conexao = repositorio.conexao()?;
-            let atualizadas = diesel::update(
-                idempotencia_operacoes
-                    .filter(escritorio_id.eq(escritorio))
-                    .filter(chave_idempotencia.eq(chave))
-                    .filter(estado.eq("RESERVADA")),
+            let atualizados = diesel::sql_query(
+                "UPDATE idempotencia_operacoes \
+                 SET estado = $1, resposta_status = $2, resposta_redigida = $3, \
+                     processado_em = CASE \
+                       WHEN $1 IN ('CONCLUIDO', 'REJEITADO', 'INDETERMINADO') THEN NOW() \
+                       ELSE processado_em END \
+                 WHERE escritorio_id = $4 AND chave_idempotencia = $5 AND payload_hash = $6",
             )
-            .set((
-                estado.eq(novo_estado),
-                resposta_redigida.eq(resposta),
-                resposta_status.eq(status_http),
-                processado_em.eq(Some(chrono::Utc::now())),
-            ))
+            .bind::<Text, _>(estado)
+            .bind::<Nullable<Integer>, _>(status)
+            .bind::<Nullable<Jsonb>, _>(resposta_redigida)
+            .bind::<SqlUuid, _>(reserva.escritorio_id)
+            .bind::<Text, _>(reserva.chave)
+            .bind::<Text, _>(reserva.payload_hash)
             .execute(&mut conexao)
-            .map_err(|_| RepositorioError::Dados)?;
-
-            if atualizadas != 1 {
-                return Err(RepositorioError::Dados);
+            .map_err(|_| ErroIntegraContador::Persistencia)?;
+            if atualizados != 1 {
+                return Err(ErroIntegraContador::Persistencia);
             }
             Ok(())
         })
         .await
-        .map_err(|_| RepositorioError::Dados)?
+        .map_err(|_| ErroIntegraContador::Persistencia)?
     }
 }
 
-#[async_trait]
-impl CatalogoEscritoriosIntegra for IntegraContadorRepositorioDiesel {
-    async fn buscar_cnpj(&self, escritorio: Uuid) -> Result<Option<String>, RepositorioError> {
+#[async_trait::async_trait]
+impl AuditoriaIntegraContador for IntegraContadorRepositorioDiesel {
+    async fn registrar_chamada(
+        &self,
+        evento: &EventoChamadaIntegra,
+    ) -> Result<(), ErroIntegraContador> {
         let repositorio = self.clone();
-        tokio::task::spawn_blocking(move || {
-            use schema_escritorios::dsl::*;
+        let evento = evento.clone();
 
-            escritorios
-                .filter(id.eq(escritorio))
-                .select(cnpj)
-                .first::<Option<String>>(&mut repositorio.conexao()?)
-                .optional()
-                .map(|resultado| resultado.flatten())
-                .map_err(|_| RepositorioError::Dados)
+        tokio::task::spawn_blocking(move || {
+            let mut conexao = repositorio.conexao()?;
+            diesel::sql_query(
+                "INSERT INTO chamadas_operacionais \
+                 (id, escritorio_id, usuario_id, verbo, id_sistema, id_servico, ambiente, \
+                  estado, status_code, referencia_resposta, request_id, bilhetavel) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+            )
+            .bind::<SqlUuid, _>(Uuid::now_v7())
+            .bind::<SqlUuid, _>(evento.escritorio_id)
+            .bind::<Nullable<SqlUuid>, _>(Some(evento.usuario_id))
+            .bind::<Text, _>(evento.verbo.como_str())
+            .bind::<Text, _>(evento.id_sistema)
+            .bind::<Text, _>(evento.id_servico)
+            .bind::<Text, _>(evento.ambiente.as_str())
+            .bind::<Text, _>(evento.estado)
+            .bind::<Nullable<Integer>, _>(evento.status_code)
+            .bind::<Nullable<Text>, _>(evento.referencia_resposta)
+            .bind::<Nullable<Text>, _>(Some(evento.request_id))
+            .bind::<Bool, _>(evento.bilhetavel)
+            .execute(&mut conexao)
+            .map_err(|_| ErroIntegraContador::Persistencia)?;
+            Ok(())
         })
         .await
-        .map_err(|_| RepositorioError::Dados)?
+        .map_err(|_| ErroIntegraContador::Persistencia)?
+    }
+
+    async fn registrar_mutacao(
+        &self,
+        evento: &EventoAuditoriaIntegra,
+    ) -> Result<(), ErroIntegraContador> {
+        let repositorio = self.clone();
+        let evento = evento.clone();
+
+        tokio::task::spawn_blocking(move || {
+            let mut conexao = repositorio.conexao()?;
+            let valores = serde_json::json!({
+                "verbo": evento.verbo.como_str(),
+                "idSistema": evento.id_sistema,
+                "idServico": evento.id_servico,
+                "ambiente": evento.ambiente.as_str(),
+                "estado": evento.estado,
+                "payloadHash": evento.payload_hash,
+            });
+            diesel::sql_query(
+                "INSERT INTO auditoria_eventos \
+                 (id, escritorio_id, usuario_id, acao, entidade, entidade_id, valor_novo) \
+                 VALUES ($1, $2, $3, $4, 'INTEGRA_CONTADOR', $5, $6)",
+            )
+            .bind::<SqlUuid, _>(Uuid::now_v7())
+            .bind::<SqlUuid, _>(evento.escritorio_id)
+            .bind::<Nullable<SqlUuid>, _>(Some(evento.usuario_id))
+            .bind::<Text, _>(evento.acao)
+            .bind::<Nullable<SqlUuid>, _>(Some(Uuid::now_v7()))
+            .bind::<Nullable<Jsonb>, _>(Some(valores))
+            .execute(&mut conexao)
+            .map_err(|_| ErroIntegraContador::Persistencia)?;
+            Ok(())
+        })
+        .await
+        .map_err(|_| ErroIntegraContador::Persistencia)?
+    }
+}
+
+pub struct ProcuracaoNaoVerificavel;
+
+#[async_trait::async_trait]
+impl crate::application::integra_contador::ports::ValidadorProcuracao for ProcuracaoNaoVerificavel {
+    async fn validar(
+        &self,
+        _contexto: &ContextoIntegraContador,
+        _codigo_servico: &str,
+        _ambiente: AmbienteSerpro,
+    ) -> Result<bool, ErroIntegraContador> {
+        Ok(false)
     }
 }

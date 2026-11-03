@@ -42,6 +42,15 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'integra-contador',
+    title: 'Integra Contador | Accurit Cliente',
+    canActivate: [autenticadoGuard],
+    loadComponent: () =>
+      import('./features/integra-contador/integra-contador.component').then(
+        (m) => m.IntegraContadorComponent,
+      ),
+  },
+  {
     path: 'clientes',
     title: 'Clientes | Accurit Cliente',
     canActivate: [autenticadoGuard],
