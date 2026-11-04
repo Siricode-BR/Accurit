@@ -506,4 +506,25 @@ mod tests {
         assert!(!bilhetavel(VerboIntegraContador::Apoiar, 200));
         assert!(bilhetavel(VerboIntegraContador::Declarar, 202));
     }
+
+    #[test]
+    fn regras_bilhetamento_cinco_verbos() {
+        // Apoiar e Monitorar nunca são bilhetados
+        assert!(!bilhetavel(VerboIntegraContador::Apoiar, 200));
+        assert!(!bilhetavel(VerboIntegraContador::Monitorar, 200));
+
+        // Consultar, Declarar, Emitir são bilhetados em 200 e 202
+        assert!(bilhetavel(VerboIntegraContador::Consultar, 200));
+        assert!(bilhetavel(VerboIntegraContador::Declarar, 200));
+        assert!(bilhetavel(VerboIntegraContador::Emitir, 200));
+        assert!(bilhetavel(VerboIntegraContador::Declarar, 202));
+        assert!(bilhetavel(VerboIntegraContador::Emitir, 202));
+
+        // Códigos não bilhetados em nenhum verbo
+        for status in [204, 304, 400, 401, 404, 429, 500, 503, 504] {
+            assert!(!bilhetavel(VerboIntegraContador::Consultar, status));
+            assert!(!bilhetavel(VerboIntegraContador::Declarar, status));
+            assert!(!bilhetavel(VerboIntegraContador::Emitir, status));
+        }
+    }
 }

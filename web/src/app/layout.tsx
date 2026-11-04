@@ -9,8 +9,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="pt-BR" className="h-full antialiased">
-      <body className="flex min-h-full flex-col">{children}</body>
+    <html lang="pt-BR" className="min-h-full antialiased">
+      <body className="flex min-h-dvh flex-col">{children}</body>
     </html>
   );
 }

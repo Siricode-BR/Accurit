@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
 import { AuthService } from '../../core/auth/auth.service';
 import { SessionStore } from '../../core/auth/session.store';
@@ -11,7 +11,7 @@ type EstadoSaude = 'carregando' | 'ok' | 'indisponivel';
 @Component({
   selector: 'app-inicio',
   standalone: true,
-  imports: [SeloAmbienteComponent],
+  imports: [RouterLink, SeloAmbienteComponent],
   templateUrl: './inicio.html',
   styleUrl: './inicio.css',
 })

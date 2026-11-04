@@ -280,4 +280,49 @@ mod tests {
         let token = SecretString::from("segredo");
         assert!(!format!("{token:?}").contains("segredo"));
     }
+
+    #[test]
+    fn url_do_verbo_mapeia_cinco_verbos() {
+        let endpoint = EndpointSerpro {
+            produto: ProdutoSerpro::IntegraContador,
+            ambiente: AmbienteSerpro::Trial,
+            url_base: Url::parse(
+                "https://gateway.apiserpro.serpro.gov.br/integra-contador-trial/v1",
+            )
+            .unwrap(),
+            autenticacao: EstrategiaAutenticacaoSerpro::BearerFixo(secrecy::SecretString::from(
+                "token",
+            )),
+        };
+        assert_eq!(
+            url_do_verbo(&endpoint, VerboIntegraContador::Apoiar)
+                .unwrap()
+                .as_str(),
+            "https://gateway.apiserpro.serpro.gov.br/integra-contador-trial/v1/Apoiar"
+        );
+        assert_eq!(
+            url_do_verbo(&endpoint, VerboIntegraContador::Consultar)
+                .unwrap()
+                .as_str(),
+            "https://gateway.apiserpro.serpro.gov.br/integra-contador-trial/v1/Consultar"
+        );
+        assert_eq!(
+            url_do_verbo(&endpoint, VerboIntegraContador::Declarar)
+                .unwrap()
+                .as_str(),
+            "https://gateway.apiserpro.serpro.gov.br/integra-contador-trial/v1/Declarar"
+        );
+        assert_eq!(
+            url_do_verbo(&endpoint, VerboIntegraContador::Emitir)
+                .unwrap()
+                .as_str(),
+            "https://gateway.apiserpro.serpro.gov.br/integra-contador-trial/v1/Emitir"
+        );
+        assert_eq!(
+            url_do_verbo(&endpoint, VerboIntegraContador::Monitorar)
+                .unwrap()
+                .as_str(),
+            "https://gateway.apiserpro.serpro.gov.br/integra-contador-trial/v1/Monitorar"
+        );
+    }
 }

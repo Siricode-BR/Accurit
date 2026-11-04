@@ -35,6 +35,13 @@ import { ConfirmaProducaoDialog, ConfirmacaoProducaoDados } from './confirma-pro
         <mat-card-subtitle>Gerencie os escritórios cadastrados na plataforma</mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
+        <div class="escopo-ambiente" role="note">
+          <mat-icon aria-hidden="true">info_outline</mat-icon>
+          <p>
+            O ambiente SERPRO é compartilhado pelo Integra Contador e pela Consulta Dívida Ativa.
+            A produção da Dívida Ativa continua bloqueada até confirmação contratual.
+          </p>
+        </div>
         <div class="header-actions">
           <button mat-raised-button color="primary" routerLink="/tenants/novo">
             <mat-icon>add</mat-icon>
@@ -63,8 +70,11 @@ import { ConfirmaProducaoDialog, ConfirmacaoProducaoDados } from './confirma-pro
         } @else {
           <table mat-table [dataSource]="store.tenants()" class="tenants-table">
             <ng-container matColumnDef="nome">
-              <th mat-header-cell *matHeaderCellDef>Nome (slug)</th>
-              <td mat-cell *matCellDef="let tenant">{{ tenant.nome }} ({{ tenant.slug }})</td>
+              <th mat-header-cell *matHeaderCellDef>Escritório</th>
+              <td mat-cell *matCellDef="let tenant">
+                <strong>{{ tenant.nome }}</strong>
+                <span class="slug">{{ tenant.slug }}</span>
+              </td>
             </ng-container>
 
             <ng-container matColumnDef="serpro">
@@ -77,9 +87,10 @@ import { ConfirmaProducaoDialog, ConfirmacaoProducaoDados } from './confirma-pro
                   [checked]="tenant.modoTrialSerpro"
                   [disabled]="store.trocaEmAndamento(tenant.id)"
                   [matTooltip]="tooltipDoToggle(tenant)"
+                  [attr.aria-label]="tooltipDoToggle(tenant) + ' para ' + tenant.nome"
                   (change)="trocar(tenant, $event)"
                 >
-                  <span class="sr-only">Alternar trial</span>
+                  <span class="sr-only">Alternar ambiente compartilhado</span>
                 </mat-slide-toggle>
               </td>
             </ng-container>
@@ -125,6 +136,58 @@ import { ConfirmaProducaoDialog, ConfirmacaoProducaoDados } from './confirma-pro
     </mat-card>
   `,
   styles: `
+    :host {
+      display: block;
+      color: var(--text-primary);
+    }
+
+    mat-card {
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-card);
+      background: var(--surface-raised);
+      box-shadow: none;
+    }
+
+    mat-card-header {
+      padding: 8px 8px 0;
+    }
+
+    mat-card-title {
+      font-size: 1.5rem;
+      font-weight: 650;
+      letter-spacing: -0.025em;
+    }
+
+    mat-card-subtitle {
+      color: var(--text-secondary);
+    }
+
+    mat-card-content {
+      padding-top: 20px;
+    }
+
+    .escopo-ambiente {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 20px;
+      border: 1px solid var(--state-info-surface);
+      border-radius: var(--radius-control);
+      background: var(--state-info-surface);
+      padding: 12px 16px;
+      color: var(--state-info);
+      font-size: 0.875rem;
+    }
+
+    .escopo-ambiente mat-icon {
+      flex: 0 0 auto;
+      margin-top: 1px;
+    }
+
+    .escopo-ambiente p {
+      margin: 0;
+    }
+
     .header-actions {
       margin-bottom: 16px;
     }
@@ -143,7 +206,7 @@ import { ConfirmaProducaoDialog, ConfirmacaoProducaoDados } from './confirma-pro
       align-items: center;
       padding: 48px;
       text-align: center;
-      color: #666;
+      color: var(--text-secondary);
       gap: 16px;
 
       mat-icon {
@@ -155,26 +218,48 @@ import { ConfirmaProducaoDialog, ConfirmacaoProducaoDados } from './confirma-pro
 
     .tenants-table {
       width: 100%;
+      background: transparent;
+    }
+
+    .tenants-table th {
+      background: var(--surface-subtle);
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .tenants-table td {
+      border-bottom-color: var(--border-subtle);
+      color: var(--text-primary);
+    }
+
+    .slug {
+      display: block;
+      margin-top: 2px;
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
     }
 
     .badge {
       display: inline-block;
       margin-right: 12px;
       padding: 4px 8px;
-      border-radius: 4px;
+      border-radius: 999px;
       font-size: 12px;
-      font-weight: 500;
+      font-weight: 700;
       text-transform: uppercase;
     }
 
     .badge.trial {
-      background-color: #fff3e0;
-      color: #e65100;
+      background: var(--env-trial-surface);
+      color: var(--env-trial);
     }
 
     .badge.producao {
-      background-color: #e8f5e9;
-      color: #2e7d32;
+      background: var(--env-producao-surface);
+      color: var(--env-producao);
     }
 
     .sr-only {
@@ -195,6 +280,16 @@ import { ConfirmaProducaoDialog, ConfirmacaoProducaoDados } from './confirma-pro
 
     .mat-column-serpro {
       text-align: center;
+    }
+
+    @media (max-width: 640px) {
+      mat-card-content {
+        padding-inline: 12px;
+      }
+
+      .escopo-ambiente {
+        padding: 10px 12px;
+      }
     }
   `,
 })

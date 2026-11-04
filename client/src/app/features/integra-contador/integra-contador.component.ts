@@ -155,37 +155,204 @@ import {
     </main>
   `,
   styles: `
-    :host { display: block; min-height: 100dvh; background: #f8fafc; color: #0f172a; }
-    .pagina { max-width: 860px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
-    header { margin-bottom: 1.5rem; }
-    h1 { margin: .25rem 0; font-size: clamp(2rem, 5vw, 3rem); }
-    h2 { margin: 0; font-size: 1.125rem; }
-    p { line-height: 1.5; }
-    .sobretitulo { margin: 0; color: #64748b; font-size: .75rem; font-weight: 700; text-transform: uppercase; }
-    .descricao { max-width: 44rem; color: #475569; }
-    .cartao { margin-top: 1rem; border: 1px solid #e2e8f0; border-radius: .75rem; background: white; padding: 1.25rem; }
-    .linha { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
-    .ambiente, .rotulo { border-radius: 999px; padding: .25rem .625rem; font-size: .75rem; font-weight: 700; }
-    .ambiente { background: #dcfce7; color: #166534; }
-    .ambiente--trial { background: #fef3c7; color: #92400e; }
-    .aviso { border-left: 4px solid #d97706; background: #fffbeb; padding: .75rem; color: #78350f; }
-    .servicos { display: grid; gap: .5rem; margin: 1rem 0 0; padding: 0; list-style: none; }
-    .servicos li { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-top: 1px solid #e2e8f0; padding: .75rem 0; }
-    .servicos p { margin: .25rem 0 0; color: #64748b; font-size: .875rem; }
-    .rotulo--ok { background: #dcfce7; color: #166534; }
-    .rotulo--pendente { background: #f1f5f9; color: #475569; }
-    label { display: block; margin: 1rem 0 .4rem; font-weight: 600; }
-    input { min-width: 0; flex: 1; border: 1px solid #cbd5e1; border-radius: .5rem; padding: .7rem; }
-    button { border: 0; border-radius: .5rem; background: #1d4ed8; padding: .7rem 1rem; color: white; font-weight: 700; cursor: pointer; }
-    button:disabled { cursor: wait; opacity: .6; }
-    .mensagem { margin: 1rem 0; color: #475569; }
-    .mensagem--erro { border-left: 4px solid #dc2626; background: #fef2f2; padding: .75rem; color: #991b1b; }
-    .resultado { margin-top: 1rem; border-radius: .5rem; background: #f8fafc; padding: .9rem; }
-    .resultado p { margin-bottom: 0; color: #475569; }
-    .vazio { color: #64748b; }
+    :host {
+      display: block;
+      min-height: 100dvh;
+      background: var(--surface-canvas);
+      color: var(--text-primary);
+    }
+
+    .pagina {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2.5rem clamp(1rem, 4vw, 2.5rem) 4rem;
+    }
+
+    header {
+      margin-bottom: 2rem;
+    }
+
+    h1 {
+      margin: 0.25rem 0;
+      font-size: clamp(2rem, 5vw, 3rem);
+      letter-spacing: -0.035em;
+      line-height: 1.1;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 1.125rem;
+      letter-spacing: -0.015em;
+    }
+
+    p {
+      line-height: 1.5;
+    }
+
+    .sobretitulo {
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .descricao {
+      max-width: 44rem;
+      color: var(--text-secondary);
+    }
+
+    .cartao {
+      margin-top: 1rem;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-card);
+      background: var(--surface-raised);
+      padding: clamp(1rem, 3vw, 1.5rem);
+    }
+
+    .linha {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .ambiente,
+    .rotulo {
+      border-radius: 999px;
+      padding: 0.25rem 0.625rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+
+    .ambiente {
+      background: var(--env-producao-surface);
+      color: var(--env-producao);
+    }
+
+    .ambiente--trial {
+      background: var(--env-trial-surface);
+      color: var(--env-trial);
+    }
+
+    .aviso {
+      border-left: 4px solid var(--state-warning);
+      border-radius: 0 var(--radius-control) var(--radius-control) 0;
+      background: var(--state-warning-surface);
+      padding: 0.75rem;
+      color: var(--state-warning);
+    }
+
+    .servicos {
+      display: grid;
+      gap: 0.5rem;
+      margin: 1rem 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .servicos li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      border-top: 1px solid var(--border-subtle);
+      padding: 0.875rem 0;
+    }
+
+    .servicos p {
+      margin: 0.25rem 0 0;
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+    }
+
+    .rotulo--ok {
+      background: var(--state-success-surface);
+      color: var(--state-success);
+    }
+
+    .rotulo--pendente {
+      background: var(--surface-subtle);
+      color: var(--text-secondary);
+    }
+
+    label {
+      display: block;
+      margin: 1rem 0 0.4rem;
+      font-weight: 600;
+    }
+
+    input {
+      min-width: 0;
+      flex: 1;
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-control);
+      background: var(--surface-raised);
+      padding: 0.75rem;
+      color: var(--text-primary);
+    }
+
+    button {
+      min-height: 2.75rem;
+      border: 0;
+      border-radius: var(--radius-control);
+      background: var(--action-primary);
+      padding: 0.7rem 1rem;
+      color: var(--action-on-primary);
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--action-primary-hover);
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.6;
+    }
+
+    .mensagem {
+      margin: 1rem 0;
+      color: var(--text-secondary);
+    }
+
+    .mensagem--erro {
+      border-left: 4px solid var(--state-danger);
+      border-radius: 0 var(--radius-control) var(--radius-control) 0;
+      background: var(--state-danger-surface);
+      padding: 0.75rem;
+      color: var(--state-danger);
+    }
+
+    .resultado {
+      margin-top: 1rem;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-control);
+      background: var(--surface-subtle);
+      padding: 1rem;
+    }
+
+    .resultado p {
+      margin-bottom: 0;
+      color: var(--text-secondary);
+    }
+
+    .vazio {
+      color: var(--text-secondary);
+    }
+
     @media (max-width: 540px) {
-      .linha { align-items: stretch; flex-direction: column; }
-      .servicos li { align-items: flex-start; flex-direction: column; }
+      .linha {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .servicos li {
+        align-items: flex-start;
+        flex-direction: column;
+      }
     }
   `,
 })

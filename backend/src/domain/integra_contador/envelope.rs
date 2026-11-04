@@ -131,4 +131,25 @@ mod tests {
     fn rejeita_identificacao_invalida() {
         assert!(Identificacao::nova("00000000000").is_err());
     }
+
+    #[test]
+    fn cobre_os_cinco_verbos_e_suas_regras() {
+        assert_eq!(VerboIntegraContador::Apoiar.como_str(), "Apoiar");
+        assert_eq!(VerboIntegraContador::Consultar.como_str(), "Consultar");
+        assert_eq!(VerboIntegraContador::Declarar.como_str(), "Declarar");
+        assert_eq!(VerboIntegraContador::Emitir.como_str(), "Emitir");
+        assert_eq!(VerboIntegraContador::Monitorar.como_str(), "Monitorar");
+
+        assert!(!VerboIntegraContador::Apoiar.exige_confirmacao());
+        assert!(!VerboIntegraContador::Consultar.exige_confirmacao());
+        assert!(VerboIntegraContador::Declarar.exige_confirmacao());
+        assert!(VerboIntegraContador::Emitir.exige_confirmacao());
+        assert!(!VerboIntegraContador::Monitorar.exige_confirmacao());
+
+        assert!(VerboIntegraContador::Apoiar.pode_repetir_leitura());
+        assert!(VerboIntegraContador::Consultar.pode_repetir_leitura());
+        assert!(!VerboIntegraContador::Declarar.pode_repetir_leitura());
+        assert!(!VerboIntegraContador::Emitir.pode_repetir_leitura());
+        assert!(VerboIntegraContador::Monitorar.pode_repetir_leitura());
+    }
 }
