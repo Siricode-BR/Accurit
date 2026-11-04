@@ -16,6 +16,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+COPY --from=design-system tokens.css /design-system/tokens.css
 
 RUN npm run build
 
@@ -32,6 +33,7 @@ RUN addgroup --system --gid 1001 nodejs \
     && adduser --system --uid 1001 --ingroup nodejs nextjs
 
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+RUN if [ -d /app/web ]; then cp -r /app/web/. /app/ && rm -rf /app/web && chown -R nextjs:nodejs /app; fi
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 

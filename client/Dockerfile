@@ -16,6 +16,7 @@ ARG BASE_HREF=/app/
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+COPY --from=design-system tokens.css /design-system/tokens.css
 
 RUN npm run build -- --configuration production --base-href="$BASE_HREF"
 
