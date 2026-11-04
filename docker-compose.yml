@@ -89,8 +89,6 @@ services:
   web:
     build:
       context: ./web
-      additional_contexts:
-        design-system: ./design-system
     container_name: accurit-web
     restart: unless-stopped
     init: true
@@ -111,8 +109,6 @@ services:
   admin:
     build:
       context: ./admin
-      additional_contexts:
-        design-system: ./design-system
       args:
         BASE_HREF: /admin/
     container_name: accurit-admin
@@ -129,8 +125,6 @@ services:
   client:
     build:
       context: ./client
-      additional_contexts:
-        design-system: ./design-system
       args:
         BASE_HREF: /app/
     container_name: accurit-client

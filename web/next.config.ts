@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-import { resolve } from "node:path";
 
 const nextConfig: NextConfig = {
   output: "standalone",
@@ -7,7 +6,6 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {
-    root: resolve(process.cwd(), ".."),
     rules: {
       "*.css": {
         loaders: ["@tailwindcss/turbopack"],

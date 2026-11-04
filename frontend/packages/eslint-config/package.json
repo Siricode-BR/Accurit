@@ -1,0 +1,21 @@
+{
+  "name": "@repo/eslint-config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./angular": "./angular.js",
+    "./library": "./library.js"
+  },
+  "files": [
+    "angular.js",
+    "library.js"
+  ],
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "angular-eslint": "22.2.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-config-turbo": "2.10.12",
+    "typescript-eslint": "8.69.0"
+  }
+}
