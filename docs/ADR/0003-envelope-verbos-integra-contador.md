@@ -13,7 +13,7 @@ O Integra Contador é uma plataforma SERPRO orientada a serviços. Todas as oper
 Os cinco verbos operacionais são:
 
 | Verbo | Método | Path | Uso |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Apoiar | `POST` | `/Apoiar` | Serviços auxiliares de suporte à solução |
 | Consultar | `POST` | `/Consultar` | Consulta de dados autorizados |
 | Declarar | `POST` | `/Declarar` | Entrega/transmissão de declaração |
@@ -182,7 +182,7 @@ contribuinte**, o backend executa uma chamada de pré-validação:
 Mapa de referência (confirmar no catálogo/PDF vigente):
 
 | Sistema | Código(s) de procuração | Serviços de referência |
-|---|---|---|
+| --- | --- | --- |
 | PGDASD (inclui DEFIS) | `00146` | `CONSDECLARACAO13`, `TRANSDECLARACAO11`, `CONSEXTRATO16` |
 | DCTFWeb | `00103` | `GERARGUIA31`, `TRANSDECLARACAO310` |
 | SITFIS | `00002` | `RELATORIOSITFIS92`, `SOLICITARPROTOCOLO91` |
@@ -258,7 +258,7 @@ Os headers são injetados exclusivamente pelo backend. O frontend não recebe, n
 ### 8. Mapeamento de erros
 
 | Situação | Tratamento |
-|---|---|
+| --- | --- |
 | `400` / `EntradaIncorreta-ICGERENCIADOR-*` | Erro de validação interno; não repetir; registrar detalhe redigido |
 | `401` | Renovar token uma vez; se persistir, falha de autenticação explícita |
 | `403` / `AcessoNegado-ICGERENCIADOR-022` | Falha de autorização/procuração; não repetir; invalidar cache de procuração |

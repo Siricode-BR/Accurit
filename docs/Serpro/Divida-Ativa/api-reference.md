@@ -33,7 +33,7 @@ de obtenção do token em [quick-start-consulta-divida-ativa.md](quick-start-con
 ### Tag: Divida Ativa DF
 
 | Verbo | Path | Descrição |
-|---|---|---|
+| --- | --- | --- |
 | GET | `/v1/inscricao/{numeroInscricao}` | Consulta dados de inscrição |
 | GET | `/v1/devedor/{numeroInscricaoDevedor}` | Consulta dados do devedor, seja pessoa física ou jurídica |
 
@@ -50,7 +50,7 @@ de obtenção do token em [quick-start-consulta-divida-ativa.md](quick-start-con
 ## Parâmetros de path
 
 | Path | Parâmetro | Descrição |
-|---|---|---|
+| --- | --- | --- |
 | `/v1/inscricao/{numeroInscricao}` | `numeroInscricao` | Número da inscrição na Dívida Ativa (formato com dígitos verificadores, ex.: `9061700096419`). |
 | `/v1/devedor/{numeroInscricaoDevedor}` | `numeroInscricaoDevedor` | CPF ou CNPJ do devedor (ex.: `09781911768`). |
 

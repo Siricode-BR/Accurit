@@ -55,7 +55,7 @@ Regras:
 Quando o serviço exigir documento assinado, o XML deve seguir o subconjunto XMLDSig aceito pela SERPRO:
 
 | Item | Requisito |
-|---|---|
+| --- | --- |
 | Documento | XML 1.0, UTF-8, uma única declaração `<?xml version="1.0" encoding="UTF-8"?>` |
 | Assinatura | `<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">`; a documentação oficial **não usa prefixo `ds:`** |
 | Transformação | Enveloped Signature: `http://www.w3.org/2000/09/xmldsig#enveloped-signature` |
@@ -119,7 +119,7 @@ Regras de implementação:
 A normalização ocorre na borda (DTO → domínio) e antes da serialização do envelope.
 
 | Entrada | Saída canônica | Regra |
-|---|---|---|
+| --- | --- | --- |
 | `123.456.789-09` | `12345678909` | Manter apenas dígitos; validar dígitos verificadores |
 | `12.345.678/0001-90` | `12345678000190` | Manter apenas dígitos; validar dígitos verificadores |
 | `R$ 1.234,56` | `1234.56` | Remover `R$`, espaços e milhar; vírgula decimal → ponto |

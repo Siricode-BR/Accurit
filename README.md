@@ -80,7 +80,7 @@ O produto foi desenhado para eliminar erro operacional e retrabalho: os payloads
 ### Stack tecnológica
 
 | Camada | Tecnologia | Responsabilidade |
-|---|---|---|
+| --- | --- | --- |
 | Backend | Rust 2024, Axum 0.8, Tokio, Diesel 2.3+ | API REST, regras de negócio, integrações SERPRO |
 | Banco | PostgreSQL 16 (`postgres:16-alpine`) | Persistência multi-tenant e migrations |
 | Web | Next.js (App Router, SSG/SSR) atrás do proxy Nginx | Site institucional, SEO e captação de leads |
@@ -92,7 +92,7 @@ O produto foi desenhado para eliminar erro operacional e retrabalho: os payloads
 ### Mapeamento de rotas do Nginx
 
 | Rota pública | Upstream | Container | Estratégia |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `/` | `web:3000` | `accurit-web` | Proxy Next.js (SSG/SSR) e assets `/_next/` |
 | `/admin/` | `admin:80` | `accurit-admin` | SPA Angular com fallback para `index.html` |
 | `/app/` | `client:80` | `accurit-client` | SPA Angular com fallback para `index.html` |
@@ -119,7 +119,6 @@ imprimir os segredos e sem sobrescrever um `.env` existente. Alternativamente, g
 
 > **Placeholders não sobem.** O backend recusa `JWT_SECRET=change-me` e
 > `CERTIFICATE_MASTER_KEY=change-me-32-bytes` no startup, com mensagem clara e sem revelar valores.
-
 > **Um passo, zero Diesel CLI.** No startup, o backend aguarda o PostgreSQL ficar saudável e executa automaticamente todas as migrations embutidas no binário. **Não é necessário instalar `diesel_cli` no host nem rodar comandos manuais de migration.**
 
 Para executar em segundo plano:
@@ -160,7 +159,7 @@ Use `bootstrap-admin --help` ou `bootstrap-tenant --help` para a ajuda completa.
 ### Acessos locais
 
 | Serviço | URL |
-|---|---|
+| --- | --- |
 | Web (site institucional) | `http://localhost/` |
 | Backoffice SaaS (login do gestor de tenants) | `http://localhost/admin/login` |
 | Plataforma do escritório | `http://localhost/app/` |
@@ -189,7 +188,7 @@ docker run --rm --network container:accurit-proxy -v "$(pwd):/app" -w /app alpin
 A seleção de ambiente é persistida por escritório em `escritorios.modo_trial_serpro` e resolvida no backend a cada requisição.
 
 | Produto | Ambiente Trial | Ambiente de produção |
-|---|---|---|
+| --- | --- | --- |
 | Integra Contador | `https://gateway.apiserpro.serpro.gov.br/integra-contador-trial/v1` | `https://gateway.apiserpro.serpro.gov.br/integra-contador/v1` |
 | Consulta Dívida Ativa | `https://gateway.apiserpro.serpro.gov.br/consulta-divida-ativa-trial/api/v1` | **Indefinida**; bloqueada por `SERPRO_PROD_NOT_CONFIGURED` até confirmação SERPRO |
 | Token Dívida Ativa | `https://gateway.apiserpro.serpro.gov.br/token` | Mesmo endpoint, com credenciais de produção |

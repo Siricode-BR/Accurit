@@ -11,7 +11,7 @@
 A Accurit precisa operar contra dois ambientes da SERPRO:
 
 | Produto | Trial | Produção |
-|---|---|---|
+| --- | --- | --- |
 | Integra Contador | `https://gateway.apiserpro.serpro.gov.br/integra-contador-trial/v1` | `https://gateway.apiserpro.serpro.gov.br/integra-contador/v1` |
 | Consulta Dívida Ativa | `https://gateway.apiserpro.serpro.gov.br/consulta-divida-ativa-trial/api/v1` | **Indefinida**; bloqueada com `SERPRO_PROD_NOT_CONFIGURED` até confirmação SERPRO (D5) |
 | Token Dívida Ativa | `https://gateway.apiserpro.serpro.gov.br/token` | Mesmo endpoint, com credenciais de produção |
@@ -84,7 +84,7 @@ Regras:
 ### 3. API administrativa
 
 | Método | Rota | Descrição |
-|---|---|---|
+| --- | --- | --- |
 | `GET` | `/api/v1/admin/serpro/configuracao` | Retorna o estado persistido e o ambiente efetivo |
 | `PATCH` | `/api/v1/admin/serpro/trial` | Alterna o modo Trial do escritório |
 
@@ -173,7 +173,7 @@ Comportamento:
 ### 5. Seleção de endpoint e credencial
 
 | Modo | Integra Contador | Dívida Ativa | Credencial |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Trial | Base Trial | Base Trial | `SERPRO_TRIAL_BEARER_TOKEN` de ambiente |
 | Produção | `https://gateway.apiserpro.serpro.gov.br/integra-contador/v1` | **Bloqueada** (`SERPRO_PROD_NOT_CONFIGURED`) | Integra: SAPI com mTLS e-CNPJ (`access_token` + `jwt_token`); Dívida Ativa: OAuth2 + mTLS + A1 |
 

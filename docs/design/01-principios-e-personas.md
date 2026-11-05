@@ -68,7 +68,7 @@ Consulta Dívida Ativa permanece estritamente informativa. A UI não pode oferec
 As metas abaixo são hipóteses para aprovação e validação com usuários; não são SLAs SERPRO.
 
 | Métrica | Definição | Meta inicial proposta |
-|---|---|---|
+| --- | --- | --- |
 | Tempo para cadastrar cliente atendido | Mediana entre abertura do formulário e confirmação do cadastro, em cenário sem erro externo | Até 2 minutos |
 | Tempo para localizar cliente | Mediana entre abrir Clientes e abrir a ficha correta, usando busca/filtro | Até 30 segundos |
 | Tempo de resposta percebido da consulta | Mediana e p90 entre envio e resultado; medir separadamente tempo do backend/SERPRO | Apresentar feedback imediato; medir p90 contra timeout configurado, sem ocultar estado indeterminado |

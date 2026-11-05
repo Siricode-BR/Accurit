@@ -2,6 +2,8 @@ use async_trait::async_trait;
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::domain::certificados::Certificado;
+use crate::domain::integra_contador::assinatura::XmlAssinado;
 use crate::domain::integra_contador::envelope::{
     Identificacao, IntegraContadorRequest, IntegraContadorResponse, VerboIntegraContador,
 };
@@ -135,6 +137,47 @@ pub trait ValidadorProcuracao: Send + Sync {
         codigo_servico: &str,
         ambiente: AmbienteSerpro,
     ) -> Result<bool, ErroIntegraContador>;
+}
+
+/// Port para obter o certificado A1 ativo do escritório.
+#[async_trait]
+pub trait CertificadoA1Provider: Send + Sync {
+    async fn obter_ativo(
+        &self,
+        escritorio_id: Uuid,
+    ) -> Result<Option<Certificado>, ErroIntegraContador>;
+}
+
+/// Resultado da autenticação do procurador (token JWT retornado pelo SERPRO).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AutenticarProcuradorResultado {
+    pub jwt_token: String,
+    pub expira_em: chrono::DateTime<chrono::Utc>,
+}
+
+/// Port para salvar o token JWT obtido via AUTENTICAPROCURADOR.
+#[async_trait]
+pub trait TokensSerproRepositorio: Send + Sync {
+    async fn salvar_jwt_procurador(
+        &self,
+        escritorio_id: Uuid,
+        cliente_id: Uuid,
+        ambiente: AmbienteSerpro,
+        jwt_token: &str,
+        expira_em: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), ErroIntegraContador>;
+}
+
+/// Port para o cliente HTTP do endpoint AUTENTICAPROCURADOR (ENVIOXMLASSINADO81).
+#[async_trait]
+pub trait AutenticaProcuradorCliente: Send + Sync {
+    async fn enviar_xml_assinado(
+        &self,
+        request: &IntegraContadorRequest,
+        xml_base64: &str,
+        ambiente: AmbienteSerpro,
+        request_id: &str,
+    ) -> Result<AutenticarProcuradorResultado, ErroIntegraContador>;
 }
 
 pub type RespostaRedigida = Value;

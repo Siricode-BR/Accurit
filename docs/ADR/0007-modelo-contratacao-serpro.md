@@ -16,7 +16,7 @@ assina o Termo de Autorização, quando o autor não é o próprio contratante.
 Há duas formas de organizar a contratação:
 
 | Modelo | Contratante | Autor do pedido | Certificado | Termo |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | **A — por escritório** | Cada escritório contrata com o próprio CNPJ | O próprio escritório | e-CNPJ A1 do escritório | Não é necessário quando autor = contratante |
 | **B — centralizado** | Accurit ou entidade central | Escritório/procurador | e-CNPJ do contratante + procuração | Necessário quando autor ≠ contratante |
 

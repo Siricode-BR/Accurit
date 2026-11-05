@@ -2,12 +2,14 @@ pub mod ports;
 pub mod use_cases;
 
 pub use ports::{
-    AuditoriaIntegraContador, CatalogoEscritoriosIntegra, ClienteIntegraContador,
+    AuditoriaIntegraContador, AutenticaProcuradorCliente, AutenticarProcuradorResultado,
+    CatalogoEscritoriosIntegra, CertificadoA1Provider, ClienteIntegraContador,
     ContextoIntegraContador, EntregaIntegraContador, EventoAuditoriaIntegra, EventoChamadaIntegra,
-    RepositorioIdempotencia, ReservaIdempotencia, ValidadorProcuracao,
+    RepositorioIdempotencia, ReservaIdempotencia, TokensSerproRepositorio, ValidadorProcuracao,
 };
 pub use use_cases::{
-    ComandoIntegraContador, ExecutarIntegraContadorUseCase, ResultadoIntegraContador,
+    AutenticarProcuradorUseCase, ComandoAutenticarProcurador, ComandoIntegraContador,
+    ExecutarIntegraContadorUseCase, ResultadoAutenticarProcurador, ResultadoIntegraContador,
 };
 
 pub const PRODUTO_INTEGRA_CONTADOR: &str = "INTEGRA_CONTADOR";

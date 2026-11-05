@@ -260,7 +260,7 @@ Formulário: slug, nome do escritório, e-mail/CPF/senha inicial do titular, con
 ## Estados transversais obrigatórios
 
 | Estado | Padrão de apresentação |
-|---|---|
+| --- | --- |
 | Loading | Skeleton estrutural; controles desabilitados somente durante a operação correspondente |
 | Vazio | Explicar por que não há itens e oferecer CTA permitido |
 | Erro | Texto seguro, categoria, ação de recuperação e `requestId` copiável |

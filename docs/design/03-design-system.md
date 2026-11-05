@@ -108,7 +108,7 @@ O snippet é uma proposta de nomenclatura, não um tema já validado. O contrast
 ## Catálogo de componentes
 
 | Componente | Anatomia e variantes | Estados | Usar / evitar |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `AppShell` | Sidebar, topbar, conteúdo, nav mobile; variações `admin`/`client` | Carregando sessão, autenticado, acesso negado | Base de toda área autenticada; não duplicar shell por tela |
 | `Sidebar` | Marca, grupos, item ativo, recolher | Expandida, compacta, mobile drawer | Navegação primária; não colocar ações destrutivas |
 | `Topbar` | Breadcrumb, `EnvBadge`, busca, tema, perfil/sair | Busca fechada/aberta, sessão expirando | Contexto e ações globais; nunca mostrar documento/token |
@@ -150,7 +150,7 @@ O snippet é uma proposta de nomenclatura, não um tema já validado. O contrast
 O envelope interno usa `error.code`, `error.message`, `error.requestId` e `error.details`. O código determina categoria e próximo passo; a mensagem do backend pode ser apresentada se for segura, mas detalhes técnicos nunca são renderizados.
 
 | Código/categoria | Título sugerido | Texto e ação | Severidade |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `VALIDACAO` | Revise os dados | Indicar o campo ou regra inválida; corrigir e tentar novamente | Aviso |
 | `CONFLITO` / HTTP `409` | Informação desatualizada | Recarregar a tela; em troca de ambiente, mostrar o estado atual do servidor | Aviso |
 | `MUITAS_REQUISICOES` / HTTP `429` | Muitas tentativas em pouco tempo | Aguardar o período indicado; não oferecer repetição em loop | Aviso |

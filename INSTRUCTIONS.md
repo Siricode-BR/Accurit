@@ -7,7 +7,7 @@
 ## 1. Pré-requisitos
 
 | Ferramenta | Versão mínima | Uso |
-|---|---|---|
+| --- | --- | --- |
 | Docker Engine | 24.x | Build e execução dos containers |
 | Docker Compose | v2.20+ | Orquestração local |
 | Git | 2.x | Controle de versão |
@@ -50,7 +50,7 @@ No startup, o container `accurit-backend`:
 Acessos locais:
 
 | Serviço | URL |
-|---|---|
+| --- | --- |
 | Web (site institucional) | `http://localhost/` |
 | Backoffice SaaS (login do gestor de tenants) | `http://localhost/admin/login` |
 | Login da plataforma do escritório | `http://localhost/login` |
@@ -74,7 +74,7 @@ docker compose down -v            # encerra e apaga o banco (destrutivo)
 Copie `.env.example` para `.env` e preencha os valores. Nunca versione `.env`, certificados, tokens ou credenciais reais.
 
 | Variável | Obrigatória | Descrição |
-|---|---:|---|
+| --- | ---: | --- |
 | `APP_ENV` | Sim | `development`, `staging` ou `production` |
 | `HTTP_PORT` | Não | Porta pública do proxy no host (padrão 80) |
 | `DATABASE_URL` | Sim | Conexão da aplicação, usando `POSTGRES_APP_USER` (não-superuser): `postgres://accurit_app:senha@postgres:5432/accurit` |
@@ -184,7 +184,7 @@ O comando cria o registro na tabela `administradores` com senha Argon2id e CPF o
 ## 4. Containers, portas e rotas
 
 | Serviço | Container | Porta interna | Observação |
-|---|---|---:|---|
+| --- | --- | ---: | --- |
 | `postgres` | `accurit-postgres` | 5432 | Volume persistente e healthcheck |
 | `backend` | `accurit-backend` | 8080 | Axum + migrations automáticas |
 | `web` | `accurit-web` | 3000 | Next.js standalone |
@@ -197,7 +197,7 @@ O comando cria o registro na tabela `administradores` com senha Argon2id e CPF o
 Roteamento no proxy:
 
 | Rota | Destino |
-|---|---|
+| --- | --- |
 | `/` e `/_next/` | `web:3000` |
 | `/admin/` | `admin:80` |
 | `/app/` | `client:80` |
@@ -409,7 +409,7 @@ Convenções:
 ### 8.1 Erros de integração SERPRO
 
 | Sintoma | Causa provável | Ação |
-|---|---|---|
+| --- | --- | --- |
 | HTTP 401 com mensagem de usuário não identificado | Credencial/token inválido; o header `x-cpf-usuario` **não** é documentado oficialmente | Conferir token/credencial e, se `SERPRO_OPERATOR_HEADER_ENABLED=true`, o CPF do operador; validar o comportamento real em teste live (D3) |
 | HTTP 401 “invalid token” / token expirado | Token vencido, cache inconsistente ou credenciais incorretas | Invalidar o cache, renovar via `POST /token`, conferir `Consumer Key`/`Secret` |
 | HTTP 401 de certificado / handshake mTLS | A1 expirado, cadeia ICP-Brasil inválida ou certificado trocado | Validar validade, fingerprint e cadeia; recadastrar o A1 do escritório |
@@ -432,7 +432,7 @@ Convenções:
 ### 8.2 Erros de infraestrutura
 
 | Sintoma | Causa provável | Ação |
-|---|---|---|
+| --- | --- | --- |
 | Backend reinicia em loop | PostgreSQL indisponível ou `DATABASE_URL` inválida | Verificar healthcheck do `accurit-postgres` e a URL |
 | Migration falha no startup | SQL inválido, constraint ou migration já aplicada | Ler o log, corrigir `up.sql` e criar nova migration se já aplicada |
 | `nginx` retorna 502 | Backend ainda não subiu ou porta incorreta | Aguardar health check; conferir `backend:8080` |

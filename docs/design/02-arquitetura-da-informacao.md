@@ -61,7 +61,7 @@
 Legenda: **L** ler/consultar; **C** criar; **E** editar; **R** revogar/excluir; **—** sem acesso. A permissão efetiva é sempre decidida no backend.
 
 | Área/ação | ADMIN | CLIENTE (titular) | OPERADOR | Observação |
-|---|---:|---:|---:|---|
+| --- | ---: | ---: | ---: | --- |
 | Site público e contato | L | L | L | Sem sessão ou dado de tenant |
 | Login de backoffice | C | — | — | Somente audiência `admin`/papel `ADMIN` |
 | Login da plataforma | — | C | C | Audiência `client`; escritório é informado |
@@ -86,7 +86,7 @@ Legenda: **L** ler/consultar; **C** criar; **E** editar; **R** revogar/excluir; 
 ## Prioridade e relação com a UI existente
 
 | Destino | Estado no repositório | Direção de IA |
-|---|---|---|
+| --- | --- | --- |
 | `/app/clientes` e cadastro | Implementados; filtros são select e ficha usa formulário compartilhado | Evoluir para chips sincronizados e ficha de leitura com abas |
 | `/app/consultas/divida-ativa` | Consulta e detalhe implementados | Preservar aviso consultivo, resultado Trial e distinção de erros |
 | `/app/integra-contador` | Tela autenticada existe | Migrar para “Consultas fiscais”; manter serviços pendentes indisponíveis |

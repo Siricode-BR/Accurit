@@ -243,6 +243,7 @@ diesel::table! {
     tokens_serpro (id) {
         id -> Uuid,
         escritorio_id -> Uuid,
+        cliente_id -> Nullable<Uuid>,
         #[max_length = 32]
         produto -> Varchar,
         #[max_length = 16]

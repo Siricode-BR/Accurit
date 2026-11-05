@@ -24,7 +24,7 @@ O produto também tem requisitos não funcionais relevantes: confiabilidade, ras
 Adotar a seguinte stack como padrão para toda a plataforma:
 
 | Camada | Tecnologia | Responsabilidade |
-|---|---|---|
+| --- | --- | --- |
 | Backend | Rust 2024, Axum 0.8, Tokio, Diesel 2.2+ | API REST, regras de negócio, integrações SERPRO, assinatura XML e auditoria |
 | Banco de dados | PostgreSQL 16 (`postgres:16-alpine`) | Persistência relacional multi-tenant, restrições, índices e migrações |
 | Site institucional (`/`) | Next.js (App Router, SSG/SSR) servido por `nginx:alpine` | SEO, conteúdo institucional e captação de leads |
@@ -62,7 +62,7 @@ Adotar a seguinte stack como padrão para toda a plataforma:
 ### Alternativas consideradas
 
 | Alternativa | Motivo da não adoção |
-|---|---|
+| --- | --- |
 | Backend em Node.js/NestJS | Menor segurança de tipos em regras fiscais e maior risco de erros em cálculos e contratos; o custo de Rust é compensado pela criticidade do domínio. |
 | Backend em Go | Boa performance e simplicidade, mas o ecossistema de tipagem do domínio e de queries SQL não foi considerado superior ao conjunto Rust + Diesel para este projeto. |
 | SPA única em Angular para Admin e Cliente | Mistura bundles e permissões; aumenta o risco de exposição de funcionalidades administrativas e dificulta a evolução independente. |

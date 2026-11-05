@@ -39,6 +39,7 @@ XMLDSig e serviços adicionais sem versão confirmada (P4) permanecem bloqueados
 ## Fase 1 — Fundação, infraestrutura e base multi-tenant
 
 ### 1. Banco de Dados
+
 - [x] Configurar PostgreSQL 16 (`postgres:16-alpine`), volume persistente, healthcheck e usuário de aplicação não-superuser (`POSTGRES_APP_USER`).
 - [x] Criar migrations iniciais para `escritorios`, `usuarios` e tabelas de suporte.
 - [x] Criar `modo_trial_serpro BOOLEAN NOT NULL DEFAULT TRUE` no `CREATE TABLE escritorios` (sem `ALTER`).
@@ -47,6 +48,7 @@ XMLDSig e serviços adicionais sem versão confirmada (P4) permanecem bloqueados
 - [x] Validar automaticamente a política "sem `ALTER`" e o par `up.sql`/`down.sql` das migrations.
 
 ### 2. Backend (Rust / DDD)
+
 - [x] Preparar as camadas `domain/`, `application/`, `infrastructure/` e `presentation/` com regras de dependência.
 - [x] Publicar `lib.rs` com os módulos e consumir `accurit_backend` a partir de `main.rs`.
 - [x] Configurar Axum 0.8, Tokio, pool Diesel 2.3+ e `diesel_migrations::embed_migrations!`.
@@ -61,6 +63,7 @@ XMLDSig e serviços adicionais sem versão confirmada (P4) permanecem bloqueados
 - [x] Executar smoke test da stack completa pelo proxy.
 
 ### 3. Frontend (Angular / Next.js)
+
 - [x] Configurar Admin Angular 21 e Client Angular 21 com Signals, Standalone Components e organização por features.
 - [x] Configurar o app Next.js 16 (`web`) com App Router, SSG/SSR e build standalone.
 - [x] Preparar Nginx para `/`, `/admin/`, `/app/`, `/login` e `/api/`.
@@ -75,6 +78,7 @@ XMLDSig e serviços adicionais sem versão confirmada (P4) permanecem bloqueados
 O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/login` → `/app/login`) foi implementado no modelo inicial e **revisado pelo [ADR-0010](docs/ADR/0010-revisao-atores-papeis-e-provisionamento.md)** para separar o gestor SaaS (`administradores`) dos usuários do escritório (`usuarios`). A Fase 2B está **parcialmente entregue** (tabelas de negócio e backend de clientes/provisionamento); o frontend do backoffice/portal e a cobertura de testes de IDOR pendem.
 
 ### 1. Banco de Dados
+
 - [x] Criar `sessoes` com audiência (`CLIENT`), família de refresh, hash SHA-256 único, expiração, revogação e índices, sem `ALTER` (Fase 2A).
 - [x] Criar tabela `administradores` e `sessoes_admin` para o gestor de tenants SaaS (ADR-0010).
 - [x] Criar `clientes` com `escritorio_id`, `tipo` (`PF`/`PJ`), `porte_regime`, `cpf_cnpj`, nome/razão social, contatos e timestamps.
@@ -85,6 +89,7 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 - [x] Definir política de retenção e minimização de dados fiscais (SPEC §9.11).
 
 ### 2. Backend (Rust / DDD)
+
 - [x] Implementar login JWT por audiência com claims `sub`, `role` e `aud` (`admin`/`client`), rejeitando token cruzado (Fase 2A).
 - [x] Ajustar autenticação da audiência `admin` para consultar `administradores` e `sessoes_admin` (sem `escritorio_id` no JWT).
 - [x] Ajustar autenticação da audiência `client` para aceitar papéis `CLIENTE` e `OPERADOR` na plataforma do escritório.
@@ -98,6 +103,7 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 - [x] Cobrir IDOR e isolamento multi-tenant com testes.
 
 ### 3. Frontend (Angular / Next.js)
+
 - [x] Implementar login por aplicação (`/admin/login` e `/app/login`), guards de sessão, renovação automática no 401, `returnUrl` validado e rota de acesso negado (Fase 2A).
 - [x] Adaptar o app `/admin` para operar como Backoffice SaaS (gestão de tenants e criação do titular `CLIENTE`) — o login já segue o ADR-0010 (sem slug do escritório); telas de gestão de tenants implementadas.
 - [x] Implementar guards por papel nos fluxos de clientes e tratamento consistente de 403 na plataforma do escritório (`/app`).
@@ -113,12 +119,14 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 ## Fase 3 — Configuração SERPRO e Modo Trial
 
 ### 1. Banco de Dados
+
 - [x] Garantir `modo_trial_serpro BOOLEAN NOT NULL DEFAULT TRUE` em `escritorios`.
 - [x] Criar trilha de auditoria para alteração do ambiente SERPRO (`quem`, `quando`, valor anterior/novo).
 - [x] Persistir o ambiente efetivamente utilizado em cada consulta (`consultas_fiscais.ambiente`).
 - [x] Criar constraints para `tokens_serpro` por produto/ambiente.
 
 ### 2. Backend (Rust / DDD)
+
 - [x] Criar configuração tipada e separada para Trial e Produção por produto.
 - [x] Configurar base Trial do Integra Contador: `https://gateway.apiserpro.serpro.gov.br/integra-contador-trial/v1`.
 - [x] Configurar base Trial de Consulta Dívida Ativa: `https://gateway.apiserpro.serpro.gov.br/consulta-divida-ativa-trial/api/v1`.
@@ -129,6 +137,7 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 - [x] Implementar testes para estado ausente, troca de modo, credencial inválida e indisponibilidade.
 
 ### 3. Frontend (Angular / Next.js)
+
 - [x] Criar toggle “Modo Trial SERPRO” no Admin `/admin` com Angular Signals.
 - [x] Exibir ambiente ativo, aviso de demonstração e confirmação antes de alternar para Produção.
 - [x] Restringir a alteração a papel autorizado e atualizar a tela somente após resposta confirmada da API.
@@ -143,12 +152,14 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 ## Fase 4 — Consulta Dívida Ativa (somente leitura)
 
 ### 1. Banco de Dados
+
 - [x] Criar histórico de consultas com tenant, cliente, endpoint/tipo, ambiente, status, timestamp e protocolo/referência.
 - [x] Restringir `fonte_consulta` a `CPF_CNPJ`/`CODIGO_CONTRIBUINTE` para rastrear o fallback.
 - [x] Criar índices por `escritorio_id`, cliente, data e status.
 - [x] Definir expurgo diário configurável (`CONSULTAS_RETENCAO_DIAS`, padrão de 90 dias).
 
 ### 2. Backend (Rust / DDD)
+
 - [x] Implementar cliente OAuth2 (Client Credentials) e cache de token com renovação em HTTP 401 (em modo trial e produção via `EndpointSerpro`).
 - [x] Implementar cliente HTTP para `GET {base}/devedor/{cpfCnpj}` (base termina em `/api/v1`).
 - [x] Implementar cliente HTTP para `GET {base}/inscricao/{numeroInscricao}`.
@@ -165,6 +176,7 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 > Status operacional: banco, backend e frontend implementados e validados; suporte a Trial/sem-SERPRO e comportamento exclusivamente consultivo. Testes Rust, Angular e integração HTTP/PostgreSQL/Docker passaram. O fallback alternativo não pode ser ativado até confirmação oficial da SERPRO (D2).
 
 ### 3. Frontend (Angular / Next.js)
+
 - [x] Criar busca por CPF/CNPJ e tela de inscrições/pendências.
 - [x] Criar detalhe de inscrição com processo administrativo, receita principal, prescrição e valores retornados.
 - [x] Exibir data, ambiente e estado da consulta, incluindo a fonte da chave quando aplicável.
@@ -178,6 +190,7 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 ## Fase 5 — Integra Contador, procurações e-CAC e assinatura XML
 
 ### 1. Banco de Dados
+
 - [x] Ajustar `tokens_serpro` para token cifrado, escopo, expiração, ambiente, `tipo_token` (`ACCESS`/`JWT`/`AUTENTICAR_PROCURADOR`), `autor_pedido_dados` e timestamps.
 - [x] Ajustar `procuracoes` com ambiente, contribuinte, procurador, código de serviço, validade, status e data de verificação.
 - [x] Registrar chamadas operacionais com verbo, `idSistema`, `idServico`, ambiente, estado e referência de resposta.
@@ -185,6 +198,7 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 - [x] Auditar alterações de configuração e execuções potencialmente mutáveis.
 
 ### 2. Backend (Rust / DDD)
+
 - [ ] Implementar OAuth2 Client Credentials da Dívida Ativa em `POST https://gateway.apiserpro.serpro.gov.br/token` com Basic Base64 e requisitos mTLS do contrato.
 - [ ] Implementar autenticação do Integra Contador em produção via SAPI (`https://autenticacao.sapi.serpro.gov.br/authenticate`), com mTLS e-CNPJ, `Role-Type: TERCEIROS`, `Content-Type: application/x-www-form-urlencoded`, `access_token` e `jwt_token`.
 - [ ] Cachear `access_token`/`jwt_token` com expiração calculada de `expires_in`; invalidar e renovar em 401 com retry limitado.
@@ -206,6 +220,7 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 - [x] Não bilhetar `204`, `304`, `400`, `401`, `404`, `429`, `500`, `503`, `504`, `/Apoiar` e `/Monitorar`.
 
 ### 3. Frontend (Angular / Next.js)
+
 - [x] Criar fluxo de consultas por sistema/serviço habilitado (somente `PROCURACOES / OBTERPROCURACAO41` está liberado).
 - [x] Exibir estado da autorização/procuração e motivo de bloqueio sem expor segredos.
 - [x] Apresentar status de processamento e resultados de `Monitorar` quando aplicável.
@@ -222,12 +237,14 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 ## Fase 6 — Qualidade, CI/CD e produção
 
 ### 1. Banco de Dados
+
 - [ ] Testar migrations `up.sql`/`down.sql` em banco limpo e em upgrade.
 - [ ] Revisar índices, constraints, retenção e estratégia de backup/restore.
 - [ ] Verificar integridade, unicidade e isolamento por escritório.
 - [ ] Validar execução concorrente de migrations com múltiplas réplicas.
 
 ### 2. Backend (Rust / DDD)
+
 - [ ] Testes unitários de domínio e testes de integração Axum/Diesel.
 - [ ] Testes de isolamento multi-tenant e IDOR em todas as rotas relevantes.
 - [ ] Testes com mocks SERPRO para token OAuth2, SAPI, envelopes, procuração, Trial, Dívida Ativa, `202`/`204`/`304` e assinatura XML.
@@ -238,6 +255,7 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 - [ ] Pipeline CI/CD com build de imagem, testes e análise de dependências.
 
 ### 3. Frontend (Angular / Next.js)
+
 - [ ] Testes unitários de Signals, filtros, guards e estado do toggle Trial.
 - [ ] Testes E2E para login, CRUD de clientes, consulta por devedor/inscrição e verificação de procuração.
 - [ ] Verificar acessibilidade, estados de loading/erro/vazio e compatibilidade responsiva.

@@ -11,7 +11,7 @@
 A Accurit integra a API de Consulta Dívida Ativa da União, disponibilizada pela SERPRO, para que escritórios de contabilidade identifiquem pendências e detalhem inscrições de seus clientes. A API expõe operações de leitura:
 
 | Método | Endpoint (relativo à base) | Finalidade |
-|---|---|---|
+| --- | --- | --- |
 | `GET` | `/devedor/{cpfCnpj}` | Lista e resume as inscrições/pendências do devedor |
 | `GET` | `/inscricao/{numeroInscricao}` | Detalha uma inscrição individual |
 
@@ -64,7 +64,7 @@ O módulo Dívida Ativa da Accurit é **estritamente consultivo e somente leitur
 ### Limites de implementação
 
 | Artefato | Permitido | Proibido |
-|---|---|---|
+| --- | --- | --- |
 | Rotas HTTP | `GET /devedores/{cpfCnpj}`, `GET /inscricoes/{numero}` | `POST`, `PUT`, `PATCH` ou `DELETE` de negociação/parcelamento |
 | Casos de uso | Consultar devedor, consultar inscrição, registrar auditoria | Negociar, parcelar, liquidar, cobrar, emitir DARF de dívida ativa |
 | Repositórios | Leitura de histórico de consultas e configuração do tenant | Persistir acordos, parcelas, pagamentos ou quitações |
@@ -76,7 +76,7 @@ O módulo Dívida Ativa da Accurit é **estritamente consultivo e somente leitur
 ### Alternativas consideradas
 
 | Alternativa | Motivo da não adoção |
-|---|---|
+| --- | --- |
 | Expor também o catálogo de parcelamentos do Integra Contador | Ampliaria o escopo jurídico e operacional, contrariaria o posicionamento do produto e criaria risco de efeitos fiscais irreversíveis. |
 | Criar fluxo de “pré-negociação” apenas informativo | Ainda criaria expectativa de negociação e exigiria regras, consentimentos e auditoria específicos; o produto não é canal de regularização. |
 | Delegar negociação ao e-CAC por links externos | Links informativos são permitidos, mas não podem ser apresentados como funcionalidade da Accurit nem simular uma transação interna. |

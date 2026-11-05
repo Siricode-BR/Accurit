@@ -1,59 +1,50 @@
-# Client
+# client — Portal do Escritório Contábil (Angular)
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.2.5.
+Plataforma que o escritório de contabilidade usa no dia a dia: cadastro de clientes e, em seguida, consultas SERPRO (Integra Contador / Dívida Ativa).
 
-## Development server
+## Rotas
 
-To start a local development server, run:
+| Rota | Descrição |
+| --- | --- |
+| `/login` | Login do escritório (`publicGuard`) |
+| `/clientes` | Gestão de clientes PF/PJ com validação de CPF/CNPJ (`authGuard`) |
 
-```bash
-ng serve
+Rotas lazy via `loadComponent`; base-href de produção é `/app/` (build arg `BASE_HREF` no compose — esta é a rota acessada pelo botão "Portal do Escritório" da landing).
+
+## Estrutura
+
+```
+src/app/
+├─ core/
+│  ├─ api.config.ts           # API_BASE_URL (InjectionToken)
+│  └─ auth/
+│     ├─ auth.service.ts      # login/logout com Signals
+│     ├─ session.store.ts     # SessionStore persistido em localStorage
+│     ├─ auth.interceptor.ts  # Bearer token + redirect em 401
+│     └─ auth.guards.ts       # authGuard / publicGuard
+├─ data/
+│  ├─ cliente.service.ts      # clientes + filtros (estado em Signals)
+│  └─ serpro.ambiente.service.ts  # ambiente SERPRO do escritório (RxJS single-flight)
+└─ features/
+   ├─ auth/login.component.ts
+   └─ clientes/cliente-list.component.ts
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+## Design system
 
-## Code scaffolding
+Componentes `acc-*` vindos de `@accurit/ui` (botão, card, badge, spinner, máscara de documento) e tokens CSS (`@accurit/ui/tokens.css`) — nenhum estilo de marca é redefinido no app.
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+## Comandos
 
-```bash
-ng generate component component-name
+```sh
+pnpm --filter client dev       # ng serve (http://localhost:4200)
+pnpm --filter client build     # ng build --configuration production
+pnpm --filter client test      # Vitest
+pnpm --filter client typecheck
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+> Os dois apps Angular usam a porta 4200 por padrão — rode um por vez ou ajuste `ng serve --port` (ou `angular.json` / variável de porta no compose).
 
-```bash
-ng generate --help
-```
+## Docker
 
-## Building
-
-To build the project run:
-
-```bash
-ng build
-```
-
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+Serviço `client` no compose: build a partir do `./frontend` (`apps/client/Dockerfile`), runtime nginx com `/healthz`, roteado em `/app/`.

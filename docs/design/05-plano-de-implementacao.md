@@ -42,7 +42,7 @@
 Estimativas preliminares em dias de engenharia, sujeitas a revisão depois da aprovação e análise do build dos workspaces. Não incluem espera por confirmação externa de contrato SERPRO nem APIs novas.
 
 | Etapa | Escopo | Dependências | Estimativa |
-|---|---|---|---:|
+| --- | --- | --- | ---: |
 | 0 — Design e contratos divergentes | Cinco documentos de design e inventário de divergências | Leitura SPEC/ADRs | 2–3 dias |
 | 1 — Fundação | npm workspaces; libs/ui e libs/core; tokens; tema/densidade; wrappers; página dev de catálogo; testes; Docker/BaseHref | Aprovação Fase 0 | 6–10 dias |
 | 2 — Shells e navegação | AppShell Admin/Client, sidebar/topbar, selo, breadcrumbs, menu mobile, guards/mensagens, command palette, rotas base e links do Web | Etapa 1; manter contratos de auth | 6–9 dias |
@@ -75,7 +75,7 @@ Estimativa total indicativa: **45–73 dias de engenharia**, com trabalho de bac
 ## Riscos, bloqueios e mitigação
 
 | Risco/bloqueio | Impacto | Mitigação |
-|---|---|---|
+| --- | --- | --- |
 | API de equipe, ADMINs, auditoria, detalhe de escritório e saúde analítica ausente | Telas não podem carregar dados reais | Manter item desabilitado/fora do menu até contrato e autorização existirem |
 | Enum do tipo de cliente não conversa com os valores usados pela UI | Criação/edição pode falhar no parse do request; resposta não combina com tipo TS | Mapper testado; proposta de correção backend separada |
 | Certificados serializados em snake_case e ainda sem feature Angular | Integração tipada falha se assumir camelCase | DTO wire explícito + mapper para modelo de UI |

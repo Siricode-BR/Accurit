@@ -1,16 +1,21 @@
 use std::sync::Arc;
 
+use chrono::Utc;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+use crate::application::clientes::ports::ClienteRepositorio;
 use crate::application::integra_contador::ports::{
-    AuditoriaIntegraContador, CatalogoEscritoriosIntegra, ClienteIntegraContador,
-    ContextoIntegraContador, EntregaIntegraContador, EventoAuditoriaIntegra, EventoChamadaIntegra,
+    AuditoriaIntegraContador, AutenticaProcuradorCliente, CatalogoEscritoriosIntegra,
+    CertificadoA1Provider, ClienteIntegraContador, ContextoIntegraContador,
+    EntregaIntegraContador, EventoAuditoriaIntegra, EventoChamadaIntegra,
     RepositorioIdempotencia, ReservaIdempotencia, ResultadoReservaIdempotencia,
-    ValidadorProcuracao,
+    TokensSerproRepositorio, ValidadorProcuracao,
 };
+use crate::domain::certificados::Certificado;
+use crate::domain::integra_contador::assinatura::{AssinadorXml, TermoAutorizacao, XmlAssinado};
 use crate::domain::integra_contador::envelope::{
-    IntegraContadorRequest, PedidoDados, VerboIntegraContador,
+    Identificacao, IntegraContadorRequest, PedidoDados, VerboIntegraContador,
 };
 use crate::domain::integra_contador::erros::ErroIntegraContador;
 use crate::domain::integra_contador::servicos::{EstadoCatalogo, resolver_servico};
@@ -339,6 +344,184 @@ impl ExecutarIntegraContadorUseCase {
                 payload_hash: payload_hash.to_owned(),
             })
             .await
+    }
+}
+
+/// Comando para autenticar procurador via AUTENTICAPROCURADOR/ENVIOXMLASSINADO81.
+#[derive(Debug, Clone)]
+pub struct ComandoAutenticarProcurador {
+    pub escritorio_id: Uuid,
+    pub usuario_id: Uuid,
+    pub cliente_id: Uuid,
+    pub ambiente: AmbienteSerpro,
+    pub request_id: String,
+}
+
+/// Resultado da autenticação do procurador.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResultadoAutenticarProcurador {
+    pub jwt_token: String,
+    pub expira_em: chrono::DateTime<chrono::Utc>,
+}
+
+/// Caso de uso para autenticar o procurador (escritório) junto ao SERPRO
+/// via endpoint AUTENTICAPROCURADOR/ENVIOXMLASSINADO81.
+/// 
+/// Fluxo (modelo Software House):
+/// 1. Busca o certificado A1 ativo do escritório
+/// 2. Gera o Termo de Autorização com 3 atores: Contratante (SaaS), AutorPedidoDados (Escritório), Contribuinte (Cliente)
+/// 3. Assina o XML com o certificado A1 do escritório
+/// 4. Envia para SERPRO via ENVIOXMLASSINADO81
+/// 5. Salva o jwt_token retornado vinculado ao escritório e cliente
+pub struct AutenticarProcuradorUseCase {
+    contexto: Arc<dyn CatalogoEscritoriosIntegra>,
+    cliente_repositorio: Arc<dyn ClienteRepositorio>,
+    certificado_provider: Arc<dyn CertificadoA1Provider>,
+    assinador: Arc<dyn AssinadorXml>,
+    autentica_cliente: Arc<dyn AutenticaProcuradorCliente>,
+    tokens_repositorio: Arc<dyn TokensSerproRepositorio>,
+    auditoria: Arc<dyn AuditoriaIntegraContador>,
+}
+
+impl AutenticarProcuradorUseCase {
+    pub fn novo(
+        contexto: Arc<dyn CatalogoEscritoriosIntegra>,
+        cliente_repositorio: Arc<dyn ClienteRepositorio>,
+        certificado_provider: Arc<dyn CertificadoA1Provider>,
+        assinador: Arc<dyn AssinadorXml>,
+        autentica_cliente: Arc<dyn AutenticaProcuradorCliente>,
+        tokens_repositorio: Arc<dyn TokensSerproRepositorio>,
+        auditoria: Arc<dyn AuditoriaIntegraContador>,
+    ) -> Self {
+        Self {
+            contexto,
+            cliente_repositorio,
+            certificado_provider,
+            assinador,
+            autentica_cliente,
+            tokens_repositorio,
+            auditoria,
+        }
+    }
+
+    pub async fn executar(
+        &self,
+        comando: ComandoAutenticarProcurador,
+    ) -> Result<ResultadoAutenticarProcurador, ErroIntegraContador> {
+        // 1. Busca o cliente para obter CPF/CNPJ e nome
+        let cliente = self
+            .cliente_repositorio
+            .buscar_por_id(comando.escritorio_id, comando.cliente_id)
+            .map_err(|_| ErroIntegraContador::ConfiguracaoIncompleta)?
+            .ok_or(ErroIntegraContador::ConfiguracaoIncompleta)?;
+
+        // 2. Resolve o contexto (busca CNPJs do contratante, autor, contribuinte)
+        let contexto = self
+            .contexto
+            .resolver_contexto(
+                comando.escritorio_id,
+                comando.usuario_id,
+                &cliente.documento.como_str(),
+            )
+            .await?;
+
+        // 3. Busca o certificado A1 ativo do escritório
+        let certificado = self
+            .certificado_provider
+            .obter_ativo(comando.escritorio_id)
+            .await?
+            .ok_or(ErroIntegraContador::ConfiguracaoIncompleta)?;
+
+        // 4. Busca o nome do escritório (autor do pedido de dados)
+        // TODO: Buscar via repositório de escritórios quando disponível
+        let escritorio_nome = "Escritório Contábil".to_owned();
+
+        // 5. Constrói o Termo de Autorização com os 3 atores
+        let termo = TermoAutorizacao {
+            data_assinatura: Utc::now().date_naive(),
+            vigencia: (Utc::now() + chrono::Duration::days(365)).date_naive(),
+            atores: crate::domain::integra_contador::assinatura::AtoresTermoAutorizacao {
+                contratante_numero: contexto.contratante.numero.clone(),
+                contratante_nome: "Accurit Tecnologia Ltda".to_owned(), // Nome da Software House
+                autor_pedido_dados_numero: contexto.autor_pedido_dados.numero.clone(),
+                autor_pedido_dados_nome: escritorio_nome,
+                contribuinte_numero: contexto.contribuinte.numero.clone(),
+                contribuinte_nome: cliente.nome_razao_social,
+            },
+        };
+
+        // 6. Prepara o PFX e senha para assinatura
+        let mut pfx_der = certificado.conteudo_cifrado.clone();
+        let mut senha = certificado
+            .senha_cifrada
+            .clone()
+            .unwrap_or_default();
+
+        // 7. Assina o XML
+        let xml_assinado = self
+            .assinador
+            .assinar(&termo, &mut pfx_der, &mut senha)
+            .await?;
+
+        // 8. Constrói a requisição para ENVIOXMLASSINADO81
+        let request = IntegraContadorRequest {
+            contratante: contexto.contratante.clone(),
+            autor_pedido_dados: contexto.autor_pedido_dados.clone(),
+            contribuinte: contexto.contribuinte.clone(),
+            pedido_dados: PedidoDados {
+                id_sistema: "AUTENTICAPROCURADOR".to_owned(),
+                id_servico: "ENVIOXMLASSINADO81".to_owned(),
+                versao_sistema: "1.0".to_owned(),
+                dados: serde_json::to_string(&serde_json::json!({
+                    "xml": xml_assinado.xml_base64
+                }))
+                .map_err(|_| ErroIntegraContador::PayloadInvalido)?,
+            },
+        };
+
+        // 9. Envia para SERPRO
+        let resultado = self
+            .autentica_cliente
+            .enviar_xml_assinado(
+                &request,
+                &xml_assinado.xml_base64,
+                comando.ambiente,
+                &comando.request_id,
+            )
+            .await?;
+
+        // 10. Salva o token JWT no banco
+        self.tokens_repositorio
+            .salvar_jwt_procurador(
+                comando.escritorio_id,
+                comando.cliente_id,
+                comando.ambiente,
+                &resultado.jwt_token,
+                resultado.expira_em,
+            )
+            .await?;
+
+        // 11. Auditoria
+        self.auditoria
+            .registrar_chamada(&EventoChamadaIntegra {
+                escritorio_id: comando.escritorio_id,
+                usuario_id: comando.usuario_id,
+                verbo: VerboIntegraContador::Apoiar,
+                id_sistema: "AUTENTICAPROCURADOR".to_owned(),
+                id_servico: "ENVIOXMLASSINADO81".to_owned(),
+                ambiente: comando.ambiente,
+                estado: "CONCLUIDO".to_owned(),
+                status_code: Some(200),
+                referencia_resposta: None,
+                request_id: comando.request_id,
+                bilhetavel: false,
+            })
+            .await?;
+
+        Ok(ResultadoAutenticarProcurador {
+            jwt_token: resultado.jwt_token,
+            expira_em: resultado.expira_em,
+        })
     }
 }
 

@@ -13,7 +13,7 @@ A Accurit permite que escritórios de contabilidade administrem clientes PF/PJ, 
 ### 1.1 Identidade do produto
 
 | Item | Definição |
-|---|---|
+| --- | --- |
 | Nome oficial | **Accurit** |
 | Descrição curta | SaaS multi-tenant de gestão contábil e consulta fiscal automatizada via APIs SERPRO |
 | Público-alvo | Escritórios de contabilidade e seus clientes PJ/PF |
@@ -23,7 +23,7 @@ A Accurit permite que escritórios de contabilidade administrem clientes PF/PJ, 
 ### 1.2 Contextos delimitados (bounded contexts)
 
 | Contexto | Responsabilidade | Módulo backend |
-|---|---|---|
+| --- | --- | --- |
 | Identidade e acesso | Login JWT, papéis, usuários | `domain/auth` |
 | Tenancy | Escritórios, isolamento e resolução do tenant | `domain/tenancy` |
 | Clientes | Cadastro PF/PJ, validação e filtros | `domain/clientes` |
@@ -46,7 +46,7 @@ A Accurit permite que escritórios de contabilidade administrem clientes PF/PJ, 
 Modelo revisado em 2026-10-21 ([ADR-0010](docs/ADR/0010-revisao-atores-papeis-e-provisionamento.md)):
 
 | Ator | Quem é | Canal | Papel |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **ADMIN — gestor de tenants** | Operação interna do SaaS; não pertence a escritório | `/admin` (backoffice) | `ADMIN` — tabela `administradores`, fora de `usuarios` |
 | **CLIENTE — escritório assinante** | O escritório que contratou o serviço; titular do tenant | `/app` (plataforma do escritório) | `CLIENTE` em `usuarios` |
 | **OPERADOR** | Membro da equipe do escritório, dentro da plataforma do CLIENTE | `/app` | `OPERADOR` em `usuarios` |
@@ -123,7 +123,7 @@ gestor de tenants (audiência `admin`) **não** — rota dele que age sobre um t
 ### 2.2 Frontends
 
 | Aplicação | Rota | Renderização | Arquitetura |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Web | `/` | Next.js App Router (SSG/SSR) | SEO, conteúdo institucional e formulário de lead |
 | Backoffice | `/admin` e `/admin/login` | Angular 21 SPA/CSR | Gestão de tenants: provisionar escritórios e titular CLIENTE, alternar modo Trial por escritório |
 | Plataforma do escritório | `/app`, `/app/login` e `/login` (301) | Angular 21 SPA/CSR | Gestão de clientes atendidos, equipe (OPERADOR), consultas e configurações |
@@ -161,7 +161,7 @@ com `returnUrl` interno validado e o acesso proibido tem a rota dedicada `/acess
 ### 2.3 Infraestrutura e rede
 
 | Serviço Compose | Imagem/build | Container | Porta interna |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `postgres` | `postgres:16-alpine` | `accurit-postgres` | 5432 |
 | `backend` | `backend/Dockerfile` | `accurit-backend` | 8080 |
 | `web` | `web/Dockerfile` | `accurit-web` | 3000 |
@@ -283,7 +283,7 @@ x-cpf-usuario: 12345678909
 ### 3.3 Cliente HTTP e resiliência
 
 | Parâmetro | Valor de referência | Observação |
-|---|---|---|
+| --- | --- | --- |
 | Connect timeout | 5 s | Falha rápida evita esgotar workers |
 | Request timeout | 30 s | Limite do gateway SERPRO |
 | Pool de conexões | 32 por worker | Reutilização TLS |
@@ -321,7 +321,7 @@ O módulo **apenas consulta e apresenta** inscrições, situações e valores re
 ### 4.2 Endpoints
 
 | Método | Endpoint (relativo à base) | Finalidade |
-|---|---|---|
+| --- | --- | --- |
 | `GET` | `/devedor/{cpfCnpj}` | Lista e resumo de inscrições/pendências do CPF/CNPJ |
 | `GET` | `/inscricao/{numeroInscricao}` | Detalhamento de uma inscrição individual |
 
@@ -424,7 +424,7 @@ virarem `numeroPfnResponsavel`/`nomePfnResponsavel`. Se a API responder com enve
 Mapeamento recomendado para o domínio:
 
 | Campo da API | Campo de domínio | Regra |
-|---|---|---|
+| --- | --- | --- |
 | `inscricao` | `numero_inscricao` | Preservar a formatação de exibição e manter uma versão somente dígitos para busca |
 | `situacao` | `situacao_descricao` | Texto retornado, sem interpretação local |
 | `indicadorPrescricaoSV8` | `indicador_prescricao: bool` | `SIM` → `true`; `NAO` → `false`; ausente → `None` |
@@ -471,7 +471,7 @@ O fallback, quando habilitado, deve ser registrado na trilha de auditoria
 Os endpoints são `POST` dedicados sob a base URL do Integra Contador. O envelope comum é o mesmo; `idSistema`, `idServico`, `versaoSistema`, payload, headers e regras de negócio são específicos de cada serviço.
 
 | Verbo | Endpoint | Exemplos de serviço | Responsabilidade |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Apoiar | `POST /Apoiar` | `SICALC CONSULTAAPOIORECEITAS52`, `SITFIS SOLICITARPROTOCOLO91`, `AUTENTICAPROCURADOR ENVIOXMLASSINADO81` | Operações de apoio ao serviço |
 | Consultar | `POST /Consultar` | `PGDASD CONSDECLARACAO13`, `PROCURACOES OBTERPROCURACAO41` | Consulta de informações autorizadas |
 | Declarar | `POST /Declarar` | `PGDASD TRANSDECLARACAO11` | Transmissão de declarações quando habilitado |
@@ -596,7 +596,7 @@ pub enum RegraProcuracao {
 ```
 
 | Sistema/serviço | Código(s) de procuração | Observação |
-|---|---|---|
+| --- | --- | --- |
 | PGDASD (inclui DEFIS) | `00146` | Também usado por DEFIS no catálogo oficial |
 | DCTFWeb | `00103` | Inclui `TRANSDECLARACAO310` |
 | SITFIS | `00002` | `RELATORIOSITFIS92` e `SOLICITARPROTOCOLO91` |
@@ -718,7 +718,7 @@ qualquer divergência invalida o termo. No modelo A (ADR-0007), o Termo só é n
 Antes de serializar o envelope JSON, remover pontuação, símbolos de moeda e separadores de milhar.
 
 | Entrada | Saída | Regra |
-|---|---|---|
+| --- | --- | --- |
 | `123.456.789-09` | `12345678909` | Manter apenas dígitos; validar dígitos verificadores |
 | `12.345.678/0001-90` | `12345678000190` | Manter apenas dígitos; validar dígitos verificadores |
 | `R$ 1.234,56` | `1234.56` | Remover `R$`, espaços e milhar; vírgula decimal → ponto |
@@ -785,7 +785,7 @@ O toggle do Modo Trial é operado no **backoffice `/admin`** pelo gestor de tena
 confirmação explícita; o escritório apenas visualiza o ambiente ativo em `/app`. O estado é persistido em `escritorios.modo_trial_serpro BOOLEAN NOT NULL DEFAULT TRUE`.
 
 | Modo | Integra Contador | Dívida Ativa | Credencial |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Trial (`TRUE`) | `https://gateway.apiserpro.serpro.gov.br/integra-contador-trial/v1` | `https://gateway.apiserpro.serpro.gov.br/consulta-divida-ativa-trial/api/v1` | Bearer demo via `SERPRO_TRIAL_BEARER_TOKEN` |
 | Produção (`FALSE`) | `https://gateway.apiserpro.serpro.gov.br/integra-contador/v1` | **Bloqueada** (`SERPRO_PROD_NOT_CONFIGURED`) até confirmação SERPRO | Integra: SAPI (`access_token` + `jwt_token`) com mTLS e-CNPJ; Dívida Ativa: OAuth2 + mTLS + A1 |
 
@@ -1155,7 +1155,7 @@ e a revogação da família operam de forma idêntica a `sessoes`, com os evento
 ### 10.1 Endpoints principais
 
 | Método | Rota | Descrição |
-|---|---|---|
+| --- | --- | --- |
 | `POST` | `/api/v1/auth/admin/login` | Login do backoffice (audiência `admin`; papel `ADMIN`, tabela `administradores`) — corpo `{ email, senha }` |
 | `POST` | `/api/v1/auth/admin/refresh` | Renovação rotativa via cookie do backoffice |
 | `POST` | `/api/v1/auth/admin/logout` | Revoga a sessão do backoffice e limpa o cookie |
@@ -1185,7 +1185,7 @@ Todos os endpoints de domínio validam o tenant no repositório e ignoram qualqu
 ### 10.2 Filtros obrigatórios
 
 | Filtro UI | Query | Predicado SQL |
-|---|---|---|
+| --- | --- | --- |
 | Todos | `todos` | Sem filtro de tipo/regime, mantendo `escritorio_id` |
 | CPF | `cpf` | `tipo = 'PF'` |
 | CNPJ - MEI | `cnpj_mei` | `tipo = 'PJ' AND porte_regime = 'MEI'` |
@@ -1342,7 +1342,7 @@ Observações de produção:
 ## 14. Glossário
 
 | Termo | Significado |
-|---|---|
+| --- | --- |
 | Escritório | Tenant da plataforma; unidade de isolamento de dados |
 | Contratante | CPF/CNPJ do escritório que contrata o serviço SERPRO |
 | Autor do pedido de dados | CNPJ/CPF informado em `autorPedidoDados`, titular do certificado que assina o Termo quando aplicável |

@@ -1,27 +1,19 @@
-# Ui
+# @accurit/ui
 
-This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 17.3.7.
+Design system Angular do Accurit — biblioteca ng-packagr consumida pelos apps `apps/admin` e `apps/client`.
 
-## Development server
+## Componentes
 
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The application will automatically reload if you change any of the source files.
+| Export | Uso |
+| --- | --- |
+| `AccButtonComponent` | botões (`variant` primary/secondary/outline/ghost, `loading`) |
+| `AccCardComponent` | cards de conteúdo |
+| `AccBadgeComponent` | badges de status (`status` info/neutral/success…) |
+| `AccSpinnerComponent` | spinner de carregamento |
+| `AccDocumentMaskDirective` | máscara de CPF/CNPJ em inputs (`accDocMask`) |
 
-## Code scaffolding
+## Tokens
 
-Run `ng generate component component-name` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module`.
+`tokens.css` (exportado como `@accurit/ui/tokens.css`) define `--acc-color-*`, `--acc-radius-*`, `--acc-shadow-*` e `--acc-font-sans`. Importado em `styles.css`/`globals.css` dos apps — a landing do Next também consome os mesmos tokens.
 
-## Build
-
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory.
-
-## Running unit tests
-
-Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).
-
-## Running end-to-end tests
-
-Run `ng e2e` to execute the end-to-end tests via a platform of your choice. To use this command, you need to first add a package that implements end-to-end testing capabilities.
-
-## Further help
-
-To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI Overview and Command Reference](https://angular.io/cli) page.
+Consumo via `"@accurit/ui": "workspace:*"`. Este é o único package que exige `build` (`ng build` → FESM em `dist/ui`); o Turborepo garante a ordem via `dependsOn: ["^build"]`.

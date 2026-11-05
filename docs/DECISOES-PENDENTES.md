@@ -9,7 +9,7 @@
 ## Resumo
 
 | ID | Tema | Status | Impacto | Ação |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | D1 | Modelo de contratação SERPRO | **Decidido** (modelo A padrão; porta para B) | Alto | Ver [ADR-0007](ADR/0007-modelo-contratacao-serpro.md) |
 | D2 | Fallback “Código de Contribuinte” | **Não confirmado** | Médio | Desabilitado por padrão; validar em trial |
 | D3 | Header `x-cpf-usuario` | **Não confirmado** | Médio | Manter flag; teste live opt-in |
@@ -32,7 +32,7 @@ Estas decisões estão **fechadas** para a fundação e registradas em
 nova decisão arquitetural.
 
 | ID | Decisão | Efeito |
-|---|---|---|
+| --- | --- | --- |
 | F1 | Diesel síncrono + pool `r2d2`, acesso via traits e `spawn_blocking` | Sem `diesel-async` na Fase 1; porta de repositório preserva evolução |
 | F2 | `POSTGRES_USER` superusuário só para administração/testes; `POSTGRES_APP_USER` não-superuser com DDL em `public` | `DATABASE_URL` nunca usa superusuário; split migrator/runtime adiado |
 | F3 | Linkagem dinâmica com `libpq` no Alpine (`-crt-static` desabilitado) | Runtime instala `libpq`; build estático rejeitado |
@@ -46,7 +46,7 @@ Estas decisões estão **fechadas** para a autenticação por aplicação revisa
 [ADR-0010](ADR/0010-revisao-atores-papeis-e-provisionamento.md) (suplementando o ADR-0009).
 
 | ID | Decisão | Efeito |
-|---|---|---|
+| --- | --- | --- |
 | A-ATR-1 | Papéis por audiência revistos: audiência `admin` autentica exclusivamente gestores SaaS (`ADMIN` em tabela separada); audiência `client` autentica `CLIENTE` e `OPERADOR` do escritório | Token de ADMIN não possui `escritorio_id`; token de escritório (`CLIENTE`/`OPERADOR`) restringe-se ao tenant |
 | A-ATR-2 | ADMIN em tabela separada (`administradores`) e sessões próprias (`sessoes_admin`) | Preserva `escritorio_id NOT NULL` nas tabelas de negócio e isolamento multi-tenant |
 | A-ATR-3 | Provisionamento de tenants (escritório + titular `CLIENTE`) por tela no backoffice `/admin` | CLI fica como `bootstrap-admin` e fallback de suporte; dispensa escritório "sede" |

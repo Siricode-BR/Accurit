@@ -1,41 +1,89 @@
 use crate::domain::clientes::{CpfCnpj, TipoDocumento};
 use chrono::NaiveDate;
 
+/// Representa os três atores no modelo Software House para o Termo de Autorização.
+/// Conforme documentação SERPRO Integra Contador - Autentica Procurador.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AtoresTermoAutorizacao {
+    /// Contratante da API (nossa plataforma SaaS) - CNPJ da Software House
+    pub contratante_numero: String,
+    pub contratante_nome: String,
+    /// Autor do Pedido de Dados (Escritório de Contabilidade / Procurador) - CNPJ do escritório
+    pub autor_pedido_dados_numero: String,
+    pub autor_pedido_dados_nome: String,
+    /// Contribuinte (Cliente do escritório) - CPF/CNPJ do cliente
+    pub contribuinte_numero: String,
+    pub contribuinte_nome: String,
+}
+
+impl AtoresTermoAutorizacao {
+    pub fn validar(&self) -> Result<(), ErroAssinatura> {
+        let contratante = CpfCnpj::novo(&self.contratante_numero)
+            .map_err(|_| ErroAssinatura::TermoInvalido)?;
+        let autor = CpfCnpj::novo(&self.autor_pedido_dados_numero)
+            .map_err(|_| ErroAssinatura::TermoInvalido)?;
+        let contribuinte = CpfCnpj::novo(&self.contribuinte_numero)
+            .map_err(|_| ErroAssinatura::TermoInvalido)?;
+
+        if contratante.tipo() != TipoDocumento::Cnpj {
+            return Err(ErroAssinatura::TermoInvalido);
+        }
+        if autor.tipo() != TipoDocumento::Cnpj {
+            return Err(ErroAssinatura::TermoInvalido);
+        }
+        if self.contratante_nome.trim().is_empty()
+            || self.autor_pedido_dados_nome.trim().is_empty()
+            || self.contribuinte_nome.trim().is_empty()
+        {
+            return Err(ErroAssinatura::TermoInvalido);
+        }
+        Ok(())
+    }
+}
+
+/// Termo de Autorização completo para o endpoint AUTENTICAPROCURADOR/ENVIOXMLASSINADO81.
+/// Contém os três CNPJs/CPFs exigidos pelo SERPRO no modelo Software House.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TermoAutorizacao {
     pub data_assinatura: NaiveDate,
     pub vigencia: NaiveDate,
-    pub destinatario_numero: String,
-    pub destinatario_nome: String,
-    pub assinado_por_numero: String,
-    pub assinado_por_nome: String,
+    pub atores: AtoresTermoAutorizacao,
 }
 
 impl TermoAutorizacao {
+    /// Gera o XML do Termo de Autorização com a estrutura de 3 atores exigida pelo SERPRO
+    /// para o modelo Software House (AUTENTICAPROCURADOR).
     pub fn para_xml(&self) -> Result<String, ErroAssinatura> {
         if self.vigencia < self.data_assinatura {
             return Err(ErroAssinatura::TermoInvalido);
         }
 
-        let destinatario =
-            CpfCnpj::novo(&self.destinatario_numero).map_err(|_| ErroAssinatura::TermoInvalido)?;
-        let assinante =
-            CpfCnpj::novo(&self.assinado_por_numero).map_err(|_| ErroAssinatura::TermoInvalido)?;
-        if destinatario.tipo() != TipoDocumento::Cnpj
-            || self.destinatario_nome.trim().is_empty()
-            || self.assinado_por_nome.trim().is_empty()
-        {
-            return Err(ErroAssinatura::TermoInvalido);
-        }
+        self.atores.validar()?;
 
-        let destinatario_numero = escapar_atributo(&self.destinatario_numero)?;
-        let destinatario_nome = escapar_atributo(&self.destinatario_nome)?;
-        let assinado_por_numero = escapar_atributo(&self.assinado_por_numero)?;
-        let assinado_por_nome = escapar_atributo(&self.assinado_por_nome)?;
-        let tipo_assinante = match assinante.tipo() {
+        let contratante_numero = escapar_atributo(&self.atores.contratante_numero)?;
+        let contratante_nome = escapar_atributo(&self.atores.contratante_nome)?;
+        let autor_numero = escapar_atributo(&self.atores.autor_pedido_dados_numero)?;
+        let autor_nome = escapar_atributo(&self.atores.autor_pedido_dados_nome)?;
+        let contribuinte_numero = escapar_atributo(&self.atores.contribuinte_numero)?;
+        let contribuinte_nome = escapar_atributo(&self.atores.contribuinte_nome)?;
+
+        let contratante_doc = CpfCnpj::novo(&self.atores.contratante_numero).unwrap();
+        let autor_doc = CpfCnpj::novo(&self.atores.autor_pedido_dados_numero).unwrap();
+        let contribuinte_doc = CpfCnpj::novo(&self.atores.contribuinte_numero).unwrap();
+
+        let tipo_contratante = match contratante_doc.tipo() {
             TipoDocumento::Cpf => "PF",
             TipoDocumento::Cnpj => "PJ",
         };
+        let tipo_autor = match autor_doc.tipo() {
+            TipoDocumento::Cpf => "PF",
+            TipoDocumento::Cnpj => "PJ",
+        };
+        let tipo_contribuinte = match contribuinte_doc.tipo() {
+            TipoDocumento::Cpf => "PF",
+            TipoDocumento::Cnpj => "PJ",
+        };
+
         let data_assinatura = self.data_assinatura.format("%Y%m%d");
         let vigencia = self.vigencia.format("%Y%m%d");
 
@@ -44,9 +92,9 @@ impl TermoAutorizacao {
              <sistema id=\"API Integra Contador\"/><termo texto=\"{}\"/>\
              <avisoLegal texto=\"{}\"/><finalidade texto=\"{}\"/>\
              <dataAssinatura data=\"{data_assinatura}\"/><vigencia data=\"{vigencia}\"/>\
-             <destinatario numero=\"{destinatario_numero}\" nome=\"{destinatario_nome}\" \
-             tipo=\"PJ\" papel=\"contratante\"/><assinadoPor numero=\"{assinado_por_numero}\" \
-             nome=\"{assinado_por_nome}\" tipo=\"{tipo_assinante}\" papel=\"autor pedido de dados\"/>\
+             <contratante numero=\"{contratante_numero}\" nome=\"{contratante_nome}\" tipo=\"{tipo_contratante}\" papel=\"contratante\"/>\
+             <autorPedidoDados numero=\"{autor_numero}\" nome=\"{autor_nome}\" tipo=\"{tipo_autor}\" papel=\"autor pedido de dados\"/>\
+             <contribuinte numero=\"{contribuinte_numero}\" nome=\"{contribuinte_nome}\" tipo=\"{tipo_contribuinte}\" papel=\"contribuinte\"/>\
              </dados></termoDeAutorizacao>",
             escapar_atributo(TERMO)?,
             escapar_atributo(AVISO_LEGAL)?,
@@ -76,11 +124,20 @@ pub struct XmlAssinado {
 
 #[async_trait::async_trait]
 pub trait AssinadorXml: Send + Sync {
+    /// Assina o Termo de Autorização usando o certificado A1 (arquivo PFX/P12).
+    /// 
+    /// # Parâmetros
+    /// - `termo`: O termo de autorização a ser assinado
+    /// - `pfx_der`: Conteúdo do arquivo .pfx/.p12 em formato DER (bytes)
+    /// - `senha`: Senha do arquivo PFX (será limpa da memória após uso)
+    /// 
+    /// # Retorna
+    /// `XmlAssinado` contendo o XML assinado em base64, digest, signature value e certificado.
     async fn assinar(
         &self,
         termo: &TermoAutorizacao,
-        chave_privada_pkcs8_der: &mut [u8],
-        certificado_der: &mut [u8],
+        pfx_der: &mut [u8],
+        senha: &mut [u8],
     ) -> Result<XmlAssinado, ErroAssinatura>;
 }
 
@@ -98,10 +155,10 @@ fn escapar_atributo(valor: &str) -> Result<String, ErroAssinatura> {
             return Err(ErroAssinatura::CaractereXmlInvalido);
         }
         match caractere {
-            '&' => escapado.push_str("&amp;"),
-            '<' => escapado.push_str("&lt;"),
-            '>' => escapado.push_str("&gt;"),
-            '"' => escapado.push_str("&quot;"),
+            '&' => escapado.push_str("&"),
+            '<' => escapado.push_str("<"),
+            '>' => escapado.push_str(">"),
+            '"' => escapado.push_str("""),
             '\'' => escapado.push_str("&apos;"),
             _ => escapado.push(caractere),
         }
@@ -117,10 +174,14 @@ mod tests {
         TermoAutorizacao {
             data_assinatura: NaiveDate::from_ymd_opt(2026, 10, 20).expect("data válida"),
             vigencia: NaiveDate::from_ymd_opt(2027, 10, 20).expect("data válida"),
-            destinatario_numero: "11222333000181".to_owned(),
-            destinatario_nome: "Escritório & Associados".to_owned(),
-            assinado_por_numero: "11222333000181".to_owned(),
-            assinado_por_nome: "Responsável".to_owned(),
+            atores: AtoresTermoAutorizacao {
+                contratante_numero: "11222333000181".to_owned(),
+                contratante_nome: "Accurit Tecnologia Ltda".to_owned(),
+                autor_pedido_dados_numero: "11222333000181".to_owned(),
+                autor_pedido_dados_nome: "Escritório & Associados".to_owned(),
+                contribuinte_numero: "52998224725".to_owned(),
+                contribuinte_nome: "João da Silva".to_owned(),
+            },
         }
     }
 
@@ -128,8 +189,11 @@ mod tests {
     fn gera_termo_xml_sem_perder_textos_fixos_ou_escapar_atributos() {
         let xml = termo().para_xml().expect("XML válido");
         assert!(xml.starts_with("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"));
-        assert!(xml.contains("Escritório &amp; Associados"));
+        assert!(xml.contains("Escritório & Associados"));
         assert!(xml.contains("artigos 7º ou 11º da LGPD"));
+        assert!(xml.contains("<contratante"));
+        assert!(xml.contains("<autorPedidoDados"));
+        assert!(xml.contains("<contribuinte"));
         assert!(!xml.contains('\n'));
     }
 
@@ -146,7 +210,33 @@ mod tests {
     #[test]
     fn rejeita_caractere_xml_invalido() {
         let mut termo = termo();
-        termo.destinatario_nome.push('\u{1}');
+        termo.atores.contribuinte_nome.push('\u{1}');
         assert_eq!(termo.para_xml(), Err(ErroAssinatura::CaractereXmlInvalido));
+    }
+
+    #[test]
+    fn rejeita_contratante_nao_cnpj() {
+        let mut termo = termo();
+        termo.atores.contratante_numero = "52998224725".to_owned(); // CPF
+        assert_eq!(termo.para_xml(), Err(ErroAssinatura::TermoInvalido));
+    }
+
+    #[test]
+    fn rejeita_autor_pedido_dados_nao_cnpj() {
+        let mut termo = termo();
+        termo.atores.autor_pedido_dados_numero = "52998224725".to_owned(); // CPF
+        assert_eq!(termo.para_xml(), Err(ErroAssinatura::TermoInvalido));
+    }
+
+    #[test]
+    fn aceita_contribuinte_pf_ou_pj() {
+        // PF
+        let mut termo = termo();
+        termo.atores.contribuinte_numero = "52998224725".to_owned();
+        assert!(termo.para_xml().is_ok());
+
+        // PJ
+        termo.atores.contribuinte_numero = "12345678000190".to_owned();
+        assert!(termo.para_xml().is_ok());
     }
 }

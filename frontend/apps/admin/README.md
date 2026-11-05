@@ -1,59 +1,47 @@
-# Admin
+# admin — Backoffice SaaS (Angular)
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.2.5.
+Backoffice do administrador da plataforma: gestão de escritórios (tenants) e alternância do modo trial do SERPRO.
 
-## Development server
+## Rotas
 
-To start a local development server, run:
+| Rota | Descrição |
+| --- | --- |
+| `/login` | Login administrativo (`publicGuard`) |
+| `/tenants` | Listagem de escritórios com métricas (`authGuard`) |
 
-```bash
-ng serve
+Rotas lazy via `loadComponent`; base-href de produção é `/admin/` (build arg `BASE_HREF` no compose).
+
+## Estrutura
+
+```
+src/app/
+├─ core/
+│  ├─ api.config.ts          # API_BASE_URL (InjectionToken)
+│  └─ auth/
+│     ├─ auth.service.ts     # login/logout com Signals (isLoading, errorMessage)
+│     ├─ session.store.ts    # SessionStore persistido em localStorage
+│     ├─ auth.interceptor.ts # Bearer token + redirect em 401
+│     └─ auth.guards.ts      # authGuard / publicGuard
+├─ data/
+│  └─ tenant.service.ts      # estado dos tenants em Signals
+└─ features/
+   ├─ auth/login.component.ts
+   └─ tenants/tenant-list.component.ts
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+## Padrão
 
-## Code scaffolding
+Standalone + Signals ONLY na UI: os services (`data/`) guardam o estado em `#state = signal(...)` privado e expõem `computed` de leitura; componentes consomem os signals declarativamente no template (`@if`, `@for`), sem `async pipe` nem observables de UI. RxJS aparece apenas no HttpClient e no interceptor.
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+## Comandos
 
-```bash
-ng generate component component-name
+```sh
+pnpm --filter admin dev       # ng serve (http://localhost:4200)
+pnpm --filter admin build     # ng build --configuration production
+pnpm --filter admin test      # Vitest
+pnpm --filter admin typecheck
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+## Docker
 
-```bash
-ng generate --help
-```
-
-## Building
-
-To build the project run:
-
-```bash
-ng build
-```
-
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+Serviço `admin` no compose: build a partir do `./frontend` (`apps/admin/Dockerfile`), runtime nginx servindo o SPA estático com `/healthz` e roteado em `/admin/`.

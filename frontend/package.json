@@ -1,8 +1,9 @@
 {
-  "name": "with-angular",
+  "name": "accurit-frontend",
   "private": true,
   "scripts": {
     "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
