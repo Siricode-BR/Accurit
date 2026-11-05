@@ -1,32 +1,42 @@
 {
-  "name": "@repo/ui",
-  "version": "0.0.0",
+  "name": "@accurit/ui",
+  "version": "1.0.0",
   "private": true,
-  "main": "./dist/ui/fesm2022/ui.mjs",
-  "types": "./dist/ui/types/ui.d.ts",
+  "main": "./dist/ui/fesm2022/accurit-ui.mjs",
+  "types": "./dist/ui/types/accurit-ui.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/ui/types/accurit-ui.d.ts",
+      "import": "./dist/ui/fesm2022/accurit-ui.mjs",
+      "default": "./dist/ui/fesm2022/accurit-ui.mjs"
+    },
+    "./tokens.css": "./tokens.css"
+  },
   "scripts": {
     "ng": "ng",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "lint": "eslint . --max-warnings 0",
-    "clean": "rm -rf .turbo node_modules .angular"
+    "clean": "rm -rf .turbo node_modules .angular dist"
   },
   "dependencies": {
-    "@angular/common": "22.1.5",
-    "@angular/compiler": "22.1.5",
-    "@angular/core": "22.1.5",
-    "@angular/forms": "22.1.5",
-    "@angular/platform-browser": "22.1.5",
-    "@angular/router": "22.1.5",
-    "rxjs": "7.8.2",
-    "tslib": "2.8.1",
-    "zone.js": "0.16.3"
+    "@accurit/core": "workspace:*",
+    "@accurit/shared": "workspace:*",
+    "@angular/common": "^22.2.0",
+    "@angular/compiler": "^22.2.0",
+    "@angular/core": "^22.2.0",
+    "@angular/forms": "^22.2.0",
+    "@angular/platform-browser": "^22.2.0",
+    "@angular/router": "^22.2.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0",
+    "zone.js": "^0.16.0"
   },
   "devDependencies": {
-    "@angular/build": "22.1.7",
-    "@angular/cli": "22.1.7",
-    "@angular/compiler-cli": "22.1.5",
+    "@angular/build": "^22.2.5",
+    "@angular/cli": "^22.2.5",
+    "@angular/compiler-cli": "^22.2.0",
     "@repo/eslint-config": "workspace:*",
     "@types/jasmine": "6.0.0",
     "jasmine-core": "7.0.2",
@@ -35,6 +45,7 @@
     "karma-coverage": "2.2.1",
     "karma-jasmine": "5.1.0",
     "karma-jasmine-html-reporter": "2.3.0",
-    "ng-packagr": "22.1.1"
+    "ng-packagr": "22.1.1",
+    "typescript": "~6.0.2"
   }
 }

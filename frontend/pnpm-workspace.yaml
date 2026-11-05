@@ -8,3 +8,5 @@ allowBuilds:
   lmdb: true
   msgpackr-extract: true
   pnpm: true
+  sharp: false
+  unrs-resolver: false

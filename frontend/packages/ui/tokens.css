@@ -1,0 +1,33 @@
+:root {
+  /* Brand Accurit Colors */
+  --acc-color-primary: #1e40af;
+  --acc-color-primary-hover: #1d4ed8;
+  --acc-color-primary-light: #eff6ff;
+  --acc-color-secondary: #0f172a;
+
+  /* Semantic Feedback */
+  --acc-color-success: #15803d;
+  --acc-color-success-bg: #f0fdf4;
+  --acc-color-warning: #b45309;
+  --acc-color-warning-bg: #fffbeb;
+  --acc-color-danger: #b91c1c;
+  --acc-color-danger-bg: #fef2f2;
+  --acc-color-info: #0369a1;
+  --acc-color-info-bg: #f0f9ff;
+
+  /* Surfaces & Neutrals */
+  --acc-color-bg: #f8fafc;
+  --acc-color-surface: #ffffff;
+  --acc-color-border: #e2e8f0;
+  --acc-color-text-main: #0f172a;
+  --acc-color-text-muted: #64748b;
+
+  /* Typography & Sizing */
+  --acc-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --acc-radius-sm: 4px;
+  --acc-radius-md: 8px;
+  --acc-radius-lg: 12px;
+  --acc-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --acc-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
