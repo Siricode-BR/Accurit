@@ -2,7 +2,7 @@
 @import "tailwindcss";
 
 body {
-  font-family: var(--acc-font-sans);
+  font-family: var(--font-inter), var(--acc-font-sans);
   background-color: var(--acc-color-bg);
   color: var(--acc-color-text-main);
   margin: 0;

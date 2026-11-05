@@ -5,8 +5,11 @@
     "ng": "ng",
     "start": "ng serve",
     "build": "ng build",
+    "dev": "ng serve",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "test": "ng test",
+    "clean": "Remove-Item -Recurse -Force dist, .angular -ErrorAction SilentlyContinue"
   },
   "private": true,
   "packageManager": "pnpm@12.3.4",
@@ -33,6 +36,7 @@
     "prettier": "^3.8.1",
     "tailwindcss": "^4.1.12",
     "typescript": "~6.0.2",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.0",
+    "zone.js": "^0.16.0"
   }
 }

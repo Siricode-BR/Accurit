@@ -191,6 +191,9 @@ importers:
       vitest:
         specifier: ^5.0.0
         version: 5.1.0(@types/node@26.4.1)(jsdom@30.1.3)(vite@8.3.5(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.1(supports-color@8.1.1))(sass-embedded@1.104.1)(sass@1.104.1)(terser@5.51.2))
+      zone.js:
+        specifier: ^0.16.0
+        version: 0.16.3
 
   apps/client:
     dependencies:
@@ -258,6 +261,9 @@ importers:
       vitest:
         specifier: ^5.0.0
         version: 5.1.0(@types/node@26.4.1)(jsdom@30.1.3)(vite@8.3.5(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.1(supports-color@8.1.1))(sass-embedded@1.104.1)(sass@1.104.1)(terser@5.51.2))
+      zone.js:
+        specifier: ^0.16.0
+        version: 0.16.3
 
   apps/web:
     dependencies:
@@ -280,7 +286,7 @@ importers:
         specifier: 19.3.0
         version: 19.3.0(react@19.3.0)
     devDependencies:
-      '@tailwindcss/turbopack':
+      '@tailwindcss/postcss':
         specifier: ^4
         version: 4.3.4
       '@types/node':
@@ -2388,9 +2394,6 @@ packages:
 
   '@tailwindcss/postcss@4.3.4':
     resolution: {integrity: sha512-6O0QLY+1CseO8ivlYK2Y7IxNPaQ8D5ypxrV+ws34mbxknWH824J+gEWtJ0gyFiYAudmdEeXdF8kqwgXIaZRyHw==}
-
-  '@tailwindcss/turbopack@4.3.4':
-    resolution: {integrity: sha512-zaGyyqTe+7Leowbp5HZ6SXBQ/XFbGK4sV/I5ZPwiO/bWD1j/ukJGzyKOZLj9//uD11790obelpdQHjXJRTpORA==}
 
   '@turbo/darwin-64@2.11.10':
     resolution: {integrity: sha512-By4idRap5+nLnMuRzLB4qkOPRlvNdyY1ne4VJYDyUoUB11H94k7uif9mbe3JT8JSNXs1D68uMcBj6hJ/jMQRvA==}
@@ -7033,13 +7036,6 @@ snapshots:
       '@tailwindcss/node': 4.3.4
       '@tailwindcss/oxide': 4.3.4
       postcss: 8.5.28
-      tailwindcss: 4.3.4
-
-  '@tailwindcss/turbopack@4.3.4':
-    dependencies:
-      '@alloc/quick-lru': 5.3.0
-      '@tailwindcss/node': 4.3.4
-      '@tailwindcss/oxide': 4.3.4
       tailwindcss: 4.3.4
 
   '@turbo/darwin-64@2.11.10':

@@ -88,7 +88,8 @@ services:
 
   web:
     build:
-      context: ./web
+      context: ./frontend
+      dockerfile: apps/web/Dockerfile
     container_name: accurit-web
     restart: unless-stopped
     init: true
@@ -108,7 +109,8 @@ services:
 
   admin:
     build:
-      context: ./admin
+      context: ./frontend
+      dockerfile: apps/admin/Dockerfile
       args:
         BASE_HREF: /admin/
     container_name: accurit-admin
@@ -124,7 +126,8 @@ services:
 
   client:
     build:
-      context: ./client
+      context: ./frontend
+      dockerfile: apps/client/Dockerfile
       args:
         BASE_HREF: /app/
     container_name: accurit-client
