@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use crate::application::integra_contador::{AutenticarProcuradorUseCase, ExecutarIntegraContadorUseCase};
+use crate::application::integra_contador::{
+    AutenticarProcuradorUseCase, ExecutarIntegraContadorUseCase,
+};
 
 #[derive(Clone)]
 pub struct EstadoIntegraContador {

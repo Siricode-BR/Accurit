@@ -164,12 +164,24 @@ fn mapear_erro(erro: ErroIntegraContador) -> ApiError {
             "ESTADO_INDETERMINADO",
             "A SERPRO não confirmou o resultado. Consulte o estado antes de qualquer repetição.",
         ),
-        ErroIntegraContador::PayloadInvalido | ErroIntegraContador::RespostaInvalida => {
+        ErroIntegraContador::PayloadInvalido => {
             ApiError::validacao("A requisição ou resposta não corresponde ao contrato.")
         }
-        ErroIntegraContador::Indisponivel | ErroIntegraContador::ConfiguracaoIncompleta => {
-            ApiError::indisponivel()
-        }
+        // A SERPRO retornou HTTP 200 com corpo malformado: não é culpa do
+        // cliente, é falha upstream. Nunca exponha detalhes do corpo.
+        ErroIntegraContador::RespostaInvalida => ApiError::nova(
+            StatusCode::BAD_GATEWAY,
+            "SERPRO_RESPOSTA_INVALIDA",
+            "A SERPRO retornou uma resposta inválida para o Termo de Autorização.",
+        ),
+        // Falha de resolução de cliente/tenant: fail-closed, mas não é
+        // indisponibilidade de infra — é configuração/permissão do escritório.
+        ErroIntegraContador::ConfiguracaoIncompleta => ApiError::nova(
+            StatusCode::FORBIDDEN,
+            "CONFIGURACAO_INCOMPLETA",
+            "Configuração ou certificado do escritório incompleto para o fluxo de procurador.",
+        ),
+        ErroIntegraContador::Indisponivel => ApiError::indisponivel(),
         ErroIntegraContador::Persistencia => ApiError::erro_interno(),
     }
 }

@@ -95,31 +95,39 @@ Procurador. O fluxo implementado em `AutenticarProcuradorUseCase` é:
 
    | Ator XML | Identidade | Origem |
    | --- | --- | --- |
-   | `<contratante>` | CNPJ + razão social da plataforma SaaS | Configuração (`SERPRO_CONTRATANTE_*`) |
-   | `<autorPedidoDados>` | CNPJ + razão social do escritório | Contexto (`escritorios.cnpj`, `escritorios.nome`) |
-   | `<contribuinte>` | CPF/CNPJ + nome do cliente | `clientes` (`cpf_cnpj`, `nome_razao_social`) |
+   | `<destinatario>` (papel `contratante`) | CNPJ + razão social da plataforma SaaS | Configuração (`SERPRO_CONTRATANTE_*`) |
+   | `<assinadoPor>` (papel `autor pedido de dados`) | CNPJ + razão social do escritório | Contexto (`escritorios.cnpj`, `escritorios.nome`) |
 
-   - `dataAssinatura`: data atual; `vigencia`: 365 dias após a assinatura (configurável no caso de
-     uso); o XML é **fail-closed** se `vigencia < dataAssinatura` ou se qualquer ator for inválido;
-   - os três nomes são obrigatórios e são escapados como atributos XML;
-   - `tipo` do **envelope** deriva do documento (11 dígitos → `1` PF, 14 dígitos → `2` PJ); no **XML** do termo é `PF`/`PJ`.
-4. **Validação explícita do trio de CNPJs.** Antes de gerar/assinar, o backend valida a estrutura
-   de 3 CNPJs (`TrioSoftwareHouse` / `AtoresTermoAutorizacao::validar`):
-   - `contratante` **obrigatoriamente CNPJ** (não CPF);
-   - `autorPedidoDados` **obrigatoriamente CNPJ** (não CPF);
-   - `contribuinte` pode ser CPF ou CNPJ;
-   - os três nomes são obrigatórios;
+   - `dataAssinatura`: data atual (Brasília); `vigencia`: 365 dias após a assinatura (configurável no caso
+     de uso); o XML é **fail-closed** se `vigencia < dataAssinatura` ou se qualquer ator for inválido;
+   - os dois nomes são obrigatórios e são escapados como atributos XML;
+   - `tipo` do **envelope** deriva do documento (11 dígitos → `1` PF, 14 dígitos → `2` PJ); no **XML** do
+     termo é `PF`/`PJ`.
+4. **Validação explícita dos atores.** Antes de gerar/assinar, o backend valida o par de atores
+   (`AtoresTermoAutorizacao::validar`, delegado por `TermoAutorizacao::validar`):
+   - `<destinatario>` **obrigatoriamente CNPJ** (não CPF);
+   - `<assinadoPor>` pode ser CPF ou CNPJ (deve ser o número do certificado A1 que assina);
+   - os dois nomes são obrigatórios;
    - qualquer violação impede a assinatura e a chamada ao `/Apoiar`.
+   Não existe ator `contribuinte` no Termo — ele vive apenas no envelope JSON da API.
 5. **Assinatura XMLDSig.** `AssinadorXmlImpl` assina o termo conforme o subconjunto adotado pelo
-   SERPRO (NFe/eSocial):
+   SERPRO (NFe/eSocial), com uma C14N 2001 mínima implementada no próprio adapter (não há
+   biblioteca XMLDSig consolidada no lockfile):
    - assinatura **enveloped** (`<Signature>` dentro de `<termoDeAutorizacao>`);
-   - canonicalização **C14N 2001** (`REC-xml-c14n-20010315`);
-   - método de assinatura **RSA-SHA256** (`xmldsig-more#rsa-sha256`);
-   - digest **SHA-256** (`xmlenc#sha256`);
+   - canonicalização **C14N 2001** (`REC-xml-c14n-20010315`) aplicada ao documento para o
+     `DigestValue` (SHA-256) e ao `SignedInfo` antes de assinar;
+   - método de assinatura **RSA-SHA256** (`xmldsig-more#rsa-sha256`, PKCS#1 v1.5);
    - `Reference URI=""` (todo o documento) com enveloped-signature + C14N como transforms;
    - `<KeyInfo>` traz **apenas o certificado do titular** (EndCertOnly), em base64;
+   - namespace default `http://www.w3.org/2000/09/xmldsig#` declarado na tag `<Signature>`;
    - RSASSA-PKCS1-v1_5 via `rsa` crate sobre o PKCS#8 DER extraído do PFX `.p12` (p12-keystore,
      política `Strict`: vínculo chave↔cadeia por `localKeyId`).
+   **Limitação documentada:** a C14N mínima injetada no `SignedInfo` isolado não herda o
+   `xmlns` default do `<Signature>` pai; o documento final ainda carrega o `xmlns` na tag
+   `<Signature>`, conforme exige o SERPRO.
+   A validação completa de cadeia ICP-Brasil + LCR + uso da chave + série A é delegada ao
+   SERPRO no `/Apoiar` (que rejeita com 403/400); localmente o adapter garante apenas que há
+   certificado e chave extratíveis.
 6. **Envio ao SERPRO.** O XML assinado é codificado em **base64** e enviado como
    `pedidoDados.dados = '{"xml": "<base64>"}'` (string JSON escapada) no envelope:
 
@@ -163,7 +171,11 @@ Procurador. O fluxo implementado em `AutenticarProcuradorUseCase` é:
    (autenticado, audiência `Client`) dispara a validação; o `apps/client` exibe o resultado no
    `acc-badge` da lista de clientes (`Autorizada`/`Pendente`).
 
-#### 2.3 Estrutura do Termo de Autorização (3 CNPJs)
+#### 2.3 Estrutura do Termo de Autorização (destinatário + assinado por)
+
+Conforme `docs/Serpro/Integra-Contador/padroes-tecnicos-assinatura-xml.md`, o Termo declara
+exatamente dois atores no `<dados>` — `<destinatario>` (contratante) e `<assinadoPor>`
+(autor do pedido de dados). Não existe ator `contribuinte` no Termo.
 
 ```xml
 <termoDeAutorizacao>
@@ -174,18 +186,17 @@ Procurador. O fluxo implementado em `AutenticarProcuradorUseCase` é:
     <finalidade texto="..."/>
     <dataAssinatura data="20261106"/>
     <vigencia data="20271106"/>
-    <contratante numero="[CNPJ SaaS]"       nome="[Nome SaaS]"      tipo="PJ" papel="contratante"/>
-    <autorPedidoDados numero="[CNPJ Escritório]" nome="[Nome do Escritório]" tipo="PJ" papel="autor pedido de dados"/>
-    <contribuinte numero="[CPF/CNPJ Cliente]" nome="[Nome do Cliente]" tipo="[PF|PJ]" papel="contribuinte"/>
+    <destinatario numero="[CNPJ SaaS]"       nome="[Nome SaaS]"      tipo="PJ" papel="contratante"/>
+    <assinadoPor numero="[CNPJ Escritório]" nome="[Nome do Escritório]" tipo="PJ" papel="autor pedido de dados"/>
   </dados>
   <Signature xmlns="http://www.w3.org/2000/09/xmldsig#">…</Signature>
 </termoDeAutorizacao>
 ```
 
-**Regras de validação da estrutura de 3 CNPJs:**
-- `Contratante` e `AutorPedidoDados` **obrigatoriamente devem ser CNPJ** (não CPF).
-- `Contribuinte` pode ser CPF ou CNPJ.
-- Os três nomes são **obrigatórios** (não podem estar vazios).
+**Regras de validação dos atores do Termo:**
+- `<destinatario>` (contratante) **obrigatoriamente CNPJ** (não CPF).
+- `<assinadoPor>` (procurador) pode ser CPF ou CNPJ (deve bater com o certificado A1 que assina).
+- Os dois nomes são **obrigatórios** (não podem estar vazios).
 - A validação é fail-closed: qualquer estrutura incompleta impede a assinatura e, portanto,
   a chamada a `/Apoiar`.
 
@@ -294,7 +305,7 @@ O modelo B não é ativado por padrão e não altera o modelo A.
 - **Gestão de certificados:** expiração, renovação e revogação exigem processo operacional.
 - **Complexidade do modelo B e C:** Termo, procuração e token adicional aumentam o risco operacional.
 - **Configuração por tenant:** o onboarding precisa validar credencial e certificado antes de ativar produção.
-- **Modelo Software House:** requer geração e assinatura de XML com estrutura de 3 CNPJs, o que adiciona uma etapa técnica ao fluxo (além de depender de `SERPRO_CONTRATANTE_CNPJ`/`_NOME`).
+- **Modelo Software House:** requer geração e assinatura de XML com estrutura de 2 atores (destinatário + assinado por), o que adiciona uma etapa técnica ao fluxo (além de depender de `SERPRO_CONTRATANTE_CNPJ`/`_NOME`).
 
 ### Mitigações
 
@@ -302,8 +313,8 @@ O modelo B não é ativado por padrão e não altera o modelo A.
 - Alertar sobre expiração do certificado A1.
 - Cobrir a porta com testes de modelo A e testes de contrato para os modelos B e C.
 - Manter o modelo B desabilitado até que haja necessidade e aprovação explícita.
-- Documentar a estrutura de 3 CNPJs do termo de autorização com testes unitários.
-- Fail-closed em toda a cadeia: sem config, sem certificado, sem trio válido → nenhuma chamada ao SERPRO.
+- Documentar a estrutura de 2 atores (destinatário + assinado por) do termo de autorização com testes unitários.
+- Fail-closed em toda a cadeia: sem config, sem certificado, sem par de atores válido → nenhuma chamada ao SERPRO.
 
 ## Conformidade e Regras de Negócio
 
@@ -317,9 +328,9 @@ O modelo B não é ativado por padrão e não altera o modelo A.
 6. **Sem exposição:** o frontend nunca recebe `consumer_secret`, certificado, chave privada ou
    tokens.
 7. **Modelo B:** exige configuração explícita, revisão jurídica e nova decisão de produto.
-8. **Modelo Software House (C):** exige geração de termo com 3 atores (Contratante, AutorPedidoDados,
-   Contribuinte) e assinatura com certificado A1 do Procurador. O `jwt_token` obtido via
-   `ENVIOXMLASSINADO81` é usado como Bearer Token nas chamadas subsequentes.
+8. **Modelo Software House (C):** exige geração de termo com 2 atores (destinatário = contratante SaaS,
+   assinado por = Procurador escritório) e assinatura com certificado A1 do Procurador. O
+   `jwt_token` obtido via `ENVIOXMLASSINADO81` é usado como Bearer Token nas chamadas subsequentes.
 9. **Auditoria:** toda resolução de credencial registra tenant, produto, ambiente e origem, sem
    segredos.
 
@@ -327,8 +338,8 @@ O modelo B não é ativado por padrão e não altera o modelo A.
 
 - O adapter do Integra Contador resolve credencial via `SerproCredentialProvider`.
 - O modelo A envia `contratante == autorPedidoDados` e não exige Termo.
-- O modelo C monta o termo com 3 atores, valida CNPJ do contratante/autor, assina XMLDSig e grava
-  o token por `(escritório, cliente, ambiente)`.
+- O modelo C monta o termo com 2 atores (destinatário = contratante, assinado por = procurador),
+  valida CNPJ do contratante, assina XMLDSig e grava o token por `(escritório, cliente, ambiente)`.
 - O modelo B, quando habilitado, exige Termo e `autenticar_procurador_token`.
 - Credenciais e certificados de um escritório nunca são usados por outro.
 - Nenhum segredo aparece em logs, respostas ou bundle frontend.

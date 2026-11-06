@@ -134,62 +134,6 @@ pub fn catalogo_procuracoes() -> HashMap<&'static str, RegraProcuracao> {
     mapa
 }
 
-/// Trio de identificação exigido pelo SERPRO no XML base64 do Termo de
-/// Autorização do modelo **Software House** (AUTENTICAPROCURADOR):
-///
-/// 1. `contratante` — CNPJ da Software House (nossa plataforma SaaS,
-///    contratante da API e detentora do Bearer Token principal);
-/// 2. `autorPedidoDados` — CNPJ do Escritório de Contabilidade
-///    (Procurador, titular do certificado A1 que assina o termo);
-/// 3. `contribuinte` — CPF/CNPJ do cliente do escritório (outorgante da
-///    procuração eletrônica via e-CAC).
-///
-/// O XML em base64 enviado a `ENVIOXMLASSINADO81` precisa declarar os três
-/// de forma explícita — diferente do modelo por escritório, em que
-/// `contratante == autorPedidoDados` torna o termo dispensável.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TrioSoftwareHouse {
-    pub contratante_documento: String,
-    pub contratante_nome: String,
-    pub autor_pedido_dados_documento: String,
-    pub autor_pedido_dados_nome: String,
-    pub contribuinte_documento: String,
-    pub contribuinte_nome: String,
-}
-
-impl TrioSoftwareHouse {
-    /// Valida o trio conforme a estrutura de 3 CNPJs do SERPRO:
-    /// contratante e autor do pedido de dados são obrigatoriamente CNPJ
-    /// (o contribuinte pode ser CPF ou CNPJ) e os três nomes são
-    /// obrigatórios. Delega as regras de documento para
-    /// `AtoresTermoAutorizacao`, garantindo uma única fonte de verdade.
-    pub fn validar(&self) -> Result<(), crate::domain::integra_contador::assinatura::ErroAssinatura> {
-        crate::domain::integra_contador::assinatura::AtoresTermoAutorizacao {
-            contratante_numero: self.contratante_documento.clone(),
-            contratante_nome: self.contratante_nome.clone(),
-            autor_pedido_dados_numero: self.autor_pedido_dados_documento.clone(),
-            autor_pedido_dados_nome: self.autor_pedido_dados_nome.clone(),
-            contribuinte_numero: self.contribuinte_documento.clone(),
-            contribuinte_nome: self.contribuinte_nome.clone(),
-        }
-        .validar()
-    }
-
-    /// Converte o trio em `AtoresTermoAutorizacao` para o XML do termo.
-    pub fn para_atores(
-        &self,
-    ) -> crate::domain::integra_contador::assinatura::AtoresTermoAutorizacao {
-        crate::domain::integra_contador::assinatura::AtoresTermoAutorizacao {
-            contratante_numero: self.contratante_documento.clone(),
-            contratante_nome: self.contratante_nome.clone(),
-            autor_pedido_dados_numero: self.autor_pedido_dados_documento.clone(),
-            autor_pedido_dados_nome: self.autor_pedido_dados_nome.clone(),
-            contribuinte_numero: self.contribuinte_documento.clone(),
-            contribuinte_nome: self.contribuinte_nome.clone(),
-        }
-    }
-}
-
 /// Obtém a regra de procuração de um serviço.
 pub fn regra_procuracao_para_servico(id_servico: &str) -> Option<RegraProcuracao> {
     catalogo_procuracoes().get(id_servico).cloned()
@@ -220,6 +164,7 @@ pub struct ValidacaoProcuracao {
 impl ValidacaoProcuracao {
     /// Fail-closed: status deve indicar validade, dentro da janela.
     /// Falha = negar (SPEC §6: "negar a execução").
+    #[allow(clippy::collapsible_if)]
     pub fn e_valida_agora(&self, agora: chrono::DateTime<chrono::Utc>) -> bool {
         if self.status != "VALIDA" && self.status != "ATIVA" {
             return false;
@@ -383,54 +328,5 @@ mod tests {
         // Demais serviços de referência não bloqueados
         assert!(!bloqueado_allowlist("PGDASD", "CONSDECLARACAO13"));
         assert!(!bloqueado_allowlist("DCTFWEB", "GERARGUIA31"));
-    }
-
-    #[test]
-    fn trio_software_house_aceita_tres_cnpjs_validos() {
-        let trio = TrioSoftwareHouse {
-            contratante_documento: "11122233000183".to_owned(), // SaaS
-            contratante_nome: "Accurit Tecnologia Ltda".to_owned(),
-            autor_pedido_dados_documento: "11222333000181".to_owned(), // Escritório
-            autor_pedido_dados_nome: "Escritório Modelo".to_owned(),
-            contribuinte_documento: "98765432000198".to_owned(), // Cliente
-            contribuinte_nome: "Cliente Ltda".to_owned(),
-        };
-        assert!(trio.validar().is_ok());
-        assert_eq!(trio.para_atores().contratante_numero, "11122233000183");
-    }
-
-    #[test]
-    fn trio_software_house_aceita_contribuinte_pf() {
-        let trio = TrioSoftwareHouse {
-            contratante_documento: "11122233000183".to_owned(),
-            contratante_nome: "Accurit Tecnologia Ltda".to_owned(),
-            autor_pedido_dados_documento: "11222333000181".to_owned(),
-            autor_pedido_dados_nome: "Escritório Modelo".to_owned(),
-            contribuinte_documento: "52998224725".to_owned(),
-            contribuinte_nome: "João da Silva".to_owned(),
-        };
-        assert!(trio.validar().is_ok());
-    }
-
-    #[test]
-    fn trio_software_house_rejeita_contratante_ou_autor_com_cpf() {
-        let mut trio = TrioSoftwareHouse {
-            contratante_documento: "52998224725".to_owned(), // CPF — inválido
-            contratante_nome: "Accurit Tecnologia Ltda".to_owned(),
-            autor_pedido_dados_documento: "11222333000181".to_owned(),
-            autor_pedido_dados_nome: "Escritório Modelo".to_owned(),
-            contribuinte_documento: "98765432000198".to_owned(),
-            contribuinte_nome: "Cliente Ltda".to_owned(),
-        };
-        assert_eq!(
-            trio.validar(),
-            Err(crate::domain::integra_contador::assinatura::ErroAssinatura::TermoInvalido)
-        );
-        trio.contratante_documento = "11122233000183".to_owned();
-        trio.autor_pedido_dados_documento = "52998224725".to_owned(); // CPF — inválido
-        assert_eq!(
-            trio.validar(),
-            Err(crate::domain::integra_contador::assinatura::ErroAssinatura::TermoInvalido)
-        );
     }
 }

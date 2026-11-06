@@ -3,15 +3,14 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use base64::Engine as _;
 use chrono::{NaiveDateTime, Utc};
-use secrecy::ExposeSecret;
+use secrecy::{ExposeSecret, SecretString};
 use url::Url;
 
 use crate::application::integra_contador::ports::{
     AutenticaProcuradorCliente, AutenticarProcuradorResultado,
 };
 use crate::domain::integra_contador::{
-    envelope::IntegraContadorRequest,
-    erros::ErroIntegraContador,
+    envelope::IntegraContadorRequest, erros::ErroIntegraContador,
 };
 use crate::domain::serpro::ambiente::AmbienteSerpro;
 use crate::domain::serpro::endpoints::{EndpointSerpro, EstrategiaAutenticacaoSerpro};
@@ -67,7 +66,8 @@ struct AutenticaDados {
 /// O SERPRO devolve `data_hora_expiracao` no fuso de Brasília
 /// (America/Sao_Paulo, UTC-3); converte para UTC corretamente.
 fn expiracao_utc(valor: &str) -> chrono::DateTime<Utc> {
-    if let Ok(naive) = NaiveDateTime::parse_from_str(&valor.replace(' ', "T"), "%Y-%m-%dT%H:%M:%S") {
+    if let Ok(naive) = NaiveDateTime::parse_from_str(&valor.replace(' ', "T"), "%Y-%m-%dT%H:%M:%S")
+    {
         // Brasília é UTC-3: o horário local equivale ao UTC somado de 3 h.
         let utc = naive + chrono::TimeDelta::try_hours(3).expect("3 horas cabe em TimeDelta");
         return chrono::DateTime::<Utc>::from_naive_utc_and_offset(utc, Utc);
@@ -145,11 +145,10 @@ impl AutenticaProcuradorCliente for AutenticaProcuradorClienteImpl {
             _ => return Err(ErroIntegraContador::RespostaInvalida),
         }
 
-        let envelope: crate::domain::integra_contador::envelope::IntegraContadorResponse =
-            resposta
-                .json()
-                .await
-                .map_err(|_| ErroIntegraContador::RespostaInvalida)?;
+        let envelope: crate::domain::integra_contador::envelope::IntegraContadorResponse = resposta
+            .json()
+            .await
+            .map_err(|_| ErroIntegraContador::RespostaInvalida)?;
 
         // `dados` chega como string JSON escapada contendo o objeto Autentica.
         let dados_texto = envelope
@@ -164,7 +163,7 @@ impl AutenticaProcuradorCliente for AutenticaProcuradorClienteImpl {
         }
 
         Ok(AutenticarProcuradorResultado {
-            jwt_token: autentica.autenticar_procurador_token,
+            jwt_token: SecretString::from(autentica.autenticar_procurador_token),
             expira_em: autentica
                 .data_hora_expiracao
                 .as_deref()
@@ -180,10 +179,16 @@ mod tests {
 
     #[test]
     fn exige_xml_base64_valido() {
-        assert!(base64::engine::general_purpose::STANDARD
-            .decode("aGVsbG8=")
-            .is_ok());
-        assert!(base64::engine::general_purpose::STANDARD.decode("!").is_err());
+        assert!(
+            base64::engine::general_purpose::STANDARD
+                .decode("aGVsbG8=")
+                .is_ok()
+        );
+        assert!(
+            base64::engine::general_purpose::STANDARD
+                .decode("!")
+                .is_err()
+        );
     }
 
     #[test]

@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use secrecy::SecretString;
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -161,9 +162,12 @@ pub trait CertificadoA1Provider: Send + Sync {
 }
 
 /// Resultado da autenticação do procurador (token JWT retornado pelo SERPRO).
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// `jwt_token` é um `SecretString`: nunca é serializado em logs/respostas e é
+/// zeroizado da memória após ser persistido cifrado no banco.
+#[derive(Debug, Clone)]
 pub struct AutenticarProcuradorResultado {
-    pub jwt_token: String,
+    pub jwt_token: SecretString,
     pub expira_em: chrono::DateTime<chrono::Utc>,
 }
 

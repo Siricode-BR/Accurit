@@ -1,5 +1,5 @@
-use thiserror::Error;
 use crate::domain::integra_contador::assinatura::ErroAssinatura;
+use thiserror::Error;
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum ErroIntegraContador {
     #[error("serviço não está habilitado")]
@@ -45,4 +45,3 @@ impl From<ErroAssinatura> for ErroIntegraContador {
         Self::ConfiguracaoIncompleta
     }
 }
-

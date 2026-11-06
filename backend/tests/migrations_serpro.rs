@@ -369,3 +369,132 @@ async fn procuracoes_e_certificados_aceitam_filhos_do_escritorio() {
         "SELECT (COUNT(*) > 0) AS total FROM certificados_a1 WHERE ativo IS TRUE"
     ));
 }
+
+fn semear_cliente(banco: &BancoTemporario, escritorio: Uuid, documento: &str) -> Uuid {
+    let mut conexao = banco.conexao();
+    let id = Uuid::now_v7();
+    sql_query(
+        "INSERT INTO clientes (id, escritorio_id, cpf_cnpj, nome_razao_social, tipo, criado_em, atualizado_em) \
+         VALUES ($1, $2, $3, $4, 'PJ', NOW(), NOW())",
+    )
+    .bind::<SqlUuid, _>(id)
+    .bind::<SqlUuid, _>(escritorio)
+    .bind::<Text, _>(documento)
+    .bind::<Text, _>(format!("Cliente {documento}"))
+    .execute(&mut conexao)
+    .expect("cliente deve ser inserido");
+    id
+}
+
+#[tokio::test]
+async fn tokens_serpro_exigem_cliente_para_autenticar_procurador() {
+    let ambiente = ambiente();
+    let escritorio = semear_escritorio(&ambiente.banco, "alfa");
+    let cliente = semear_cliente(&ambiente.banco, escritorio, "11222333000181");
+
+    let mut conexao = ambiente.banco.conexao();
+
+    // AUTENTICAR_PROCURADOR SEM cliente_id deve ser rejeitado pelo CHECK.
+    let sem_cliente = sql_query(
+        "INSERT INTO tokens_serpro \
+         (id, escritorio_id, produto, ambiente, tipo_token, autor_pedido_dados, token_cifrado, expira_em) \
+         VALUES ($1, $2, 'INTEGRA_CONTADOR', 'TRIAL', 'AUTENTICAR_PROCURADOR', '', $3, NOW() + INTERVAL '60 minutes')",
+    )
+    .bind::<SqlUuid, _>(Uuid::now_v7())
+    .bind::<SqlUuid, _>(escritorio)
+    .bind::<diesel::sql_types::Binary, _>(vec![1_u8])
+    .execute(&mut conexao);
+    assert!(
+        sem_cliente.is_err(),
+        "CHECK exige_cliente deve rejeitar AUTENTICAR_PROCURADOR sem cliente_id"
+    );
+
+    // AUTENTICAR_PROCURADOR COM cliente_id deve ser aceito.
+    let com_cliente = sql_query(
+        "INSERT INTO tokens_serpro \
+         (id, escritorio_id, cliente_id, produto, ambiente, tipo_token, autor_pedido_dados, token_cifrado, expira_em) \
+         VALUES ($1, $2, $3, 'INTEGRA_CONTADOR', 'TRIAL', 'AUTENTICAR_PROCURADOR', '', $4, NOW() + INTERVAL '60 minutes')",
+    )
+    .bind::<SqlUuid, _>(Uuid::now_v7())
+    .bind::<SqlUuid, _>(escritorio)
+    .bind::<SqlUuid, _>(cliente)
+    .bind::<diesel::sql_types::Binary, _>(vec![2_u8])
+    .execute(&mut conexao);
+    assert!(
+        com_cliente.is_ok(),
+        "AUTENTICAR_PROCURADOR com cliente_id deve ser aceito"
+    );
+
+    // Outros tipos de token (ACCESS/JWT) continuam aceitando cliente_id NULL.
+    let sem_cliente_outro_tipo = sql_query(
+        "INSERT INTO tokens_serpro \
+         (id, escritorio_id, produto, ambiente, tipo_token, autor_pedido_dados, token_cifrado, expira_em) \
+         VALUES ($1, $2, 'INTEGRA_CONTADOR', 'TRIAL', 'ACCESS', '', $3, NOW() + INTERVAL '60 minutes')",
+    )
+    .bind::<SqlUuid, _>(Uuid::now_v7())
+    .bind::<SqlUuid, _>(escritorio)
+    .bind::<diesel::sql_types::Binary, _>(vec![3_u8])
+    .execute(&mut conexao);
+    assert!(
+        sem_cliente_outro_tipo.is_ok(),
+        "ACCESS com cliente_id NULL deve ser aceito"
+    );
+}
+
+#[tokio::test]
+async fn tokens_serpro_upsert_por_constraint_uq_tokens_serpro() {
+    let ambiente = ambiente();
+    let escritorio = semear_escritorio(&ambiente.banco, "alfa");
+    let cliente = semear_cliente(&ambiente.banco, escritorio, "11222333000181");
+
+    let mut conexao = ambiente.banco.conexao();
+
+    // Insere o token inicial.
+    let primeiro = sql_query(
+        "INSERT INTO tokens_serpro \
+         (id, escritorio_id, cliente_id, produto, ambiente, tipo_token, autor_pedido_dados, token_cifrado, expira_em) \
+         VALUES ($1, $2, $3, 'INTEGRA_CONTADOR', 'TRIAL', 'AUTENTICAR_PROCURADOR', '', $4, NOW() + INTERVAL '60 minutes')",
+    )
+    .bind::<SqlUuid, _>(Uuid::now_v7())
+    .bind::<SqlUuid, _>(escritorio)
+    .bind::<SqlUuid, _>(cliente)
+    .bind::<diesel::sql_types::Binary, _>(vec![1_u8])
+    .execute(&mut conexao)
+    .expect("token inicial deve ser inserido");
+    assert_eq!(primeiro, 1);
+
+    // Reinserir a mesma chave (escritorio, cliente, produto, ambiente,
+    // tipo_token, autor_pedido_dados) deve falhar pela constraint única
+    // uq_tokens_serpro (UNIQUE NULLS NOT DISTINCT). O upsert por essa
+    // constraint é executado pelo código Rust (salvar_jwt_procurador), não
+    // por SQL cru aqui.
+    let duplicado = sql_query(
+        "INSERT INTO tokens_serpro \
+         (id, escritorio_id, cliente_id, produto, ambiente, tipo_token, autor_pedido_dados, token_cifrado, expira_em) \
+         VALUES ($1, $2, $3, 'INTEGRA_CONTADOR', 'TRIAL', 'AUTENTICAR_PROCURADOR', '', $4, NOW() + INTERVAL '60 minutes')",
+    )
+    .bind::<SqlUuid, _>(Uuid::now_v7())
+    .bind::<SqlUuid, _>(escritorio)
+    .bind::<SqlUuid, _>(cliente)
+    .bind::<diesel::sql_types::Binary, _>(vec![9_u8])
+    .execute(&mut conexao);
+    assert!(
+        duplicado.is_err(),
+        "UNIQUE uq_tokens_serpro deve impedir duplicidade de (escritorio, cliente, produto, ambiente, tipo_token, autor)"
+    );
+
+    // Confirma que ainda existe exatamente uma linha para a chave.
+    let unica = sql_query(
+        "SELECT (COUNT(*) = 1) AS total FROM tokens_serpro \
+         WHERE escritorio_id = $1 \
+           AND cliente_id = $2 \
+           AND produto = 'INTEGRA_CONTADOR' \
+           AND ambiente = 'TRIAL' \
+           AND tipo_token = 'AUTENTICAR_PROCURADOR'",
+    )
+    .bind::<SqlUuid, _>(escritorio)
+    .bind::<SqlUuid, _>(cliente)
+    .get_result::<Total>(&mut conexao)
+    .expect("consulta deve funcionar");
+    assert!(unica.total, "deve haver exatamente um token por chave");
+}

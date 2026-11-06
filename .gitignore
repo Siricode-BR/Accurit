@@ -6,3 +6,4 @@ certs/
 nginx/certs/
 .idea/
 /.next/
+**/tsconfig.tsbuildinfo

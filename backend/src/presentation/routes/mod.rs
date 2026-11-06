@@ -265,8 +265,9 @@ where
         );
 
         // ===== AUTENTICAPROCURADOR (modelo Software House) =====
-        let criptografia_integra = criar_criptografia(config.certificate_master_key.expose_secret())
-            .expect("criptografia Integra deve inicializar");
+        let criptografia_integra =
+            criar_criptografia(config.certificate_master_key.expose_secret())
+                .expect("criptografia Integra deve inicializar");
         let autentica_procurador_http_cliente = std::sync::Arc::new(
             crate::infrastructure::integra_contador::AutenticaProcuradorClienteImpl::novo(
                 reqwest::Client::builder()

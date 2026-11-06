@@ -7,9 +7,8 @@ use uuid::Uuid;
 
 use crate::application::integra_contador::ports::{
     AuditoriaIntegraContador, CatalogoEscritoriosIntegra, CertificadoA1Provider,
-    ContextoIntegraContador, EventoAuditoriaIntegra, EventoChamadaIntegra,
-    RepositorioIdempotencia, ReservaIdempotencia, ResultadoReservaIdempotencia,
-    TokensSerproRepositorio,
+    ContextoIntegraContador, EventoAuditoriaIntegra, EventoChamadaIntegra, RepositorioIdempotencia,
+    ReservaIdempotencia, ResultadoReservaIdempotencia, TokensSerproRepositorio,
 };
 use crate::domain::integra_contador::envelope::Identificacao;
 use crate::domain::integra_contador::erros::ErroIntegraContador;
@@ -322,7 +321,9 @@ impl crate::application::integra_contador::ports::ValidadorProcuracao for Procur
 /// Autorização do AUTENTICAPROCURADOR. O conteúdo continua cifrado na
 /// saída (descifragem ocorre apenas em memória, no caso de uso).
 pub struct CertificadoA1ProviderDiesel {
-    repo: std::sync::Arc<crate::infrastructure::persistence::certificados::CertificadoRepositorioDiesel>,
+    repo: std::sync::Arc<
+        crate::infrastructure::persistence::certificados::CertificadoRepositorioDiesel,
+    >,
 }
 
 impl CertificadoA1ProviderDiesel {

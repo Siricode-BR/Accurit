@@ -1,19 +1,22 @@
 use std::sync::Arc;
 
-use chrono::Utc;
+use secrecy::{ExposeSecret, SecretString};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
+use zeroize::Zeroize;
 
-use crate::application::clientes::ClienteRepositorio;
 use crate::application::certificados::CertificadoCriptografia;
+use crate::application::clientes::ClienteRepositorio;
 use crate::application::integra_contador::ports::{
     AuditoriaIntegraContador, AutenticaProcuradorCliente, CatalogoEscritoriosIntegra,
     CertificadoA1Provider, ClienteIntegraContador, ContextoIntegraContador, ContratantePlataforma,
-    EntregaIntegraContador, EventoAuditoriaIntegra, EventoChamadaIntegra,
-    RepositorioIdempotencia, ReservaIdempotencia, ResultadoReservaIdempotencia,
-    TokensSerproRepositorio, ValidadorProcuracao,
+    EntregaIntegraContador, EventoAuditoriaIntegra, EventoChamadaIntegra, RepositorioIdempotencia,
+    ReservaIdempotencia, ResultadoReservaIdempotencia, TokensSerproRepositorio,
+    ValidadorProcuracao,
 };
-use crate::domain::integra_contador::assinatura::{AssinadorXml, TermoAutorizacao};
+use crate::domain::integra_contador::assinatura::{
+    AssinadorXml, AtoresTermoAutorizacao, TermoAutorizacao,
+};
 use crate::domain::integra_contador::envelope::{
     Identificacao, IntegraContadorRequest, PedidoDados, VerboIntegraContador,
 };
@@ -358,15 +361,18 @@ pub struct ComandoAutenticarProcurador {
 }
 
 /// Resultado da autenticação do procurador.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// `jwt_token` é um `SecretString`: nunca é serializado em logs/respostas e é
+/// zeroizado da memória após ser persistido cifrado no banco.
+#[derive(Debug, Clone)]
 pub struct ResultadoAutenticarProcurador {
-    pub jwt_token: String,
+    pub jwt_token: SecretString,
     pub expira_em: chrono::DateTime<chrono::Utc>,
 }
 
 /// Caso de uso para autenticar o procurador (escritório) junto ao SERPRO
 /// via endpoint AUTENTICAPROCURADOR/ENVIOXMLASSINADO81.
-/// 
+///
 /// Fluxo (modelo Software House):
 /// 1. Busca o cliente (contribuinte) e o certificado A1 ativo do escritório
 /// 2. Gera o Termo de Autorização com 3 atores: Contratante (SaaS, da
@@ -391,6 +397,7 @@ pub struct AutenticarProcuradorUseCase {
 }
 
 impl AutenticarProcuradorUseCase {
+    #[allow(clippy::too_many_arguments)]
     pub fn novo(
         contexto: Arc<dyn CatalogoEscritoriosIntegra>,
         cliente_repositorio: Arc<dyn ClienteRepositorio>,
@@ -451,22 +458,16 @@ impl AutenticarProcuradorUseCase {
             .await?
             .ok_or(ErroIntegraContador::ConfiguracaoIncompleta)?;
 
-        // 5. Constrói o Termo de Autorização com os 3 atores do modelo
-        //    Software House: Contratante (a plataforma SaaS, da configuração),
-        //    AutorPedidoDados (escritório/Procurador, do contexto) e
-        //    Contribuinte (cliente).
-        let termo = TermoAutorizacao {
-            data_assinatura: Utc::now().date_naive(),
-            vigencia: (Utc::now() + chrono::Duration::days(365)).date_naive(),
-            atores: crate::domain::integra_contador::assinatura::AtoresTermoAutorizacao {
-                contratante_numero: contratante_plataforma.numero.clone(),
-                contratante_nome: contratante_plataforma.nome.clone(),
-                autor_pedido_dados_numero: contexto.autor_pedido_dados.numero.clone(),
-                autor_pedido_dados_nome: contexto.escritorio_nome.clone(),
-                contribuinte_numero: contexto.contribuinte.numero.clone(),
-                contribuinte_nome: cliente.nome_razao_social.clone(),
-            },
-        };
+        // 5. Constrói o Termo de Autorização com os atores oficiais do SERPRO:
+        //    destinatario (Contratante = plataforma SaaS) e assinadoPor
+        //    (Procurador = escritório, titular do certificado A1 que assina).
+        //    O contribuinte vive apenas no envelope JSON, não no Termo.
+        let termo = TermoAutorizacao::novo_oficial(AtoresTermoAutorizacao {
+            destinatario_numero: contratante_plataforma.numero.clone(),
+            destinatario_nome: contratante_plataforma.nome.clone(),
+            assinado_por_numero: contexto.autor_pedido_dados.numero.clone(),
+            assinado_por_nome: contexto.escritorio_nome.clone(),
+        })?;
 
         // 6. Decifra o PFX A1 e a senha do escritório em memória; as
         //    cópias usadas na assinatura são zeroizadas pelo AssinadorXmlImpl
@@ -508,8 +509,8 @@ impl AutenticarProcuradorUseCase {
             },
         };
 
-        // 9. Envia para SERPRO
-        let resultado = self
+        // 9. Envia para SERPRO. Falhas são auditadas antes de propagar o erro.
+        let resultado = match self
             .autentica_cliente
             .enviar_xml_assinado(
                 &request,
@@ -517,20 +518,45 @@ impl AutenticarProcuradorUseCase {
                 comando.ambiente,
                 &comando.request_id,
             )
-            .await?;
+            .await
+        {
+            Ok(r) => r,
+            Err(erro) => {
+                let _ = self
+                    .auditoria
+                    .registrar_chamada(&EventoChamadaIntegra {
+                        escritorio_id: comando.escritorio_id,
+                        usuario_id: comando.usuario_id,
+                        verbo: VerboIntegraContador::Apoiar,
+                        id_sistema: "AUTENTICAPROCURADOR".to_owned(),
+                        id_servico: "ENVIOXMLASSINADO81".to_owned(),
+                        ambiente: comando.ambiente,
+                        estado: "FALHA_AUTENTICACAO".to_owned(),
+                        status_code: None,
+                        referencia_resposta: None,
+                        request_id: comando.request_id.clone(),
+                        bilhetavel: false,
+                    })
+                    .await;
+                return Err(erro);
+            }
+        };
 
-        // 10. Salva o token JWT no banco
+        // 10. Salva o token JWT cifrado no banco (vinculado a escritório+cliente).
+        //    Zeroiza a cópia em memória após persistir.
+        let mut jwt_exposto = resultado.jwt_token.expose_secret().to_owned();
         self.tokens_repositorio
             .salvar_jwt_procurador(
                 comando.escritorio_id,
                 comando.cliente_id,
                 comando.ambiente,
-                &resultado.jwt_token,
+                jwt_exposto.as_str(),
                 resultado.expira_em,
             )
             .await?;
+        jwt_exposto.zeroize();
 
-        // 11. Auditoria
+        // 11. Auditoria de sucesso
         self.auditoria
             .registrar_chamada(&EventoChamadaIntegra {
                 escritorio_id: comando.escritorio_id,

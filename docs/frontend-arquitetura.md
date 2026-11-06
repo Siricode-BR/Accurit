@@ -102,7 +102,7 @@ Software House (ADR-0007).
 1. A listagem de clientes (`ClienteService`) exibe em cada linha o botão **"Validar Procuração e-CAC"** (`acc-button` `primary`).
 2. Durante a requisição, o botão é substituído por `<acc-spinner size="sm">` (estado local `procuracaoValidando: signal<ReadonlySet<string>>`).
 3. Ao concluir, um `<acc-badge>` mostra o status: **Autorizada** (`status="success"`) ou **Pendente** (`status="warning"`).
-4. Falhas HTTP (401/403/429/503…) são convertidas pelo `data/procuracao.service.ts` em status `PENDENTE` e uma mensagem de erro não-bloqueante é exibida no topo da tela (banner `role="alert"` com botão `Fechar`).
+4. Falhas HTTP (401/403/429/503…) são convertidas pelo `data/procuracao.service.ts` em status `PENDENTE` e uma mensagem de erro não-bloqueante é exibida como banner `role="alert"` (com botão `Fechar`) renderizado abaixo da tabela de clientes.
 5. O status por cliente fica em `ProcuracaoService#statusPorCliente` (signal somente-leitura). Ausência de entrada = `PENDENTE`.
 
 ### 7.3 Gerenciamento seguro dos tokens de autorização
