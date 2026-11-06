@@ -1,12 +1,15 @@
 use diesel::prelude::*;
-use diesel::sql_types::{Bool, Integer, Jsonb, Nullable, Text, Uuid as SqlUuid};
+use diesel::sql_types::{
+    Binary, Bool, Integer, Jsonb, Nullable, Text, Timestamptz, Uuid as SqlUuid,
+};
 use serde_json::Value;
 use uuid::Uuid;
 
 use crate::application::integra_contador::ports::{
-    AuditoriaIntegraContador, CatalogoEscritoriosIntegra, ContextoIntegraContador,
-    EventoAuditoriaIntegra, EventoChamadaIntegra, RepositorioIdempotencia, ReservaIdempotencia,
-    ResultadoReservaIdempotencia,
+    AuditoriaIntegraContador, CatalogoEscritoriosIntegra, CertificadoA1Provider,
+    ContextoIntegraContador, EventoAuditoriaIntegra, EventoChamadaIntegra,
+    RepositorioIdempotencia, ReservaIdempotencia, ResultadoReservaIdempotencia,
+    TokensSerproRepositorio,
 };
 use crate::domain::integra_contador::envelope::Identificacao;
 use crate::domain::integra_contador::erros::ErroIntegraContador;
@@ -40,6 +43,8 @@ struct ContextoRow {
     #[diesel(sql_type = Nullable<Text>)]
     cnpj: Option<String>,
     #[diesel(sql_type = Text)]
+    nome_escritorio: String,
+    #[diesel(sql_type = Text)]
     cpf_operador: String,
     #[diesel(sql_type = Text)]
     documento_contribuinte: String,
@@ -61,7 +66,7 @@ impl CatalogoEscritoriosIntegra for IntegraContadorRepositorioDiesel {
         tokio::task::spawn_blocking(move || {
             let mut conexao = repositorio.conexao()?;
             let linha = diesel::sql_query(
-                "SELECT e.cnpj, u.cpf AS cpf_operador, c.cpf_cnpj AS documento_contribuinte \
+                "SELECT e.cnpj, e.nome AS nome_escritorio, u.cpf AS cpf_operador, c.cpf_cnpj AS documento_contribuinte \
                  FROM escritorios e \
                  INNER JOIN usuarios u \
                    ON u.escritorio_id = e.id AND u.id = $2 AND u.ativo = TRUE \
@@ -88,6 +93,7 @@ impl CatalogoEscritoriosIntegra for IntegraContadorRepositorioDiesel {
                 autor_pedido_dados: contratante,
                 contribuinte,
                 cpf_operador: Some(linha.cpf_operador),
+                escritorio_nome: linha.nome_escritorio,
             })
         })
         .await
@@ -307,4 +313,122 @@ impl crate::application::integra_contador::ports::ValidadorProcuracao for Procur
     ) -> Result<bool, ErroIntegraContador> {
         Ok(false)
     }
+}
+
+// ===== Modelo Software House: certíficado A1 do Procurador e token JWT por cliente =====
+
+/// Adaptador da porta `CertificadoA1Provider`: busca o certificado A1 ativo
+/// e válido do escritório (Procurador) — usado para assinar o Termo de
+/// Autorização do AUTENTICAPROCURADOR. O conteúdo continua cifrado na
+/// saída (descifragem ocorre apenas em memória, no caso de uso).
+pub struct CertificadoA1ProviderDiesel {
+    repo: std::sync::Arc<crate::infrastructure::persistence::certificados::CertificadoRepositorioDiesel>,
+}
+
+impl CertificadoA1ProviderDiesel {
+    pub fn novo(
+        repo: std::sync::Arc<
+            crate::infrastructure::persistence::certificados::CertificadoRepositorioDiesel,
+        >,
+    ) -> Self {
+        Self { repo }
+    }
+}
+
+#[async_trait::async_trait]
+impl CertificadoA1Provider for CertificadoA1ProviderDiesel {
+    async fn obter_ativo(
+        &self,
+        escritorio_id: Uuid,
+    ) -> Result<Option<crate::domain::certificados::Certificado>, ErroIntegraContador> {
+        let repo = self.repo.clone();
+        tokio::task::spawn_blocking(move || {
+            repo.buscar_ativo(escritorio_id)
+                .map_err(|_| ErroIntegraContador::Persistencia)
+        })
+        .await
+        .map_err(|_| ErroIntegraContador::Persistencia)?
+    }
+}
+
+/// Adaptador da porta `TokensSerproRepositorio`: persiste o token JWT do
+/// AUTENTICAPROCURADOR **cifrado** (AES-256-GCM, mesmo formato de
+/// `credenciais_serpro`) em `tokens_serpro`, vinculando `escritorio_id` e
+/// `cliente_id` (modelo por cliente/contribuinte).
+#[derive(Clone)]
+pub struct TokensSerproRepositorioDiesel {
+    pool: DbPool,
+    criptografia: std::sync::Arc<dyn crate::application::serpro::ports::CriptografiaSerpro>,
+}
+
+impl TokensSerproRepositorioDiesel {
+    pub fn novo(
+        pool: DbPool,
+        criptografia: std::sync::Arc<dyn crate::application::serpro::ports::CriptografiaSerpro>,
+    ) -> Self {
+        Self { pool, criptografia }
+    }
+}
+
+#[async_trait::async_trait]
+impl TokensSerproRepositorio for TokensSerproRepositorioDiesel {
+    async fn salvar_jwt_procurador(
+        &self,
+        escritorio_id: Uuid,
+        cliente_id: Uuid,
+        ambiente: AmbienteSerpro,
+        jwt_token: &str,
+        expira_em: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), ErroIntegraContador> {
+        let repo = self.clone();
+        let jwt = jwt_token.to_owned();
+        tokio::task::spawn_blocking(move || {
+            let token_cifrado = repo
+                .criptografia
+                .cifrar(jwt.as_bytes())
+                .map_err(|_| ErroIntegraContador::Persistencia)?;
+            let mut conexao = repo
+                .pool
+                .get()
+                .map_err(|_| ErroIntegraContador::Persistencia)?;
+
+            // Upsert pela constraint única nomeada uq_tokens_serpro
+            // (UNIQUE NULLS NOT DISTINCT): um escritório tem um token vigente
+            // por (cliente, produto, ambiente, tipo_token, autor_pedido_dados);
+            // para AUTENTICAR_PROCURADOR o cliente_id é obrigatório (CHECK).
+            diesel::sql_query(
+                "INSERT INTO tokens_serpro \
+                 (id, escritorio_id, cliente_id, produto, ambiente, tipo_token, \
+                  autor_pedido_dados, token_cifrado, escopo, expira_em, criado_em) \
+                 VALUES ($1, $2, $3, 'INTEGRA_CONTADOR', $4, 'AUTENTICAR_PROCURADOR', \
+                  '', $5, 'AUTENTICAPROCURADOR', $6, NOW()) \
+                 ON CONFLICT ON CONSTRAINT uq_tokens_serpro \
+                 DO UPDATE SET token_cifrado = EXCLUDED.token_cifrado, \
+                               expira_em = EXCLUDED.expira_em, \
+                               criado_em = NOW()",
+            )
+            .bind::<SqlUuid, _>(Uuid::now_v7())
+            .bind::<SqlUuid, _>(escritorio_id)
+            .bind::<Nullable<SqlUuid>, _>(Some(cliente_id))
+            .bind::<Text, _>(ambiente.as_str())
+            .bind::<Binary, _>(token_cifrado)
+            .bind::<Timestamptz, _>(expira_em)
+            .execute(&mut conexao)
+            .map_err(|_| ErroIntegraContador::Persistencia)?;
+            Ok(())
+        })
+        .await
+        .map_err(|_| ErroIntegraContador::Persistencia)?
+    }
+}
+
+/// Auxiliar: linha de token procurador vigente por cliente (uso futuro do
+/// cliente HTTP para o header `autenticar_procurador_token`).
+#[derive(QueryableByName)]
+#[allow(dead_code)]
+struct TokenSecret {
+    #[diesel(sql_type = Binary)]
+    token_cifrado: Vec<u8>,
+    #[diesel(sql_type = Timestamptz)]
+    expira_em: chrono::DateTime<chrono::Utc>,
 }

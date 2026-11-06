@@ -19,6 +19,10 @@ pub fn construir(
             "/procuracoes/consultar",
             post(handlers::consultar_procuracoes),
         )
+        .route(
+            "/procuracoes/autenticar",
+            post(handlers::autenticar_procurador),
+        )
         .route_layer(axum_middleware::from_fn_with_state(
             estado_ambiente,
             resolver_ambiente,

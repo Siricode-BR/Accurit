@@ -22,9 +22,7 @@ impl AtoresTermoAutorizacao {
             .map_err(|_| ErroAssinatura::TermoInvalido)?;
         let autor = CpfCnpj::novo(&self.autor_pedido_dados_numero)
             .map_err(|_| ErroAssinatura::TermoInvalido)?;
-        let contribuinte = CpfCnpj::novo(&self.contribuinte_numero)
-            .map_err(|_| ErroAssinatura::TermoInvalido)?;
-
+        CpfCnpj::novo(&self.contribuinte_numero).map_err(|_| ErroAssinatura::TermoInvalido)?;
         if contratante.tipo() != TipoDocumento::Cnpj {
             return Err(ErroAssinatura::TermoInvalido);
         }
@@ -155,10 +153,10 @@ fn escapar_atributo(valor: &str) -> Result<String, ErroAssinatura> {
             return Err(ErroAssinatura::CaractereXmlInvalido);
         }
         match caractere {
-            '&' => escapado.push_str("&"),
-            '<' => escapado.push_str("<"),
-            '>' => escapado.push_str(">"),
-            '"' => escapado.push_str("""),
+            '&' => escapado.push_str("&amp;"),
+            '<' => escapado.push_str("&lt;"),
+            '>' => escapado.push_str("&gt;"),
+            '"' => escapado.push_str("&quot;"),
             '\'' => escapado.push_str("&apos;"),
             _ => escapado.push(caractere),
         }
@@ -189,7 +187,7 @@ mod tests {
     fn gera_termo_xml_sem_perder_textos_fixos_ou_escapar_atributos() {
         let xml = termo().para_xml().expect("XML válido");
         assert!(xml.starts_with("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"));
-        assert!(xml.contains("Escritório & Associados"));
+        assert!(xml.contains("Escritório &amp; Associados"));
         assert!(xml.contains("artigos 7º ou 11º da LGPD"));
         assert!(xml.contains("<contratante"));
         assert!(xml.contains("<autorPedidoDados"));
@@ -236,7 +234,7 @@ mod tests {
         assert!(termo.para_xml().is_ok());
 
         // PJ
-        termo.atores.contribuinte_numero = "12345678000190".to_owned();
+        termo.atores.contribuinte_numero = "12345678000195".to_owned();
         assert!(termo.para_xml().is_ok());
     }
 }

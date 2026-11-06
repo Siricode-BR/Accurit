@@ -3,12 +3,14 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 
+use crate::application::integra_contador::ComandoAutenticarProcurador;
 use crate::application::integra_contador::ComandoIntegraContador;
 use crate::domain::integra_contador::erros::ErroIntegraContador;
 use crate::presentation::auth::RequestContext;
 use crate::presentation::error::ApiError;
 use crate::presentation::integra_contador::dto::{
-    RequisicaoConsultaProcuracoes, RequisicaoExecucao, ResultadoIntegraContadorResponse,
+    RequisicaoAutenticarProcurador, RequisicaoConsultaProcuracoes, RequisicaoExecucao,
+    ResultadoAutenticarProcuradorResponse, ResultadoIntegraContadorResponse,
     StatusIntegraContadorResponse,
 };
 use crate::presentation::integra_contador::state::EstadoIntegraContador;
@@ -47,6 +49,39 @@ pub async fn executar(
         .await
         .map_err(mapear_erro)?;
     Ok(Json(resultado.into()))
+}
+
+/// Valida a procuração e-CAC de um cliente: assina o Termo de Autorização
+/// com o certificado A1 do escritório, envia a AUTENTICAPROCURADOR
+/// (ENVIOXMLASSINADO81) e guarda o token por cliente. Responde apenas com
+/// status e expiração — o token nunca sai do backend (SPEC, REGRA SEG).
+pub async fn autenticar_procurador(
+    State(estado): State<EstadoIntegraContador>,
+    Extension(contexto): Extension<RequestContext>,
+    Extension(ambiente): Extension<AmbienteResolvido>,
+    request_id: RequestId,
+    Json(requisicao): Json<RequisicaoAutenticarProcurador>,
+) -> Result<Json<ResultadoAutenticarProcuradorResponse>, ApiError> {
+    let escritorio_id = escritorio_do_contexto(&contexto)?;
+    let comando = ComandoAutenticarProcurador {
+        escritorio_id,
+        usuario_id: contexto.usuario_id,
+        cliente_id: requisicao.cliente_id,
+        ambiente: ambiente.ambiente,
+        request_id: request_id.como_str().to_owned(),
+    };
+
+    let resultado = estado
+        .autenticar_procurador
+        .executar(comando)
+        .await
+        .map_err(mapear_erro)?;
+
+    Ok(Json(ResultadoAutenticarProcuradorResponse {
+        cliente_id: requisicao.cliente_id,
+        status: "AUTORIZADA",
+        expira_em: Some(resultado.expira_em),
+    }))
 }
 
 pub async fn consultar_procuracoes(

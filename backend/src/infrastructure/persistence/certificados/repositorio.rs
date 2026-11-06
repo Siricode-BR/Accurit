@@ -194,6 +194,31 @@ impl CertificadoRepositorio for CertificadoRepositorioDiesel {
     }
 }
 
+impl CertificadoRepositorioDiesel {
+    /// Busca o certificado A1 ativo e dentro da validade do escritório
+    /// (usado pelo fluxo AUTENTICAPROCURADOR / modelo Software House).
+    /// O retorno mantém o payload cifrado; a descriptografia é responsabilidade
+    /// de quem consome (use case), em memória, com zeroize.
+    pub fn buscar_ativo(
+        &self,
+        escritorio_id_param: Uuid,
+    ) -> Result<Option<Certificado>, RepositorioError> {
+        let mut conn = self.obter_conexao()?;
+
+        let agora = chrono::Utc::now();
+        certificados_a1::table
+            .filter(certificados_a1::escritorio_id.eq(escritorio_id_param))
+            .filter(certificados_a1::ativo.eq(true))
+            .filter(certificados_a1::valido_de.le(agora))
+            .filter(certificados_a1::valido_ate.ge(agora))
+            .order(certificados_a1::criado_em.desc())
+            .first::<CertificadoDb>(&mut conn)
+            .optional()
+            .map_err(|_| RepositorioError::Dados)
+            .map(|resultado| resultado.map(|c| c.into()))
+    }
+}
+
 impl AuditoriaCertificadoRepositorio for CertificadoRepositorioDiesel {
     fn registrar(&self, evento: &EventoAuditoriaCertificado) -> Result<(), RepositorioError> {
         let mut conn = self.obter_conexao()?;

@@ -3,7 +3,6 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crate::domain::certificados::Certificado;
-use crate::domain::integra_contador::assinatura::XmlAssinado;
 use crate::domain::integra_contador::envelope::{
     Identificacao, IntegraContadorRequest, IntegraContadorResponse, VerboIntegraContador,
 };
@@ -16,6 +15,19 @@ pub struct ContextoIntegraContador {
     pub autor_pedido_dados: Identificacao,
     pub contribuinte: Identificacao,
     pub cpf_operador: Option<String>,
+    /// Razão social do escritório (Procurador / autor do pedido de dados),
+    /// exigida como `autorPedidoDados.nome` no Termo de Autorização.
+    pub escritorio_nome: String,
+}
+
+/// Identidade da Software House contratante — a plataforma SaaS. Usada como
+/// `contratante` no Termo de Autorização e no envelope do modelo C (Software
+/// House), nunca como contratante de escritório. Resolvida da configuração
+/// (`SERPRO_CONTRATANTE_CNPJ` / `SERPRO_CONTRATANTE_NOME`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ContratantePlataforma {
+    pub numero: String,
+    pub nome: String,
 }
 
 #[async_trait]

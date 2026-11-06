@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use zeroize::Zeroize;
 
 use crate::domain::integra_contador::assinatura::{
@@ -6,15 +5,18 @@ use crate::domain::integra_contador::assinatura::{
 };
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use p12_keystore::{KeyStore, Pkcs12ImportPolicy};
-use pkcs8::PrivateKeyInfo;
-use rsa::{pkcs1v15::SigningKey, Pkcs1v15Sign, RsaPrivateKey};
+use rsa::RsaPrivateKey;
+use rsa::pkcs1v15::SigningKey;
+use rsa::pkcs8::DecodePrivateKey;
+use rsa::signature::{RandomizedSigner, SignatureEncoding};
 use sha2::{Digest, Sha256};
-use x509_parser::prelude::X509Certificate;
-use xmlsec::{sign, SignatureAlgorithm, Transform};
 
-/// Implementação do assinador XML usando p12-keystore e xmlsec.
-/// Realiza a assinatura digital do Termo de Autorização conforme padrão XMLDSig/W3C
-/// adotado pela SERPRO (mesmo padrão NFe/eSocial).
+/// Implementação do assinador XML usando p12-keystore.
+/// Realiza a assinatura digital do Termo de Autorização no subconjunto do
+/// XMLDSig adotado pela SERPRO (padrões técnicos Assinatura de XML):
+/// enveloped, C14N 2001, RSA-SHA256 e digest SHA-256, com o namespace
+/// `http://www.w3.org/2000/09/xmldsig#` declarado na tag `<Signature>` e
+/// apenas o certificado de usuário final (EndCertOnly) em `<KeyInfo>`.
 pub struct AssinadorXmlImpl {
     /// Política de importação do PKCS#12 (pode ser configurada para validar cadeia ICP-Brasil)
     import_policy: Pkcs12ImportPolicy,
@@ -23,9 +25,10 @@ pub struct AssinadorXmlImpl {
 impl AssinadorXmlImpl {
     pub const fn novo() -> Self {
         Self {
-            // Política padrão: não valida cadeia ICP-Brasil aqui (validada separadamente)
-            // Em produção, considerar Pkcs12ImportPolicy::Default para validar
-            import_policy: Pkcs12ImportPolicy::AcceptAll,
+            // Strict: vincula chave privada à cadeia do certificado por
+            // localKeyId e descarta entradas não vinculadas — o que a A1
+            // ICP-Brasil suporta. Entradas sem vínculo falham fechado.
+            import_policy: Pkcs12ImportPolicy::Strict,
         }
     }
 
@@ -44,62 +47,103 @@ impl AssinadorXmlImpl {
         let keystore = KeyStore::from_pkcs12(pfx_der, senha, self.import_policy)
             .map_err(|_| ErroAssinatura::CertificadoInvalido)?;
 
-        // Busca a primeira entrada de chave privada (PrivateKeyChain)
-        let mut chave_privada_der: Option<Vec<u8>> = None;
-        let mut certificado_der: Option<Vec<u8>> = None;
+        // Busca a primeira cadeia de chave privada do cofre (alias/certificado)
+        let (_alias, chain) = keystore
+            .private_key_chain()
+            .ok_or(ErroAssinatura::CertificadoInvalido)?;
 
-        for alias in keystore.aliases() {
-            if let Ok(entry) = keystore.get_key_entry(&alias, senha) {
-                // entry é um PrivateKeyChain
-                if let Some(cert_chain) = entry.cert_chain() {
-                    // Pega o primeiro certificado da cadeia (o certificado do titular)
-                    if let Some(cert) = cert_chain.first() {
-                        certificado_der = Some(cert.to_der().map_err(|_| ErroAssinatura::CertificadoInvalido)?);
-                    }
-                }
-                // Extrai a chave privada em formato PKCS#8 DER
-                let pkcs8_der = entry
-                    .private_key()
-                    .to_pkcs8_der()
-                    .map_err(|_| ErroAssinatura::CertificadoInvalido)?;
-                chave_privada_der = Some(pkcs8_der.as_bytes().to_vec());
-                break; // Usa a primeira chave encontrada
-            }
-        }
+        // Certificado do titular: primeiro da cadeia (EndCertOnly no <KeyInfo>)
+        let certificado_der = chain
+            .certs()
+            .first()
+            .map(|certificado| certificado.as_der().to_vec())
+            .ok_or(ErroAssinatura::CertificadoInvalido)?;
 
-        let chave_privada = chave_privada_der.ok_or(ErroAssinatura::CertificadoInvalido)?;
-        let certificado = certificado_der.ok_or(ErroAssinatura::CertificadoInvalido)?;
+        // Chave privada em PKCS#8 DER
+        let chave_privada_der = chain.key().as_der().to_vec();
 
-        Ok((chave_privada, certificado))
+        Ok((chave_privada_der, certificado_der))
     }
 
-    /// Converte chave privada PKCS#8 DER para chave RSA assinável.
-    fn pkcs8_para_chave_rsa(&self, pkcs8_der: &[u8]) -> Result<SigningKey<RsaPrivateKey>, ErroAssinatura> {
-        let pkcs8 = PrivateKeyInfo::try_from(pkcs8_der).map_err(|_| ErroAssinatura::CertificadoInvalido)?;
-        let rsa_private = RsaPrivateKey::try_from(pkcs8).map_err(|_| ErroAssinatura::CertificadoInvalido)?;
-        Ok(SigningKey::<RsaPrivateKey>::new(rsa_private))
-    }
-
-    /// Assina o XML usando xmlsec com algoritmo RSA-SHA256 (conforme padrão NFe/eSocial).
-    fn assinar_xml(&self, xml: &str, chave_rsa: &SigningKey<RsaPrivateKey>) -> Result<String, ErroAssinatura> {
-        // Canonicaliza o XML (C14N) e assina com RSA-SHA256
-        let signed = sign(
-            xml.as_bytes(),
-            chave_rsa,
-            SignatureAlgorithm::RSA_SHA256,
-            &[Transform::Enveloped],
-            Some("ReferenceURI"), // ID da referência
-        )
-        .map_err(|_| ErroAssinatura::CertificadoInvalido)?;
-
-        Ok(String::from_utf8(signed).map_err(|_| ErroAssinatura::CertificadoInvalido)?)
-    }
-
-    /// Extrai o certificado X.509 em base64 (para inclusão no XML assinado).
-    fn certificado_para_base64(&self, certificado_der: &[u8]) -> Result<String, ErroAssinatura> {
-        let (_, cert) = X509Certificate::from_der(certificado_der)
+    /// Converte chave privada PKCS#8 DER para chave RSA assinável (SHA-256).
+    fn pkcs8_para_chave_rsa(
+        &self,
+        pkcs8_der: &[u8],
+    ) -> Result<SigningKey<Sha256>, ErroAssinatura> {
+        let rsa_private = RsaPrivateKey::from_pkcs8_der(pkcs8_der)
             .map_err(|_| ErroAssinatura::CertificadoInvalido)?;
-        Ok(BASE64_STANDARD.encode(cert.tbs_certificate.raw))
+        Ok(SigningKey::<Sha256>::new(rsa_private))
+    }
+}
+
+// Reimplementação correta da assinatura manual XMLDSig para contornar a dependência xmlsec inexistente
+// e resolver o erro de compilação.
+impl AssinadorXmlImpl {
+    /// Assina o XML no subconjunto XMLDSig do SERPRO e retorna o documento
+    /// final com a `<Signature>` envelopada dentro da raiz do termo.
+    fn assinar_xml(
+        &self,
+        xml_sem_assinatura: &str,
+        chave_rsa: &SigningKey<Sha256>,
+        certificado_base64: &str,
+    ) -> Result<String, ErroAssinatura> {
+        let canonicalizacao = "<CanonicalizationMethod Algorithm=\"http://www.w3.org/TR/2001/REC-xml-c14n-20010315\" />";
+        let digest_value = self.calcular_digest(xml_sem_assinatura);
+        let signed_info = format!(
+            "<SignedInfo>{canonicalizacao}\
+             <SignatureMethod Algorithm=\"http://www.w3.org/2001/04/xmldsig-more#rsa-sha256\" />\
+             <Reference URI=\"\"><Transforms>\
+             <Transform Algorithm=\"http://www.w3.org/2000/09/xmldsig#enveloped-signature\" />\
+             <Transform Algorithm=\"http://www.w3.org/TR/2001/REC-xml-c14n-20010315\" />\
+             </Transforms>\
+             <DigestMethod Algorithm=\"http://www.w3.org/2001/04/xmlenc#sha256\" />\
+             <DigestValue>{digest_value}</DigestValue></Reference></SignedInfo>"
+        );
+
+        let mut rng = rand::thread_rng();
+        let assinatura = chave_rsa
+            .sign_with_rng(&mut rng, signed_info.as_bytes())
+            .to_bytes();
+        let signature_value = BASE64_STANDARD.encode(&assinatura);
+
+        let fim_raiz = "</termoDeAutorizacao>";
+        let corpo = xml_sem_assinatura
+            .strip_suffix(fim_raiz)
+            .ok_or(ErroAssinatura::TermoInvalido)?;
+        Ok(format!(
+            "{corpo}<Signature xmlns=\"http://www.w3.org/2000/09/xmldsig#\">{signed_info}\
+             <SignatureValue>{signature_value}</SignatureValue>\
+             <KeyInfo><X509Data><X509Certificate>{certificado_base64}</X509Certificate>\
+             </X509Data></KeyInfo></Signature>{fim_raiz}"
+        ))
+    }
+
+    /// Valida explicitamente a estrutura de 3 CNPJs exigida pelo SERPRO
+    /// (modelo Software House: Contratante, AutorPedidoDados, Contribuinte)
+    /// antes de gerar e assinar o XML. Fail-closed: qualquer ator fora da
+    /// estrutura impede a assinatura e, portanto, a chamada a /Apoiar.
+    fn validar_trio_software_house(
+        &self,
+        termo: &TermoAutorizacao,
+    ) -> Result<(), ErroAssinatura> {
+        crate::domain::integra_contador::regras_procuracao::TrioSoftwareHouse {
+            contratante_documento: termo.atores.contratante_numero.clone(),
+            contratante_nome: termo.atores.contratante_nome.clone(),
+            autor_pedido_dados_documento: termo.atores.autor_pedido_dados_numero.clone(),
+            autor_pedido_dados_nome: termo.atores.autor_pedido_dados_nome.clone(),
+            contribuinte_documento: termo.atores.contribuinte_numero.clone(),
+            contribuinte_nome: termo.atores.contribuinte_nome.clone(),
+        }
+        .validar()
+    }
+
+    /// Certificado de usuário final em base64 (EndCertOnly — SERPRO exige
+    /// apenas o `<X509Certificate>` do titular em `<KeyInfo>`).
+    fn certificado_para_base64(&self, certificado_der: &[u8]) -> Result<String, ErroAssinatura> {
+        if certificado_der.is_empty() {
+            return Err(ErroAssinatura::CertificadoInvalido);
+        }
+        Ok(BASE64_STANDARD.encode(certificado_der))
     }
 
     /// Calcula o digest SHA256 do XML canônico (para o campo DigestValue).
@@ -122,30 +166,36 @@ impl AssinadorXml for AssinadorXmlImpl {
         let senha_str = std::str::from_utf8(senha).map_err(|_| ErroAssinatura::CertificadoInvalido)?;
 
         // 1. Extrai chave privada e certificado do PFX
-        let (chave_privada_pkcs8, certificado_der) =
+        let (mut chave_privada_pkcs8, mut certificado_der) =
             self.extrair_chave_e_certificado(pfx_der, senha_str)?;
 
         // 2. Converte para chave RSA assinável
         let chave_rsa = self.pkcs8_para_chave_rsa(&chave_privada_pkcs8)?;
 
-        // 3. Gera o XML do termo
+        // 3. Valida explicitamente a estrutura de 3 CNPJs (Contratante,
+        //    AutorPedidoDados, Contribuinte) antes de gerar o XML.
+        self.validar_trio_software_house(termo)?;
+
+        // 4. Gera o XML do termo
         let xml_termo = termo.para_xml()?;
 
-        // 4. Assina o XML
-        let xml_assinado = self.assinar_xml(&xml_termo, &chave_rsa)?;
+        // 5. Certificado de usuário final em base64 (KeyInfo EndCertOnly)
+        let certificado_base64 = self.certificado_para_base64(&certificado_der)?;
 
-        // 5. Codifica o XML assinado em base64 (conforme exigido pela SERPRO)
+        // 6. Assina o XML (insere a <Signature> envelopada)
+        let xml_assinado = self.assinar_xml(&xml_termo, &chave_rsa, &certificado_base64)?;
+
+        // 7. Codifica em base64 (formato exigido no pedidoDados.dados de ENVIOXMLASSINADO81)
         let xml_base64 = BASE64_STANDARD.encode(&xml_assinado);
 
-        // 6. Calcula o digest do XML original (antes da assinatura)
+        // 8. DigestValue e SignatureValue já presentes na <Signature>
         let digest_value = self.calcular_digest(&xml_termo);
 
-        // 7. Extrai o valor da assinatura (SignatureValue) do XML assinado
-        // O xmlsec já inclui a assinatura no XML; extraímos o SignatureValue
+        // 9. Extrai o valor da assinatura (SignatureValue) do XML assinado
         let signature_value = extrair_signature_value(&xml_assinado)
             .ok_or(ErroAssinatura::CertificadoInvalido)?;
 
-        // 8. Certificado em base64 para o X509Certificate
+        // 10. Certificado em base64 para o X509Certificate
         let x509_certificate = self.certificado_para_base64(&certificado_der)?;
 
         // Limpa dados sensíveis da memória
@@ -165,8 +215,7 @@ impl AssinadorXml for AssinadorXmlImpl {
 
 /// Extrai o valor do SignatureValue do XML assinado.
 fn extrair_signature_value(xml_assinado: &str) -> Option<String> {
-    // Busca pelo padrão <SignatureValue>...</SignatureValue>
-    // O xmlsec gera o XML com namespace ds: http://www.w3.org/2000/09/xmldsig#
+    // A <Signature> é envelopada na raiz `<termoDeAutorizacao>`.
     let inicio = xml_assinado.find("<SignatureValue>")?;
     let fim = xml_assinado[inicio..].find("</SignatureValue>")?;
     let valor = &xml_assinado[inicio + "<SignatureValue>".len()..inicio + fim];
@@ -200,5 +249,23 @@ mod tests {
         assert!(xml.contains("<contratante"));
         assert!(xml.contains("<autorPedidoDados"));
         assert!(xml.contains("<contribuinte"));
+    }
+
+    #[test]
+    fn validar_trio_rejeita_estrutura_incompleta_antes_de_assinar() {
+        let assinador = AssinadorXmlImpl::novo();
+        let mut termo = termo_teste();
+        termo.atores.autor_pedido_dados_numero = "52998224725".to_owned(); // CPF
+        assert_eq!(
+            assinador.validar_trio_software_house(&termo),
+            Err(ErroAssinatura::TermoInvalido)
+        );
+    }
+
+    #[test]
+    fn validacao_do_trio_aceita_estrutura_software_house() {
+        let assinador = AssinadorXmlImpl::novo();
+        let termo = termo_teste();
+        assert!(assinador.validar_trio_software_house(&termo).is_ok());
     }
 }

@@ -256,16 +256,87 @@ where
                 std::sync::Arc::new(repositorio_integra_contador.clone()),
                 cliente_integra_contador,
                 std::sync::Arc::new(repositorio_integra_contador.clone()),
-                std::sync::Arc::new(repositorio_integra_contador),
+                std::sync::Arc::new(repositorio_integra_contador.clone()),
                 std::sync::Arc::new(
                     crate::infrastructure::persistence::integra_contador::ProcuracaoNaoVerificavel,
                 ),
                 config.serpro.operator_header_enabled,
             ),
         );
+
+        // ===== AUTENTICAPROCURADOR (modelo Software House) =====
+        let criptografia_integra = criar_criptografia(config.certificate_master_key.expose_secret())
+            .expect("criptografia Integra deve inicializar");
+        let autentica_procurador_http_cliente = std::sync::Arc::new(
+            crate::infrastructure::integra_contador::AutenticaProcuradorClienteImpl::novo(
+                reqwest::Client::builder()
+                    .connect_timeout(std::time::Duration::from_secs(
+                        config.serpro.http_connect_timeout_secs,
+                    ))
+                    .timeout(std::time::Duration::from_secs(
+                        config.serpro.http_request_timeout_secs,
+                    ))
+                    .build()
+                    .expect("cliente HTTP AUTENTICAPROCURADOR deve inicializar"),
+                std::sync::Arc::new(
+                    crate::infrastructure::serpro::SerproEndpointResolverImpl::novo(
+                        config.serpro.clone(),
+                    ),
+                ),
+            ),
+        );
+        let certificado_provider_integra = std::sync::Arc::new(
+            crate::infrastructure::persistence::integra_contador::CertificadoA1ProviderDiesel::novo(
+                std::sync::Arc::new(certificado_repo.clone()),
+            ),
+        );
+        // O token jwt_procurador é cifrado com o mesmo formato AES-256-GCM
+        // (nonce||ciphertext) do ecossistema tokens_serpro/credenciais_serpro.
+        let tokens_serpro_repositorio = std::sync::Arc::new(
+            crate::infrastructure::persistence::integra_contador::TokensSerproRepositorioDiesel::novo(
+                pool.clone(),
+                std::sync::Arc::new(
+                    SerproCriptografia::novo(config.certificate_master_key.expose_secret())
+                        .expect("criptografia de tokens SERPRO deve inicializar"),
+                ),
+            ),
+        );
+        // Identidade da Software House (Contratante no modelo C), vinda da
+        // configuração. Sem ela o fluxo AUTENTICAPROCURADOR falha fechado.
+        let contratante_plataforma = match (
+            config.serpro.contratante_cnpj.clone(),
+            config.serpro.contratante_nome.clone(),
+        ) {
+            (Some(numero), Some(nome)) => {
+                Some(crate::application::integra_contador::ContratantePlataforma { numero, nome })
+            }
+            _ => {
+                tracing::warn!(
+                    "SERPRO_CONTRATANTE_CNPJ/SERPRO_CONTRATANTE_NOME ausentes; \
+                     AUTENTICAPROCURADOR falhará com 503 até serem configurados"
+                );
+                None
+            }
+        };
+        let autenticar_procurador_use_case = std::sync::Arc::new(
+            crate::application::integra_contador::AutenticarProcuradorUseCase::novo(
+                std::sync::Arc::new(repositorio_integra_contador.clone()),
+                std::sync::Arc::new(cliente_repo.clone()),
+                certificado_provider_integra,
+                criptografia_integra,
+                std::sync::Arc::new(
+                    crate::infrastructure::integra_contador::AssinadorXmlImpl::novo(),
+                ),
+                autentica_procurador_http_cliente,
+                tokens_serpro_repositorio,
+                std::sync::Arc::new(repositorio_integra_contador.clone()),
+                contratante_plataforma,
+            ),
+        );
         let integra_contador_state =
             crate::presentation::integra_contador::state::EstadoIntegraContador::novo(
                 executar_integra_contador,
+                autenticar_procurador_use_case,
             );
         api = api.nest(
             "/serpro/integra-contador",

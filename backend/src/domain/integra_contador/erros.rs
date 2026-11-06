@@ -1,5 +1,5 @@
 use thiserror::Error;
-
+use crate::domain::integra_contador::assinatura::ErroAssinatura;
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum ErroIntegraContador {
     #[error("serviço não está habilitado")]
@@ -35,3 +35,14 @@ pub enum ErroIntegraContador {
     #[error("erro de persistência")]
     Persistencia,
 }
+
+/// Converte falhas de assinatura do Termo de Autorização em erro de
+/// configuração do escritório: o certificado A1 ou a cadeia ICP-Brasil
+/// não está íntegro o suficiente para assinar o XML exigido pelo
+/// AUTENTICAPROCURADOR, então a operação não pode prosseguir.
+impl From<ErroAssinatura> for ErroIntegraContador {
+    fn from(_erro: ErroAssinatura) -> Self {
+        Self::ConfiguracaoIncompleta
+    }
+}
+

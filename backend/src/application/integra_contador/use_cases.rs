@@ -4,16 +4,16 @@ use chrono::Utc;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-use crate::application::clientes::ports::ClienteRepositorio;
+use crate::application::clientes::ClienteRepositorio;
+use crate::application::certificados::CertificadoCriptografia;
 use crate::application::integra_contador::ports::{
     AuditoriaIntegraContador, AutenticaProcuradorCliente, CatalogoEscritoriosIntegra,
-    CertificadoA1Provider, ClienteIntegraContador, ContextoIntegraContador,
+    CertificadoA1Provider, ClienteIntegraContador, ContextoIntegraContador, ContratantePlataforma,
     EntregaIntegraContador, EventoAuditoriaIntegra, EventoChamadaIntegra,
     RepositorioIdempotencia, ReservaIdempotencia, ResultadoReservaIdempotencia,
     TokensSerproRepositorio, ValidadorProcuracao,
 };
-use crate::domain::certificados::Certificado;
-use crate::domain::integra_contador::assinatura::{AssinadorXml, TermoAutorizacao, XmlAssinado};
+use crate::domain::integra_contador::assinatura::{AssinadorXml, TermoAutorizacao};
 use crate::domain::integra_contador::envelope::{
     Identificacao, IntegraContadorRequest, PedidoDados, VerboIntegraContador,
 };
@@ -368,19 +368,26 @@ pub struct ResultadoAutenticarProcurador {
 /// via endpoint AUTENTICAPROCURADOR/ENVIOXMLASSINADO81.
 /// 
 /// Fluxo (modelo Software House):
-/// 1. Busca o certificado A1 ativo do escritório
-/// 2. Gera o Termo de Autorização com 3 atores: Contratante (SaaS), AutorPedidoDados (Escritório), Contribuinte (Cliente)
+/// 1. Busca o cliente (contribuinte) e o certificado A1 ativo do escritório
+/// 2. Gera o Termo de Autorização com 3 atores: Contratante (SaaS, da
+///    configuração), AutorPedidoDados (Escritório, via contexto) e
+///    Contribuinte (cliente)
 /// 3. Assina o XML com o certificado A1 do escritório
-/// 4. Envia para SERPRO via ENVIOXMLASSINADO81
+/// 4. Envia para SERPRO via `/Apoiar` (AUTENTICAPROCURADOR/ENVIOXMLASSINADO81)
 /// 5. Salva o jwt_token retornado vinculado ao escritório e cliente
 pub struct AutenticarProcuradorUseCase {
     contexto: Arc<dyn CatalogoEscritoriosIntegra>,
     cliente_repositorio: Arc<dyn ClienteRepositorio>,
     certificado_provider: Arc<dyn CertificadoA1Provider>,
+    criptografia: Arc<dyn CertificadoCriptografia>,
     assinador: Arc<dyn AssinadorXml>,
     autentica_cliente: Arc<dyn AutenticaProcuradorCliente>,
     tokens_repositorio: Arc<dyn TokensSerproRepositorio>,
     auditoria: Arc<dyn AuditoriaIntegraContador>,
+    /// Identidade da plataforma SaaS (Contratante). `None` quando a
+    /// configuração não informa `SERPRO_CONTRATANTE_CNPJ`/`_NOME` — a
+    /// operação falha fechada com `ConfiguracaoIncompleta`.
+    contratante_plataforma: Option<ContratantePlataforma>,
 }
 
 impl AutenticarProcuradorUseCase {
@@ -388,19 +395,23 @@ impl AutenticarProcuradorUseCase {
         contexto: Arc<dyn CatalogoEscritoriosIntegra>,
         cliente_repositorio: Arc<dyn ClienteRepositorio>,
         certificado_provider: Arc<dyn CertificadoA1Provider>,
+        criptografia: Arc<dyn CertificadoCriptografia>,
         assinador: Arc<dyn AssinadorXml>,
         autentica_cliente: Arc<dyn AutenticaProcuradorCliente>,
         tokens_repositorio: Arc<dyn TokensSerproRepositorio>,
         auditoria: Arc<dyn AuditoriaIntegraContador>,
+        contratante_plataforma: Option<ContratantePlataforma>,
     ) -> Self {
         Self {
             contexto,
             cliente_repositorio,
             certificado_provider,
+            criptografia,
             assinador,
             autentica_cliente,
             tokens_repositorio,
             auditoria,
+            contratante_plataforma,
         }
     }
 
@@ -408,6 +419,14 @@ impl AutenticarProcuradorUseCase {
         &self,
         comando: ComandoAutenticarProcurador,
     ) -> Result<ResultadoAutenticarProcurador, ErroIntegraContador> {
+        // 0. Identidade da plataforma SaaS (Contratante) — fail-closed: sem
+        //    `SERPRO_CONTRATANTE_CNPJ`/`SERPRO_CONTRATANTE_NOME` o Termo de
+        //    Autorização não pode ser montado; nenhuma chamada ao SERPRO ocorre.
+        let contratante_plataforma = self
+            .contratante_plataforma
+            .as_ref()
+            .ok_or(ErroIntegraContador::ConfiguracaoIncompleta)?;
+
         // 1. Busca o cliente para obter CPF/CNPJ e nome
         let cliente = self
             .cliente_repositorio
@@ -415,13 +434,13 @@ impl AutenticarProcuradorUseCase {
             .map_err(|_| ErroIntegraContador::ConfiguracaoIncompleta)?
             .ok_or(ErroIntegraContador::ConfiguracaoIncompleta)?;
 
-        // 2. Resolve o contexto (busca CNPJs do contratante, autor, contribuinte)
+        // 2. Resolve o contexto (CNPJ e nome do escritório autor e do contribuinte)
         let contexto = self
             .contexto
             .resolver_contexto(
                 comando.escritorio_id,
                 comando.usuario_id,
-                &cliente.documento.como_str(),
+                cliente.documento.como_str(),
             )
             .await?;
 
@@ -432,40 +451,50 @@ impl AutenticarProcuradorUseCase {
             .await?
             .ok_or(ErroIntegraContador::ConfiguracaoIncompleta)?;
 
-        // 4. Busca o nome do escritório (autor do pedido de dados)
-        // TODO: Buscar via repositório de escritórios quando disponível
-        let escritorio_nome = "Escritório Contábil".to_owned();
-
-        // 5. Constrói o Termo de Autorização com os 3 atores
+        // 5. Constrói o Termo de Autorização com os 3 atores do modelo
+        //    Software House: Contratante (a plataforma SaaS, da configuração),
+        //    AutorPedidoDados (escritório/Procurador, do contexto) e
+        //    Contribuinte (cliente).
         let termo = TermoAutorizacao {
             data_assinatura: Utc::now().date_naive(),
             vigencia: (Utc::now() + chrono::Duration::days(365)).date_naive(),
             atores: crate::domain::integra_contador::assinatura::AtoresTermoAutorizacao {
-                contratante_numero: contexto.contratante.numero.clone(),
-                contratante_nome: "Accurit Tecnologia Ltda".to_owned(), // Nome da Software House
+                contratante_numero: contratante_plataforma.numero.clone(),
+                contratante_nome: contratante_plataforma.nome.clone(),
                 autor_pedido_dados_numero: contexto.autor_pedido_dados.numero.clone(),
-                autor_pedido_dados_nome: escritorio_nome,
+                autor_pedido_dados_nome: contexto.escritorio_nome.clone(),
                 contribuinte_numero: contexto.contribuinte.numero.clone(),
-                contribuinte_nome: cliente.nome_razao_social,
+                contribuinte_nome: cliente.nome_razao_social.clone(),
             },
         };
 
-        // 6. Prepara o PFX e senha para assinatura
-        let mut pfx_der = certificado.conteudo_cifrado.clone();
+        // 6. Decifra o PFX A1 e a senha do escritório em memória; as
+        //    cópias usadas na assinatura são zeroizadas pelo AssinadorXmlImpl
+        //    ao final (o trait recebe &mut [u8] para isso).
+        let mut pfx_der = self
+            .criptografia
+            .decifrar(&certificado.conteudo_cifrado)
+            .map_err(|_| ErroIntegraContador::ConfiguracaoIncompleta)?;
         let mut senha = certificado
             .senha_cifrada
-            .clone()
-            .unwrap_or_default();
+            .as_deref()
+            .map(|cifrada| self.criptografia.decifrar(cifrada))
+            .transpose()
+            .map_err(|_| ErroIntegraContador::ConfiguracaoIncompleta)?
+            .ok_or(ErroIntegraContador::ConfiguracaoIncompleta)?;
 
-        // 7. Assina o XML
+        // 7. Assina o XML (o AssinadorXmlImpl zeroiza pfx_der/senha ao fim)
         let xml_assinado = self
             .assinador
             .assinar(&termo, &mut pfx_der, &mut senha)
             .await?;
 
-        // 8. Constrói a requisição para ENVIOXMLASSINADO81
+        // 8. Constrói a requisição para o endpoint `/Apoiar`
+        //    (AUTENTICAPROCURADOR/ENVIOXMLASSINADO81). O envelope declara o
+        //    contratante SaaS (modelo C), não o escritório.
         let request = IntegraContadorRequest {
-            contratante: contexto.contratante.clone(),
+            contratante: Identificacao::nova(&contratante_plataforma.numero)
+                .map_err(|_| ErroIntegraContador::ConfiguracaoIncompleta)?,
             autor_pedido_dados: contexto.autor_pedido_dados.clone(),
             contribuinte: contexto.contribuinte.clone(),
             pedido_dados: PedidoDados {

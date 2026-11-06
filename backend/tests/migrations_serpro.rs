@@ -196,8 +196,8 @@ async fn tokens_serpro_impedem_duplicidade_e_valores_ilegais() {
     let duplicado = inserir(&mut conexao, Uuid::now_v7(), "INTEGRA_CONTADOR", "ACCESS");
     assert!(
         duplicado.is_err(),
-        "UNIQUE (escritorio_id, produto, ambiente, tipo_token, autor_pedido_dados) \
-         deve impedir duplicidade"
+        "UNIQUE NULLS NOT DISTINCT (escritorio_id, cliente_id, produto, ambiente, tipo_token, \
+         autor_pedido_dados) deve impedir duplicidade"
     );
 
     let outro_tipo = inserir(&mut conexao, Uuid::now_v7(), "INTEGRA_CONTADOR", "JWT");

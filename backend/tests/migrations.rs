@@ -79,14 +79,24 @@ fn inserir_usuario(
     .execute(conexao)
 }
 
+/// Número de migrations no diretório `migrations/`, para que a suíte não
+/// empaque a cada nova migration adicionada.
+fn total_de_migrations() -> usize {
+    std::fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations"))
+        .expect("diretório de migrations deve existir")
+        .filter(|entrada| entrada.as_ref().is_ok_and(|e| e.path().is_dir()))
+        .count()
+}
+
 #[test]
-fn aplica_e_reverte_as_doze_migrations() {
+fn aplica_e_reverte_todas_as_migrations() {
     let banco = BancoTemporario::novo();
     let conexao = banco.conexao();
+    let total = total_de_migrations();
 
     let aplicadas =
         aplicar_migrations_com_lock(conexao, MIGRATIONS).expect("migrations devem aplicar");
-    assert_eq!(aplicadas, 12);
+    assert_eq!(aplicadas, total);
 
     let mut conexao = banco.conexao();
     assert!(tabela_existe(&mut conexao, "escritorios"));
@@ -107,7 +117,7 @@ fn aplica_e_reverte_as_doze_migrations() {
     );
 
     let revertidas = reverter_todas(&mut conexao).expect("migrations devem reverter");
-    assert_eq!(revertidas, 12);
+    assert_eq!(revertidas, total);
     assert!(!tabela_existe(&mut conexao, "escritorios"));
     assert!(!tabela_existe(&mut conexao, "usuarios"));
     assert!(!tabela_existe(&mut conexao, "auditoria_eventos"));
@@ -122,7 +132,7 @@ fn aplica_e_reverte_as_doze_migrations() {
     assert!(!tabela_existe(&mut conexao, "consultas_fiscais"));
     assert_eq!(
         migrations_pendentes(&mut conexao).expect("consulta válida"),
-        12
+        total
     );
 }
 
@@ -144,7 +154,7 @@ fn aplica_migrations_concorrentes_serializadas_pelo_lock() {
         })
         .collect();
 
-    let total: usize = handles
+    let aplicadas: usize = handles
         .into_iter()
         .map(|handle| {
             handle
@@ -154,7 +164,7 @@ fn aplica_migrations_concorrentes_serializadas_pelo_lock() {
         })
         .sum();
 
-    assert_eq!(total, 12);
+    assert_eq!(aplicadas, total_de_migrations());
 }
 
 #[test]

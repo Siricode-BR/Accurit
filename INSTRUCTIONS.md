@@ -101,6 +101,8 @@ Copie `.env.example` para `.env` e preencha os valores. Nunca versione `.env`, c
 | `SERPRO_DIVIDA_ATIVA_PROD_URL` | Produção | Indefinida; vazia bloqueia com `SERPRO_PROD_NOT_CONFIGURED` |
 | `SERPRO_TRIAL_BEARER_TOKEN` | Trial | Chave Bearer pública de demonstração fornecida pela SERPRO |
 | `SERPRO_CONSUMER_KEY` / `SERPRO_CONSUMER_SECRET` | Não | Fallback global de desenvolvimento; produção usa `credenciais_serpro` por escritório |
+| `SERPRO_CONTRATANTE_CNPJ` | Não | CNPJ da Software House (Contratante no modelo C); sem ela o AUTENTICAPROCURADOR falha com 503 |
+| `SERPRO_CONTRATANTE_NOME` | Não | Razão social da Software House usada no Termo de Autorização; sem ele a validação falha fechado |
 | `SERPRO_OPERATOR_HEADER_ENABLED` | Não | `true` envia `x-cpf-usuario`; header não confirmado oficialmente |
 | `DIVIDA_ATIVA_FALLBACK_CODIGO_CONTRIBUINTE` | Não | `false` por padrão; habilita fallback não confirmado |
 | `CONSULTAS_RETENCAO_DIAS` | Não | Retenção do histórico fiscal em dias (padrão 90; expurgo diário) |
@@ -155,6 +157,8 @@ SERPRO_DIVIDA_ATIVA_PROD_URL=
 SERPRO_TRIAL_BEARER_TOKEN=
 SERPRO_CONSUMER_KEY=
 SERPRO_CONSUMER_SECRET=
+SERPRO_CONTRATANTE_CNPJ=
+SERPRO_CONTRATANTE_NOME=Accurit Tecnologia Ltda
 SERPRO_OPERATOR_HEADER_ENABLED=true
 DIVIDA_ATIVA_FALLBACK_CODIGO_CONTRIBUINTE=false
 SERPRO_HTTP_CONNECT_TIMEOUT_SECS=5

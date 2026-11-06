@@ -54,6 +54,12 @@ pub struct SerproConfig {
     pub trial_bearer_token: Option<SecretString>,
     pub consumer_key: Option<SecretString>,
     pub consumer_secret: Option<SecretString>,
+    /// Identidade da Software House no modelo C — Contratante do Termo de
+    /// Autorização (`SERPRO_CONTRATANTE_CNPJ` /
+    /// `SERPRO_CONTRATANTE_NOME`). Opcional na configuração: sem os dois
+    /// valores o fluxo AUTENTICAPROCURADOR falha fechado (503).
+    pub contratante_cnpj: Option<String>,
+    pub contratante_nome: Option<String>,
     pub operator_header_enabled: bool,
     pub divida_ativa_fallback_codigo_contribuinte: bool,
     /// Rate limit local de consultas da Dívida Ativa por escritório
@@ -202,6 +208,8 @@ impl Config {
             trial_bearer_token: segredo_opcional(&mapa, "SERPRO_TRIAL_BEARER_TOKEN"),
             consumer_key: segredo_opcional(&mapa, "SERPRO_CONSUMER_KEY"),
             consumer_secret: segredo_opcional(&mapa, "SERPRO_CONSUMER_SECRET"),
+            contratante_cnpj: validar_contratante_cnpj(opcional(&mapa, "SERPRO_CONTRATANTE_CNPJ"))?,
+            contratante_nome: validar_contratante_nome(opcional(&mapa, "SERPRO_CONTRATANTE_NOME"))?,
             operator_header_enabled: booleano(&mapa, "SERPRO_OPERATOR_HEADER_ENABLED", true)?,
             divida_ativa_fallback_codigo_contribuinte: booleano(
                 &mapa,
@@ -313,6 +321,39 @@ fn url_https_opcional(
 ) -> Result<Option<Url>, ConfigError> {
     match opcional(mapa, nome) {
         Some(valor) => validar_url_https(nome, &valor).map(Some),
+        None => Ok(None),
+    }
+}
+
+/// Valida o CNPJ da Software House (Contratante no modelo C). Exige os 14
+/// dígitos com o DV válido — o SERPRO rejeita termos assinados com CNPJ
+/// malformado do contratante.
+fn validar_contratante_cnpj(valor: Option<String>) -> Result<Option<String>, ConfigError> {
+    let Some(valor) = valor else {
+        return Ok(None);
+    };
+    let invalido = || {
+        ConfigError::Invalida(
+            "SERPRO_CONTRATANTE_CNPJ",
+            "deve ser um CNPJ válido (14 dígitos com dígito verificador)",
+        )
+    };
+    let documento = crate::domain::clientes::CpfCnpj::novo(&valor).map_err(|_| invalido())?;
+    if documento.tipo() != crate::domain::clientes::TipoDocumento::Cnpj {
+        return Err(invalido());
+    }
+    Ok(Some(documento.como_str().to_owned()))
+}
+
+/// Valida a razão social da Software House (nome do Contratante no Termo de
+/// Autorização). O XML é montado com o valor trimado; vazio não é aceito.
+fn validar_contratante_nome(valor: Option<String>) -> Result<Option<String>, ConfigError> {
+    match valor {
+        Some(nome) if !nome.trim().is_empty() => Ok(Some(nome.trim().to_owned())),
+        Some(_) => Err(ConfigError::Invalida(
+            "SERPRO_CONTRATANTE_NOME",
+            "não pode ser vazio quando definido",
+        )),
         None => Ok(None),
     }
 }

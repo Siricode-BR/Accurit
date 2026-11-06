@@ -23,6 +23,24 @@ pub struct RequisicaoConsultaProcuracoes {
     pub documento_contribuinte: String,
 }
 
+/// Requisição de validação de procuração e-CAC de um cliente (modelo
+/// Software House): o backend assina o termo com o cert A1 do escritório,
+/// chama AUTENTICAPROCURADOR e guarda o token por cliente. O frontend
+/// nunca recebe o token — apenas o status autorizado/pendente.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RequisicaoAutenticarProcurador {
+    pub cliente_id: uuid::Uuid,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResultadoAutenticarProcuradorResponse {
+    pub cliente_id: uuid::Uuid,
+    pub status: &'static str,
+    pub expira_em: Option<chrono::DateTime<chrono::Utc>>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StatusIntegraContadorResponse {
