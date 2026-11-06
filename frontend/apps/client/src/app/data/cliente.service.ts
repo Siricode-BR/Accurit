@@ -72,6 +72,7 @@ export class ClienteService {
   }
 
   criar(payload: CreateClienteRequestDto): Promise<ClienteDto> {
+    this.#state.update((s) => ({ ...s, carregando: true, erro: null }));
     return new Promise((resolve, reject) => {
       this.http.post<ClienteDto>(this.baseUrl, payload).subscribe({
         next: (novo) => {
@@ -79,10 +80,18 @@ export class ClienteService {
             ...s,
             itens: [novo, ...s.itens],
             total: s.total + 1,
+            carregando: false,
           }));
           resolve(novo);
         },
-        error: (err) => reject(err),
+        error: (err) => {
+          this.#state.update((s) => ({
+            ...s,
+            carregando: false,
+            erro: err.error?.message ?? err.message ?? 'Falha ao cadastrar cliente.',
+          }));
+          reject(err);
+        },
       });
     });
   }

@@ -32,6 +32,22 @@ import { AccButtonComponent, AccCardComponent } from '@accurit/ui';
           }
 
           <div class="field">
+            <label for="escritorio" class="label">Escritório (slug)</label>
+            <input
+              id="escritorio"
+              type="text"
+              formControlName="escritorio"
+              autocomplete="off"
+              class="input"
+              [class.input--error]="isFieldInvalid('escritorio')"
+              placeholder="ex: escritorio-silva"
+            />
+            @if (isFieldInvalid('escritorio')) {
+              <span class="field-error">Informe o slug do escritório.</span>
+            }
+          </div>
+
+          <div class="field">
             <label for="email" class="label">E-mail</label>
             <input
               id="email"
@@ -180,11 +196,12 @@ export class LoginComponent {
   protected readonly auth = inject(AuthService);
 
   protected readonly form = inject(FormBuilder).group({
+    escritorio: ['', [Validators.required]],
     email: ['', [Validators.required, Validators.email]],
     senha: ['', [Validators.required, Validators.minLength(6)]],
   });
 
-  protected isFieldInvalid(field: 'email' | 'senha'): boolean {
+  protected isFieldInvalid(field: 'escritorio' | 'email' | 'senha'): boolean {
     const control = this.form.get(field);
     return !!(control?.invalid && control.touched);
   }
@@ -195,8 +212,8 @@ export class LoginComponent {
       return;
     }
 
-    const { email, senha } = this.form.getRawValue();
-    this.auth.login({ email: email!, senha: senha! });
+    const { escritorio, email, senha } = this.form.getRawValue();
+    this.auth.login({ escritorio: escritorio!, email: email!, senha: senha! });
   }
 }
 

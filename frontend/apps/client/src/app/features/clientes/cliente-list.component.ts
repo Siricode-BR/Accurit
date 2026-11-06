@@ -8,9 +8,11 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { ClienteService } from '../../data/cliente.service';
 import { ProcuracaoService } from '../../data/procuracao.service';
+import { AuthService } from '../../core/auth/auth.service';
 import {
   AccButtonComponent,
   AccBadgeComponent,
@@ -44,6 +46,9 @@ import { ClienteDto, FiltroClientes } from '@accurit/core';
         </div>
         <button acc-button variant="primary" size="md" (click)="abrirModalNovo()">
           + Novo Cliente
+        </button>
+        <button acc-button variant="outline" size="md" (click)="sair()" class="btn-sair">
+          Sair
         </button>
       </header>
 
@@ -401,11 +406,22 @@ import { ClienteDto, FiltroClientes } from '@accurit/core';
       align-items: center;
       flex-wrap: wrap;
     }
+
+    .btn-sair {
+      color: var(--acc-color-danger);
+      border-color: var(--acc-color-danger);
+    }
+
+    .btn-sair:hover {
+      background-color: var(--acc-color-danger-bg);
+    }
   `,
 })
 export class ClienteListComponent implements OnInit {
   protected readonly clienteService = inject(ClienteService);
   protected readonly procuracaoService = inject(ProcuracaoService);
+  protected readonly router = inject(Router);
+  protected readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly termoBusca = signal<string>('');
@@ -458,7 +474,11 @@ export class ClienteListComponent implements OnInit {
   }
 
   abrirModalNovo(): void {
-    // Ação do botão
+    this.router.navigate(['/clientes/novo']);
+  }
+
+  protected sair(): void {
+    this.auth.logout();
   }
 
   // Status exibido no acc-badge por cliente (ausência = Pendente).

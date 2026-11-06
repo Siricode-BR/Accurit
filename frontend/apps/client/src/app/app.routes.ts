@@ -19,4 +19,10 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/clientes/cliente-list.component').then((m) => m.ClienteListComponent),
   },
+  {
+    path: 'clientes/novo',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/clientes/cliente-form.component').then((m) => m.ClienteFormComponent),
+  },
 ];

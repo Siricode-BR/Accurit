@@ -1,10 +1,23 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { LoginRequestDto, LoginResponseDto } from '@accurit/core';
+import { LoginRequestDto, UsuarioSessaoDto, UserRole } from '@accurit/core';
 import { SessionStore } from './session.store';
 
 type AuthStatus = 'idle' | 'loading' | 'error';
+
+/// Formato bruto retornado por `POST /api/v1/auth/client/login`.
+/// O backend emite `accessToken` (não `token`) e `usuario` com `papel`/`escritorioId`.
+type LoginClientResposta = {
+  accessToken: string;
+  expiresIn: number;
+  usuario: {
+    id: string;
+    email: string;
+    papel: string;
+    escritorio_id: string;
+  };
+};
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -24,19 +37,33 @@ export class AuthService {
     this.#status.set('loading');
     this.#errorMessage.set(null);
 
-    this.http.post<LoginResponseDto>(`${this.baseUrl}/login`, credentials).subscribe({
-      next: (res) => {
-        this.#status.set('idle');
-        this.session.setSession(res.usuario, res.token);
-        this.router.navigate(['/clientes']);
-      },
-      error: (err: { error?: { message?: string }; message?: string }) => {
-        this.#status.set('error');
-        this.#errorMessage.set(
-          err.error?.message ?? err.message ?? 'Credenciais inválidas. Tente novamente.'
-        );
-      },
-    });
+    const { escritorio, ...rest } = credentials;
+
+    this.http
+      .post<LoginClientResposta>(`${this.baseUrl}/client/login`, {
+        ...rest,
+        escritorio,
+      })
+      .subscribe({
+        next: (res) => {
+          this.#status.set('idle');
+          const usuario: UsuarioSessaoDto = {
+            id: res.usuario.id,
+            nome: res.usuario.email,
+            email: res.usuario.email,
+            role: (res.usuario.papel ?? 'CONTADOR') as UserRole,
+            tenantId: res.usuario.escritorio_id ?? undefined,
+          };
+          this.session.setSession(usuario, res.accessToken);
+          this.router.navigate(['/clientes']);
+        },
+        error: (err: { error?: { message?: string }; message?: string }) => {
+          this.#status.set('error');
+          this.#errorMessage.set(
+            err.error?.message ?? err.message ?? 'Credenciais inválidas. Tente novamente.'
+          );
+        },
+      });
   }
 
   logout(): void {

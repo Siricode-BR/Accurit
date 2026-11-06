@@ -7,7 +7,9 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
 import { TenantService } from '../../data/tenant.service';
+import { AuthService } from '../../core/auth/auth.service';
 import {
   AccButtonComponent,
   AccBadgeComponent,
@@ -37,8 +39,11 @@ import { TenantDto } from '@accurit/core';
             Administração SaaS: {{ tenantService.total() }} escritórios cadastrados
           </p>
         </div>
-        <button acc-button variant="primary" size="md">
+        <button acc-button variant="primary" size="md" (click)="novoTenant()">
           + Novo Escritório
+        </button>
+        <button acc-button variant="outline" size="md" (click)="sair()" class="btn-sair">
+          Sair
         </button>
       </header>
 
@@ -248,10 +253,29 @@ import { TenantDto } from '@accurit/core';
       padding: 3rem 1rem !important;
       color: var(--acc-color-text-muted);
     }
+
+    .btn-sair {
+      color: var(--acc-color-danger);
+      border-color: var(--acc-color-danger);
+    }
+
+    .btn-sair:hover {
+      background-color: var(--acc-color-danger-bg);
+    }
   `,
 })
 export class TenantListComponent implements OnInit {
   protected readonly tenantService = inject(TenantService);
+  protected readonly router = inject(Router);
+  protected readonly auth = inject(AuthService);
+
+  protected novoTenant(): void {
+    this.router.navigate(['/tenants/novo']);
+  }
+
+  protected sair(): void {
+    this.auth.logout();
+  }
 
   ngOnInit(): void {
     this.tenantService.listar();

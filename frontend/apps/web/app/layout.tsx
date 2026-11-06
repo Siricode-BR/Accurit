@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import Link from "next/link";
 import "./globals.css";
 import { SiteHeader } from "./_components/site-header";
 import { SiteFooter } from "./_components/site-footer";
@@ -47,7 +46,7 @@ export default function RootLayout({
       lang="pt-BR"
       className={`h-full scroll-smooth antialiased ${inter.variable}`}
     >
-      <body className="flex min-h-full flex-col bg-white font-sans text-[var(--acc-color-text-main)]">
+      <body className="flex min-h-full flex-col bg-white font-sans text-(--acc-color-text-main)">
         <SiteHeader />
         <main className="flex-1">{children}</main>
         <SiteFooter />

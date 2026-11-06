@@ -1,10 +1,23 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { LoginRequestDto, LoginResponseDto } from '@accurit/core';
+import { LoginRequestDto, UsuarioSessaoDto, UserRole } from '@accurit/core';
 import { SessionStore } from './session.store';
 
 type AuthStatus = 'idle' | 'loading' | 'error';
+
+/// Formato bruto retornado por `POST /api/v1/auth/admin/login` (ADR-0010).
+/// O backoffice emite `accessToken` (não `token`) e `usuario` com `papel`/`escritorioId`.
+type LoginAdminResposta = {
+  accessToken: string;
+  expiresIn: number;
+  usuario: {
+    id: string;
+    email: string;
+    papel: string;
+    escritorioId: string | null;
+  };
+};
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -22,10 +35,17 @@ export class AuthService {
     this.#status.set('loading');
     this.#errorMessage.set(null);
 
-    this.http.post<LoginResponseDto>('/api/v1/auth/admin/login', credentials).subscribe({
+    this.http.post<LoginAdminResposta>('/api/v1/auth/admin/login', credentials).subscribe({
       next: (res) => {
         this.#status.set('idle');
-        this.session.setSession(res.usuario, res.token);
+        const usuario: UsuarioSessaoDto = {
+          id: res.usuario.id,
+          nome: res.usuario.email, // backoffice não envia `nome`; usa o e-mail como fallback
+          email: res.usuario.email,
+          role: (res.usuario.papel ?? 'ADMIN') as UserRole,
+          tenantId: res.usuario.escritorioId ?? undefined,
+        };
+        this.session.setSession(usuario, res.accessToken);
         this.router.navigate(['/tenants']);
       },
       error: (err: { error?: { message?: string }; message?: string }) => {

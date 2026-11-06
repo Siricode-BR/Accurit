@@ -3,6 +3,8 @@ export type UserRole = 'ADMIN' | 'CONTADOR' | 'OPERADOR' | 'LEITURA';
 export interface LoginRequestDto {
   email: string;
   senha: string;
+  /// Slug do escritório (obrigatório para login de cliente/escritório).
+  escritorio?: string;
   tenantId?: string;
 }
 
