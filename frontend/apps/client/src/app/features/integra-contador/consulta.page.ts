@@ -94,18 +94,22 @@ interface ConsultaState {
           <div class="field">
             <label for="verbo" class="label">Verbo</label>
             <select id="verbo"
-              [(ngModel)]="verboSelecionado"
+              [ngModel]="verboSelecionado()"
+              (ngModelChange)="verboSelecionado.set($event)"
+              (change)="aoMudarVerbo($event)"
               class="input input--select"
-              disabled
             >
-              <option [value]="verboSelecionado">{{ verboSelecionado }}</option>
+              @for (v of verbos; track v.valor) {
+                <option [value]="v.valor">{{ v.label }}</option>
+              }
             </select>
           </div>
 
           <div class="field">
             <label for="idSistema" class="label">idSistema</label>
             <select id="idSistema"
-              [(ngModel)]="idSistemaSelecionado"
+              [ngModel]="idSistemaSelecionado()"
+              (ngModelChange)="idSistemaSelecionado.set($event)"
               (change)="aoMudarSistema($event)"
               class="input input--select"
               [disabled]="sistemasDisponiveis().length === 0"
@@ -123,7 +127,8 @@ interface ConsultaState {
           <div class="field">
             <label for="idServico" class="label">idServiço</label>
             <select id="idServico"
-              [(ngModel)]="idServicoSelecionado"
+              [ngModel]="idServicoSelecionado()"
+              (ngModelChange)="idServicoSelecionado.set($event)"
               (change)="aoMudarServico($event)"
               class="input input--select"
               [disabled]="servicosDisponiveis().length === 0"
@@ -141,7 +146,8 @@ interface ConsultaState {
           <div class="field">
             <label for="versaoSistema" class="label">versão do sistema</label>
             <select id="versaoSistema"
-              [(ngModel)]="versaoSistemaSelecionada"
+              [ngModel]="versaoSistemaSelecionada()"
+              (ngModelChange)="versaoSistemaSelecionada.set($event)"
               class="input input--select"
               [disabled]="versoesDisponiveis().length === 0"
             >
@@ -547,6 +553,15 @@ export class IntegraContadorConsultaPage implements OnInit {
   protected atualizarConfirmacaoExplicita(event: Event): void {
     const target = event.target as HTMLInputElement;
     this.confirmacaoExplicita.set(target.checked);
+  }
+
+  /** Quando o verbo muda, reseta sistema, serviço e versão. */
+  protected aoMudarVerbo(event: Event): void {
+    const target = event.target as HTMLSelectElement;
+    this.verboSelecionado.set(target.value as VerboIntegraContador);
+    this.idSistemaSelecionado.set('');
+    this.idServicoSelecionado.set('');
+    this.versaoSistemaSelecionada.set('');
   }
 
   /** Quando o sistema muda, reseta serviço e versão. */
