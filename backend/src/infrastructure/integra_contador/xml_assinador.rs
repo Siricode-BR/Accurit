@@ -413,12 +413,7 @@ mod tests {
         let xml_termo = termo.para_xml().expect("XML válido");
         let assinador = AssinadorXmlImpl::novo();
         let chave_rsa = assinador
-            .pkcs8_para_chave_rsa(
-                chave_privada
-                    .to_pkcs8_der()
-                    .expect("pkcs8")
-                    .as_bytes(),
-            )
+            .pkcs8_para_chave_rsa(chave_privada.to_pkcs8_der().expect("pkcs8").as_bytes())
             .expect("chave RSA assinável");
 
         let xml_assinado = assinador
