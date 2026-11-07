@@ -94,8 +94,13 @@ interface ConsultaState {
           <div class="field">
             <label for="verbo" class="label">Verbo</label>
             <select id="verbo"
+<<<<<<< HEAD
               [ngModel]="verboSelecionado"
               (ngModelChange)="verboSelecionado = $event"
+=======
+              [ngModel]="verboSelecionado()"
+              (ngModelChange)="verboSelecionado.set($event)"
+>>>>>>> a288bb5dc8caf2e54992be2fff0fca6fb2a5f137
               (change)="aoMudarVerbo($event)"
               class="input input--select"
             >
@@ -108,8 +113,13 @@ interface ConsultaState {
           <div class="field">
             <label for="idSistema" class="label">idSistema</label>
             <select id="idSistema"
+<<<<<<< HEAD
               [ngModel]="idSistemaSelecionado"
               (ngModelChange)="idSistemaSelecionado = $event"
+=======
+              [ngModel]="idSistemaSelecionado()"
+              (ngModelChange)="idSistemaSelecionado.set($event)"
+>>>>>>> a288bb5dc8caf2e54992be2fff0fca6fb2a5f137
               (change)="aoMudarSistema($event)"
               class="input input--select"
               [disabled]="sistemasDisponiveis().length === 0"
@@ -127,8 +137,13 @@ interface ConsultaState {
           <div class="field">
             <label for="idServico" class="label">idServiço</label>
             <select id="idServico"
+<<<<<<< HEAD
               [ngModel]="idServicoSelecionado"
               (ngModelChange)="idServicoSelecionado = $event"
+=======
+              [ngModel]="idServicoSelecionado()"
+              (ngModelChange)="idServicoSelecionado.set($event)"
+>>>>>>> a288bb5dc8caf2e54992be2fff0fca6fb2a5f137
               (change)="aoMudarServico($event)"
               class="input input--select"
               [disabled]="servicosDisponiveis().length === 0"
@@ -146,8 +161,13 @@ interface ConsultaState {
           <div class="field">
             <label for="versaoSistema" class="label">versão do sistema</label>
             <select id="versaoSistema"
+<<<<<<< HEAD
               [ngModel]="versaoSistemaSelecionada"
               (ngModelChange)="versaoSistemaSelecionada = $event"
+=======
+              [ngModel]="versaoSistemaSelecionada()"
+              (ngModelChange)="versaoSistemaSelecionada.set($event)"
+>>>>>>> a288bb5dc8caf2e54992be2fff0fca6fb2a5f137
               class="input input--select"
               [disabled]="versoesDisponiveis().length === 0"
             >
