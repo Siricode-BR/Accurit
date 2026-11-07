@@ -179,6 +179,15 @@ function formatarData(value: string | null | undefined): string {
           >
             Consultar Dívida Ativa
           </button>
+          <button
+            acc-button
+            variant="outline"
+            size="sm"
+            (click)="abrirIntegraContador()"
+            [disabled]="estadoCliente() !== 'pronto'"
+          >
+            Integra Contador
+          </button>
         </div>
       </header>
 
@@ -864,6 +873,12 @@ export class ClienteDetalhesPage implements OnInit {
     const cliente = this.cliente();
     if (!cliente) return;
     this.router.navigate(['/divida-ativa'], { queryParams: { clienteId: cliente.id } });
+  }
+
+  protected abrirIntegraContador(): void {
+    const cliente = this.cliente();
+    if (!cliente) return;
+    this.router.navigate(['/integra-contador'], { queryParams: { clienteId: cliente.id } });
   }
 
   protected recarregarCliente(): void {

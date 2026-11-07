@@ -44,4 +44,10 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/divida-ativa/consulta.page').then((m) => m.DividaAtivaConsultaPage),
   },
+  {
+    path: 'integra-contador',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/integra-contador/consulta.page').then((m) => m.IntegraContadorConsultaPage),
+  },
 ];
