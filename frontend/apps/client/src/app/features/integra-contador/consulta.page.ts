@@ -94,7 +94,8 @@ interface ConsultaState {
           <div class="field">
             <label for="verbo" class="label">Verbo</label>
             <select id="verbo"
-              [(ngModel)]="verboSelecionado"
+              [ngModel]="verboSelecionado"
+              (ngModelChange)="verboSelecionado = $event"
               (change)="aoMudarVerbo($event)"
               class="input input--select"
             >
@@ -107,7 +108,8 @@ interface ConsultaState {
           <div class="field">
             <label for="idSistema" class="label">idSistema</label>
             <select id="idSistema"
-              [(ngModel)]="idSistemaSelecionado"
+              [ngModel]="idSistemaSelecionado"
+              (ngModelChange)="idSistemaSelecionado = $event"
               (change)="aoMudarSistema($event)"
               class="input input--select"
               [disabled]="sistemasDisponiveis().length === 0"
@@ -117,7 +119,7 @@ interface ConsultaState {
                 <option [value]="s">{{ s }}</option>
               }
             </select>
-            @if (sistemasDisponiveis().length === 0 && verboSelecionado()) {
+            @if (sistemasDisponiveis().length === 0 && verboSelecionado) {
               <p class="campo-ajuda">Nenhum sistema disponível para este verbo.</p>
             }
           </div>
@@ -125,7 +127,8 @@ interface ConsultaState {
           <div class="field">
             <label for="idServico" class="label">idServiço</label>
             <select id="idServico"
-              [(ngModel)]="idServicoSelecionado"
+              [ngModel]="idServicoSelecionado"
+              (ngModelChange)="idServicoSelecionado = $event"
               (change)="aoMudarServico($event)"
               class="input input--select"
               [disabled]="servicosDisponiveis().length === 0"
@@ -135,7 +138,7 @@ interface ConsultaState {
                 <option [value]="s">{{ s }}</option>
               }
             </select>
-            @if (servicosDisponiveis().length === 0 && idSistemaSelecionado()) {
+            @if (servicosDisponiveis().length === 0 && idSistemaSelecionado) {
               <p class="campo-ajuda">Nenhum serviço disponível para este sistema.</p>
             }
           </div>
@@ -143,7 +146,8 @@ interface ConsultaState {
           <div class="field">
             <label for="versaoSistema" class="label">versão do sistema</label>
             <select id="versaoSistema"
-              [(ngModel)]="versaoSistemaSelecionada"
+              [ngModel]="versaoSistemaSelecionada"
+              (ngModelChange)="versaoSistemaSelecionada = $event"
               class="input input--select"
               [disabled]="versoesDisponiveis().length === 0"
             >
@@ -152,7 +156,7 @@ interface ConsultaState {
                 <option [value]="v">{{ v }}</option>
               }
             </select>
-            @if (versoesDisponiveis().length === 0 && idServicoSelecionado()) {
+            @if (versoesDisponiveis().length === 0 && idServicoSelecionado) {
               <p class="campo-ajuda">Este serviço não utiliza versão.</p>
             }
           </div>
@@ -162,7 +166,7 @@ interface ConsultaState {
             <input
               id="documento"
               type="text"
-              [value]="documento()"
+              [value]="documento"
               (input)="atualizarDocumento($event)"
               class="input"
               placeholder="000.000.000-00 ou 00.000.000/0000-00"
@@ -173,7 +177,7 @@ interface ConsultaState {
             <label for="dados" class="label">dados (JSON string)</label>
             <textarea
               id="dados"
-              [value]="dados()"
+              [value]="dados"
               (input)="atualizarDados($event)"
               class="input textarea"
               placeholder='ex: {"cnpj": "00000000000000"}'
@@ -184,7 +188,7 @@ interface ConsultaState {
             <label class="label">
               <input
                 type="checkbox"
-                [checked]="confirmacaoExplicita()"
+                [checked]="confirmacaoExplicita"
                 (change)="atualizarConfirmacaoExplicita($event)"
               />
               Confirmação explícita de execução
@@ -197,9 +201,9 @@ interface ConsultaState {
             variant="primary"
             [disabled]="
               carregando()
-              || !documento().trim()
-              || !idSistemaSelecionado()
-              || !idServicoSelecionado()
+              || !documento.trim()
+              || !idSistemaSelecionado
+              || !idServicoSelecionado
             "
           >
             Executar
@@ -286,7 +290,7 @@ interface ConsultaState {
         </acc-card>
       }
 
-      @if (!carregando() && !erro() && !resultado() && documento()) {
+      @if (!carregando() && !erro() && !resultado() && documento) {
         <acc-empty-state
           title="Sem resultado"
           descricao="Execute uma consulta no Integra Contador para ver o resultado aqui."
@@ -470,13 +474,13 @@ export class IntegraContadorConsultaPage implements OnInit {
   private readonly route = inject(ActivatedRoute);
 
   protected readonly cliente = signal<ClienteDto | null>(null);
-  protected readonly verboSelecionado = signal<VerboIntegraContador>('Consultar');
-  protected readonly idSistemaSelecionado = signal<string>('');
-  protected readonly idServicoSelecionado = signal<string>('');
-  protected readonly versaoSistemaSelecionada = signal<string>('');
-  protected readonly documento = signal<string>('');
-  protected readonly dados = signal<string>('');
-  protected readonly confirmacaoExplicita = signal<boolean>(false);
+  protected verboSelecionado: VerboIntegraContador = 'Consultar';
+  protected idSistemaSelecionado = '';
+  protected idServicoSelecionado = '';
+  protected versaoSistemaSelecionada = '';
+  protected documento = '';
+  protected dados = '';
+  protected confirmacaoExplicita = false;
 
   protected readonly carregando = this.integraContador.carregando;
   protected readonly erro = this.integraContador.erro;
@@ -487,28 +491,22 @@ export class IntegraContadorConsultaPage implements OnInit {
 
   /** Sistemas disponíveis para o verbo selecionado. */
   protected readonly sistemasDisponiveis = computed(() => {
-    const verbo = this.verboSelecionado();
-    return [...new Set(CATALOGO.filter((s) => s.verbo === verbo).map((s) => s.idSistema))];
+    return [...new Set(CATALOGO.filter((s) => s.verbo === this.verboSelecionado).map((s) => s.idSistema))];
   });
 
   /** Serviços disponíveis para o sistema selecionado (filtrado pelo verbo). */
   protected readonly servicosDisponiveis = computed(() => {
-    const verbo = this.verboSelecionado();
-    const sistema = this.idSistemaSelecionado();
-    if (!sistema) return [];
+    if (!this.idSistemaSelecionado) return [];
     return CATALOGO.filter(
-      (s) => s.verbo === verbo && s.idSistema === sistema,
+      (s) => s.verbo === this.verboSelecionado && s.idSistema === this.idSistemaSelecionado,
     ).map((s) => s.idServico);
   });
 
   /** Versões disponíveis para o serviço selecionado (filtrado pelo verbo e sistema). */
   protected readonly versoesDisponiveis = computed(() => {
-    const verbo = this.verboSelecionado();
-    const sistema = this.idSistemaSelecionado();
-    const servico = this.idServicoSelecionado();
-    if (!servico) return [];
+    if (!this.idServicoSelecionado) return [];
     const entrada = CATALOGO.find(
-      (s) => s.verbo === verbo && s.idSistema === sistema && s.idServico === servico,
+      (s) => s.verbo === this.verboSelecionado && s.idSistema === this.idSistemaSelecionado && s.idServico === this.idServicoSelecionado,
     );
     return entrada && entrada.versaoSistema ? [entrada.versaoSistema] : [];
   });
@@ -519,7 +517,7 @@ export class IntegraContadorConsultaPage implements OnInit {
       try {
         const c = await this.clienteService.obter(clienteId);
         this.cliente.set(c);
-        this.documento.set(c.cpfCnpj);
+        this.documento = c.cpfCnpj;
       } catch {
         // cliente não encontrado — segue sem pré-preenchimento
       }
@@ -538,45 +536,45 @@ export class IntegraContadorConsultaPage implements OnInit {
 
   protected atualizarDocumento(event: Event): void {
     const target = event.target as HTMLInputElement;
-    this.documento.set(target.value);
+    this.documento = target.value;
   }
 
   protected atualizarDados(event: Event): void {
     const target = event.target as HTMLTextAreaElement;
-    this.dados.set(target.value);
+    this.dados = target.value;
   }
 
   protected atualizarConfirmacaoExplicita(event: Event): void {
     const target = event.target as HTMLInputElement;
-    this.confirmacaoExplicita.set(target.checked);
+    this.confirmacaoExplicita = target.checked;
   }
 
   /** Quando o verbo muda, reseta sistema, serviço e versão. */
   protected aoMudarVerbo(event: Event): void {
     const target = event.target as HTMLSelectElement;
-    this.verboSelecionado.set(target.value as VerboIntegraContador);
-    this.idSistemaSelecionado.set('');
-    this.idServicoSelecionado.set('');
-    this.versaoSistemaSelecionada.set('');
+    this.verboSelecionado = target.value as VerboIntegraContador;
+    this.idSistemaSelecionado = '';
+    this.idServicoSelecionado = '';
+    this.versaoSistemaSelecionada = '';
   }
 
   /** Quando o sistema muda, reseta serviço e versão. */
   protected aoMudarSistema(event: Event): void {
     const target = event.target as HTMLSelectElement;
-    this.idSistemaSelecionado.set(target.value);
-    this.idServicoSelecionado.set('');
-    this.versaoSistemaSelecionada.set('');
+    this.idSistemaSelecionado = target.value;
+    this.idServicoSelecionado = '';
+    this.versaoSistemaSelecionada = '';
   }
 
   /** Quando o serviço muda, reseta a versão. */
   protected aoMudarServico(event: Event): void {
     const target = event.target as HTMLSelectElement;
-    this.idServicoSelecionado.set(target.value);
-    this.versaoSistemaSelecionada.set('');
+    this.idServicoSelecionado = target.value;
+    this.versaoSistemaSelecionada = '';
   }
 
   protected async onSubmit(): Promise<void> {
-    const doc = sanitizeDocument(this.documento());
+    const doc = sanitizeDocument(this.documento);
     if (!doc) return;
 
     this.integraContador.limparResultado();
@@ -584,14 +582,14 @@ export class IntegraContadorConsultaPage implements OnInit {
     try {
       await this.integraContador.executar({
         documentoContribuinte: doc,
-        verbo: this.verboSelecionado(),
+        verbo: this.verboSelecionado,
         pedidoDados: {
-          idSistema: this.idSistemaSelecionado(),
-          idServico: this.idServicoSelecionado(),
-          versaoSistema: this.versaoSistemaSelecionada(),
-          dados: this.dados(),
+          idSistema: this.idSistemaSelecionado,
+          idServico: this.idServicoSelecionado,
+          versaoSistema: this.versaoSistemaSelecionada,
+          dados: this.dados,
         },
-        confirmacaoExplicita: this.confirmacaoExplicita(),
+        confirmacaoExplicita: this.confirmacaoExplicita,
       });
     } catch {
       // erro já definido pelo serviço
