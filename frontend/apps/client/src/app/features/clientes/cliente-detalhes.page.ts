@@ -1,65 +1,146 @@
 import {
   Component,
-  inject,
   ChangeDetectionStrategy,
   OnInit,
+  inject,
   signal,
+  computed,
 } from '@angular/core';
-import {
-  ReactiveFormsModule,
-  FormBuilder,
-  Validators,
-} from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import {
-  UpdateClienteRequestDto,
   ClienteDto,
-  TipoCliente,
-  PorteRegime,
+  EstadoConsultaFiscal,
+  SituacaoFiscalServicoDto,
+  ConsultaFiscalDto,
 } from '@accurit/core';
 import { sanitizeDocument } from '@accurit/shared';
 import { ClienteService } from '../../data/cliente.service';
-import { IntegraContadorService } from '../../data/integra-contador.service';
-import { DividaAtivaService } from '../../data/divida-ativa.service';
-import { AccButtonComponent, AccCardComponent } from '@accurit/ui';
+import { ConsultasFiscaisService } from '../../data/consultas-fiscais.service';
+import { SessionStore } from '../../core/auth/session.store';
+import {
+  AccButtonComponent,
+  AccCardComponent,
+  AccTabsComponent,
+  AccEmptyStateComponent,
+  AccSkeletonComponent,
+  AccCopyButtonComponent,
+  AccBadgeComponent,
+  AccTab,
+} from '@accurit/ui';
 
-export interface PendenciaDto {
-  id: string;
-  descricao: string;
-  valor: number;
-  vencimento: string;
-  status: 'ABERTA' | 'PAGA' | 'VENCIDA';
-  origem: string;
-}
+type EstadoCliente = 'carregando' | 'pronto' | 'naoEncontrado' | 'erro';
+type AbaId = 'visao-geral' | 'consultas' | 'contatos' | 'unidades';
 
-export interface ServicoIntegraContador {
-  idSistema: string;
-  idServico: string;
-  versaoSistema?: string;
-  verbo: string;
-  habilitado: boolean;
-}
-
-const SERVICOS_INTEGRA_CONTADOR: ServicoIntegraContador[] = [
-  { idSistema: 'SICALC', idServico: 'CONSULTAAPOIORECEITAS52', verbo: 'Apoiar', habilitado: false },
-  { idSistema: 'PROCURACOES', idServico: 'OBTERPROCURACAO41', versaoSistema: '1', verbo: 'Consultar', habilitado: true },
-  { idSistema: 'SITFIS', idServico: 'RELATORIOSITFIS92', verbo: 'Emitir', habilitado: false },
-  { idSistema: 'PGDASD', idServico: 'CONSDECLARACAO13', verbo: 'Consultar', habilitado: false },
-  { idSistema: 'PGDASD', idServico: 'TRANSDECLARACAO11', verbo: 'Declarar', habilitado: false },
-  { idSistema: 'DCTFWEB', idServico: 'GERARGUIA31', verbo: 'Emitir', habilitado: false },
-  { idSistema: 'CAIXAPOSTAL', idServico: 'INNOVAMSG63', verbo: 'Monitorar', habilitado: false },
-  { idSistema: 'AUTENTICAPROCURADOR', idServico: 'ENVIOXMLASSINADO81', versaoSistema: '1.0', verbo: 'Apoiar', habilitado: false },
+/** Abas por `?aba=`; "Unidades" é placeholder da fase seguinte (FASE 2). */
+const ABAS:readonly AccTab[] = [
+  { id: 'visao-geral', label: 'Visão geral' },
+  { id: 'consultas', label: 'Consultas' },
+  { id: 'contatos', label: 'Contatos' },
+  { id: 'unidades', label: 'Unidades', emBreve: true },
 ];
+
+const ABAS_VALIDAS: readonly string[] = ABAS.map((t) => t.id);
+
+/** Estados aceitos no filtro `?estado=` — espelham o backend (SPEC §4.5). */
+const ESTADOS_FILTRO: readonly EstadoConsultaFiscal[] = [
+  'SUCESSO',
+  'SEM_PENDENCIAS',
+  'NAO_ENCONTRADO',
+  'NAO_AUTORIZADO',
+  'LIMITE_EXCEDIDO',
+  'INDISPONIVEL',
+  'RESPOSTA_INVALIDA',
+  'INDETERMINADO',
+  'ERRO_INTERNO',
+];
+
+interface LeituraEstado {
+  /** rótulo curto do cartão/badge em pt-BR */
+  readonly rotulo: string;
+  /** cor do badge: success = sem pendências; warning = atenção; danger = falha */
+  readonly status: 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+  /** texto explicativo sob o estado */
+  readonly descricao: string;
+}
+
+/** Mapa único estado → leitura em português (nunca expõe código ao usuário). */
+const LEITURAS_ESTADO: Record<EstadoConsultaFiscal | 'NUNCA', LeituraEstado> = {
+  SUCESSO: {
+    rotulo: 'Dados recuperados',
+    status: 'info',
+    descricao: 'Última consulta retornou informações da Dachser.',
+  } as unknown as LeituraEstado,
+  SEM_PENDENCIAS: {
+    rotulo: 'Sem pendências',
+    status: 'success',
+    descricao: 'A última consulta não encontrou inscrições para esta chave.',
+  },
+  NAO_ENCONTRADO: {
+    rotulo: 'Não encontrado',
+    status: 'neutral',
+    descricao: 'A chave não é de um contribuinte devedor ativo.',
+  },
+  NAO_AUTORIZADO: {
+    rotulo: 'Falha de autorização',
+    status: 'danger',
+    descricao: 'As credenciais de consulta foram recusadas. Tente novamente.',
+  },
+  LIMITE_EXCEDIDO: {
+    rotulo: 'Limite excedido',
+    status: 'warning',
+    descricao: 'Limite de consultas atingido. Aguarde alguns instantes.',
+  },
+  INDISPONIVEL: {
+    rotulo: 'Serviço indisponível',
+    status: 'danger',
+    descricao: 'O serviço de consulta não respondeu. Tente novamente.',
+  },
+  RESPOSTA_INVALIDA: {
+    rotulo: 'Resposta inválida',
+    status: 'danger',
+    descricao: 'A resposta veio fora do formato esperado.',
+  },
+  INDETERMINADO: {
+    rotulo: 'Estado indeterminado',
+    status: 'warning',
+    descricao: 'A consulta não foi confirmada. Não repita imediatamente.',
+  },
+  ERRO_INTERNO: {
+    rotulo: 'Erro interno',
+    status: 'danger',
+    descricao: 'Falha inesperada durante a consulta.',
+  },
+  NUNCA: {
+    rotulo: 'Nunca consultado',
+    status: 'neutral',
+    descricao: 'Ainda não há consulta registrada para este cliente.',
+  },
+};
+
+function leituraEstado(estado: EstadoConsultaFiscal | 'NUNCA'): LeituraEstado {
+  return LEITURAS_ESTADO[estado] ?? LEITURAS_ESTADO.ERRO_INTERNO;
+}
+
+function formatarData(value: string | null | undefined): string {
+  if (!value) return '—';
+  const data = new Date(value);
+  if (Number.isNaN(data.getTime())) return value;
+  return data.toLocaleString('pt-BR');
+}
 
 @Component({
   selector: 'app-cliente-detalhes-page',
   standalone: true,
   imports: [
-    ReactiveFormsModule,
     CommonModule,
     AccButtonComponent,
     AccCardComponent,
+    AccTabsComponent,
+    AccEmptyStateComponent,
+    AccSkeletonComponent,
+    AccCopyButtonComponent,
+    AccBadgeComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -69,696 +150,325 @@ const SERVICOS_INTEGRA_CONTADOR: ServicoIntegraContador[] = [
           acc-button
           variant="ghost"
           size="sm"
-          (click)="router.navigate(['/clientes'])"
+          (click)="voltarParaLista()"
         >
           ← Voltar à lista
         </button>
-        <h1 class="page-title">Detalhes do Cliente</h1>
-        @if (cliente()?.tipo) {
-          <span class="type-badge">{{ cliente()?.tipo }}</span>
+        <h1 class="page-title">Detalhes do cliente</h1>
+        @if (cliente(); as c) {
+          <span class="type-badge">{{ c.tipo }}</span>
         }
-      </header>
-
-      @if (erroGeral()) {
-        <div class="alert-error" role="alert">{{ erroGeral() }}</div>
-      }
-
-      <!-- Card de dados cadastrais -->
-      <section class="section card-section">
-        <acc-card class="card-cadastro">
-          <h2 class="section-title">Dados cadastrais</h2>
-
-          <form [formGroup]="form" (ngSubmit)="onSalvar()" class="cliente-form">
-            <div class="field">
-              <label for="tipo" class="label">Tipo de Pessoa</label>
-              <select
-                id="tipo"
-                formControlName="tipo"
-                class="input input--select"
-                [disabled]="carregando()"
-              >
-                <option value="PF">Pessoa Física (CPF)</option>
-                <option value="PJ">Pessoa Jurídica (CNPJ)</option>
-              </select>
-              @if (isInvalid('tipo')) {
-                <span class="field-error">Tipo é obrigatório.</span>
-              }
-            </div>
-
-            <div class="field">
-              <label for="cpfCnpj" class="label">CPF / CNPJ</label>
-              <input
-                id="cpfCnpj"
-                type="text"
-                formControlName="cpfCnpj"
-                autocomplete="off"
-                class="input"
-                [class.input--error]="isInvalid('cpfCnpj')"
-                placeholder="000.000.000-00 ou 00.000.000/0000-00"
-                [disabled]="carregando()"
-              />
-              @if (isInvalid('cpfCnpj')) {
-                <span class="field-error">
-                  {{ cpfCnpjErro() ?? 'Informe um CPF/CNPJ válido.' }}
-                </span>
-              }
-            </div>
-
-            <div class="field">
-              <label for="nomeRazaoSocial" class="label">Nome / Razão Social</label>
-              <input
-                id="nomeRazaoSocial"
-                type="text"
-                formControlName="nomeRazaoSocial"
-                autocomplete="off"
-                class="input"
-                [class.input--error]="isInvalid('nomeRazaoSocial')"
-                placeholder="ex: João Silva ou Silva Contabilidade Ltda."
-                [disabled]="carregando()"
-              />
-              @if (isInvalid('nomeRazaoSocial')) {
-                <span class="field-error">Nome é obrigatório.</span>
-              }
-            </div>
-
-            <div class="field">
-              <label for="nomeFantasia" class="label">Nome Fantasia</label>
-              <input
-                id="nomeFantasia"
-                type="text"
-                formControlName="nomeFantasia"
-                autocomplete="off"
-                class="input"
-                placeholder="ex: Silva & Associados (opcional)"
-                [disabled]="carregando()"
-              />
-            </div>
-
-            <div class="field">
-              <label for="porteRegime" class="label">Porte / Regime Tributário</label>
-              <select
-                id="porteRegime"
-                formControlName="porteRegime"
-                class="input input--select"
-                [disabled]="carregando()"
-              >
-                <option value="">Selecione (opcional)</option>
-                <option value="MEI">MEI</option>
-                <option value="SIMPLES_NACIONAL">Simples Nacional</option>
-                <option value="LUCRO_PRESUMIDO">Lucro Presumido</option>
-                <option value="LUCRO_REAL">Lucro Real</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label for="email" class="label">E-mail</label>
-              <input
-                id="email"
-                type="email"
-                formControlName="email"
-                autocomplete="email"
-                class="input"
-                [class.input--error]="isInvalid('email')"
-                placeholder="cliente@email.com.br"
-                [disabled]="carregando()"
-              />
-              @if (isInvalid('email')) {
-                <span class="field-error">E-mail inválido.</span>
-              }
-            </div>
-
-            <div class="field">
-              <label for="telefone" class="label">Telefone</label>
-              <input
-                id="telefone"
-                type="tel"
-                formControlName="telefone"
-                autocomplete="tel"
-                class="input"
-                [class.input--error]="isInvalid('telefone')"
-                placeholder="(11) 99999-9999"
-                [disabled]="carregando()"
-              />
-              @if (isInvalid('telefone')) {
-                <span class="field-error">
-                  Telefone inválido. Informe 10 ou 11 dígitos.
-                </span>
-              }
-            </div>
-
-            <div class="form-actions">
-              <button
-                acc-button
-                type="button"
-                variant="danger"
-                size="md"
-                (click)="confirmarExclusao()"
-                [disabled]="carregando()"
-              >
-                Excluir cliente
-              </button>
-              <button
-                acc-button
-                type="submit"
-                variant="primary"
-                size="md"
-                [loading]="carregando()"
-                [disabled]="form.invalid || carregando()"
-              >
-                Salvar alterações
-              </button>
-              <button
-                acc-button
-                type="button"
-                variant="outline"
-                size="md"
-                (click)="onCancelar()"
-                [disabled]="carregando()"
-              >
-                Cancelar
-              </button>
-            </div>
-          </form>
-        </acc-card>
-      </section>
-
-      <!-- Pendências -->
-      <section class="section">
-        <div class="section-header">
-          <h2 class="section-title">Pendências</h2>
-          <button
-            acc-button
-            variant="primary"
-            size="sm"
-            (click)="abrirNovaPendencia()"
-            [disabled]="carregando()"
-          >
-            + Nova Pendência
-          </button>
-        </div>
-
-        @if (pendencias().length === 0) {
-          <div class="empty-state">
-            <p>Nenhuma pendência cadastrada para este cliente.</p>
-          </div>
-        } @else {
-          <table class="acc-table">
-            <thead>
-              <tr>
-                <th>Descrição</th>
-                <th>Valor</th>
-                <th>Vencimento</th>
-                <th>Status</th>
-                <th>Origem</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (p of pendencias(); track p.id) {
-                <tr>
-                  <td>{{ p.descricao }}</td>
-                  <td>R$ {{ p.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) }}</td>
-                  <td>{{ formatarData(p.vencimento) }}</td>
-                  <td>
-                    <span
-                      class="status-badge"
-                      [class.status-aberta]="p.status === 'ABERTA'"
-                      [class.status-paga]="p.status === 'PAGA'"
-                      [class.status-vencida]="p.status === 'VENCIDA'"
-                    >
-                      {{ p.status }}
-                    </span>
-                  </td>
-                  <td>{{ p.origem }}</td>
-                  <td>
-                    <button
-                      acc-button
-                      variant="ghost"
-                      size="sm"
-                      (click)="excluirPendencia(p.id)"
-                    >
-                      Excluir
-                    </button>
-                  </td>
-                </tr>
-              } @empty {
-                <tr>
-                  <td colspan="6">Nenhuma pendência encontrada.</td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        }
-
-        <!-- Modal nova pendência -->
-        @if (novaPendenciaAberta()) {
-          <div class="overlay" (click)="fecharNovaPendencia()"></div>
-          <div class="modal">
-            <div class="modal-header">
-              <h3 class="modal-title">Nova Pendência</h3>
-              <button acc-button variant="ghost" size="sm" (click)="fecharNovaPendencia()">×</button>
-            </div>
-            <form [formGroup]="formNovaPendencia" (ngSubmit)="onSalvarPendencia()" class="modal-form">
-              <div class="field">
-                <label for="pendDescricao" class="label">Descrição</label>
-                <input
-                  id="pendDescricao"
-                  type="text"
-                  formControlName="descricao"
-                  class="input"
-                  placeholder="ex: Débito de ICMS"
-                  required
-                />
-              </div>
-              <div class="field">
-                <label for="pendValor" class="label">Valor (R$)</label>
-                <input
-                  id="pendValor"
-                  type="number"
-                  formControlName="valor"
-                  class="input"
-                  placeholder="0,00"
-                  step="0.01"
-                  min="0"
-                  required
-                />
-              </div>
-              <div class="field">
-                <label for="pendVencimento" class="label">Vencimento</label>
-                <input
-                  id="pendVencimento"
-                  type="date"
-                  formControlName="vencimento"
-                  class="input"
-                  required
-                />
-              </div>
-              <div class="field">
-                <label for="pendStatus" class="label">Status</label>
-                <select id="pendStatus" formControlName="status" class="input input--select">
-                  <option value="ABERTA">Aberta</option>
-                  <option value="PAGA">Paga</option>
-                  <option value="VENCIDA">Vencida</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="pendOrigem" class="label">Origem</label>
-                <input
-                  id="pendOrigem"
-                  type="text"
-                  formControlName="origem"
-                  class="input"
-                  placeholder="ex: Dívida Ativa"
-                  required
-                />
-              </div>
-              <div class="modal-actions">
-                <button
-                  acc-button
-                  type="submit"
-                  variant="primary"
-                  size="md"
-                  [disabled]="formNovaPendencia.invalid"
-                >
-                  Salvar
-                </button>
-                <button
-                  acc-button
-                  type="button"
-                  variant="outline"
-                  size="md"
-                  (click)="fecharNovaPendencia()"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </form>
-          </div>
-        }
-
-        <!-- Modal confirmação de exclusão -->
-        @if (confirmarExclusaoAberta()) {
-          <div class="overlay" (click)="fecharConfirmarExclusao()"></div>
-          <div class="modal">
-            <div class="modal-header">
-              <h3 class="modal-title">Excluir cliente</h3>
-              <button acc-button variant="ghost" size="sm" (click)="fecharConfirmarExclusao()">×</button>
-            </div>
-            <div class="modal-body">
-              <p>Tem certeza que deseja excluir o cliente <strong>{{ cliente()?.nomeRazaoSocial }}</strong>?</p>
-              <p class="aviso-exclusao">Esta ação não pode ser desfeita.</p>
-            </div>
-            <div class="modal-actions">
-              <button
-                acc-button
-                type="button"
-                variant="outline"
-                size="md"
-                (click)="fecharConfirmarExclusao()"
-              >
-                Cancelar
-              </button>
-              <button
-                acc-button
-                type="button"
-                variant="danger"
-                size="md"
-                (click)="excluirCliente()"
-                [disabled]="carregando()"
-              >
-                Excluir
-              </button>
-            </div>
-          </div>
-        }
-      </section>
-
-      <!-- Integra Contador -->
-      <section class="section section-integracao">
-        <h2 class="section-title">Integra Contador (SERPRO)</h2>
-        <p class="section-desc">
-          Executa chamadas nos serviços do Integra Contador para este cliente.
-        </p>
-
-        @if (integra.erro()) {
-          <div class="alert-error" role="alert">{{ integra.erro() }}</div>
-        }
-
-        <form [formGroup]="formIntegra" (ngSubmit)="onExecutarIntegra()" class="integra-form">
-          <div class="field">
-            <label for="docContribuinte" class="label">Documento do Contribuinte</label>
-            <input
-              id="docContribuinte"
-              type="text"
-              formControlName="documentoContribuinte"
-              autocomplete="off"
-              class="input"
-              placeholder="CPF ou CNPJ do contribuinte"
-            />
-          </div>
-
-          <div class="field">
-            <label for="idSistema" class="label">ID do Sistema</label>
-            <select id="idSistema" formControlName="idSistema" class="input input--select">
-              <option value="">Selecione o sistema</option>
-              @for (s of servicosIntegra(); track s.idSistema + s.idServico) {
-                <option [value]="s.idSistema">{{ s.idSistema }}</option>
-              }
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="idServico" class="label">ID do Serviço</label>
-            <select id="idServico" formControlName="idServico" class="input input--select">
-              <option value="">Selecione o serviço</option>
-              @for (s of servicosFiltrados(); track s.idServico) {
-                <option [value]="s.idServico">{{ s.idServico }}</option>
-              }
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="verbo" class="label">Verbo</label>
-            <select id="verbo" formControlName="verbo" class="input input--select">
-              <option value="Consultar">Consultar</option>
-              <option value="Declarar">Declarar</option>
-              <option value="Emitir">Emitir</option>
-              <option value="Apoiar">Apoiar</option>
-              <option value="Monitorar">Monitorar</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="versaoSistema" class="label">Versão do Sistema</label>
-            <input
-              id="versaoSistema"
-              type="text"
-              formControlName="versaoSistema"
-              class="input"
-              placeholder="ex: 1"
-            />
-          </div>
-
-          <div class="field">
-            <label for="dados" class="label">Dados (JSON)</label>
-            <textarea
-              id="dados"
-              formControlName="dados"
-              class="input input--textarea"
-              rows="4"
-              placeholder='ex: {"outorgante": "00000000000", ...}'
-            ></textarea>
-          </div>
-
-          <div class="field field-checkbox">
-            <input
-              id="confirmacaoExplicita"
-              type="checkbox"
-              formControlName="confirmacaoExplicita"
-            />
-            <label for="confirmacaoExplicita" class="label">
-              Confirmação explícita
-            </label>
-          </div>
-
-          <div class="field">
-            <label for="chaveIdempotencia" class="label">Chave de Idempotência (opcional)</label>
-            <input
-              id="chaveIdempotencia"
-              type="text"
-              formControlName="chaveIdempotencia"
-              class="input"
-              placeholder="ex: req-001"
-            />
-          </div>
-
-          <div class="form-actions">
-            <button
-              acc-button
-              type="submit"
-              variant="primary"
-              size="md"
-              [loading]="integra.carregando()"
-              [disabled]="formIntegra.invalid || integra.carregando()"
-            >
-              Executar Integra Contador
-            </button>
-          </div>
-        </form>
-
-        @if (integra.ultimoResultado()) {
-          <div class="resultado-card">
-            <h3>Resultado da execução</h3>
-            <div class="resultado-grid">
-              <div class="resultado-item">
-                <span class="resultado-label">Ambiente</span>
-                <span class="resultado-valor">{{ integra.ultimoResultado()?.ambiente }}</span>
-              </div>
-              <div class="resultado-item">
-                <span class="resultado-label">Verbo</span>
-                <span class="resultado-valor">{{ integra.ultimoResultado()?.verbo }}</span>
-              </div>
-              <div class="resultado-item">
-                <span class="resultado-label">Sistema</span>
-                <span class="resultado-valor">{{ integra.ultimoResultado()?.idSistema }}</span>
-              </div>
-              <div class="resultado-item">
-                <span class="resultado-label">Serviço</span>
-                <span class="resultado-valor">{{ integra.ultimoResultado()?.idServico }}</span>
-              </div>
-              <div class="resultado-item">
-                <span class="resultado-label">Estado</span>
-                <span class="resultado-valor">{{ integra.ultimoResultado()?.estado }}</span>
-              </div>
-              <div class="resultado-item">
-                <span class="resultado-label">Status SERPRO</span>
-                <span class="resultado-valor">{{ integra.ultimoResultado()?.statusSerpro }}</span>
-              </div>
-              <div class="resultado-item">
-                <span class="resultado-label">Mensagem</span>
-                <span class="resultado-valor">{{ integra.ultimoResultado()?.mensagem }}</span>
-              </div>
-            </div>
-            @if (integra.ultimoResultado()?.codigosMensagem?.length) {
-              <div class="resultado-item resultado-codigos">
-                <span class="resultado-label">Códigos</span>
-                <span class="resultado-valor">
-                  {{ integra.ultimoResultado()?.codigosMensagem.join(', ') }}
-                </span>
-              </div>
-            }
+        <div class="page-acoes">
+          @if (podeEditar()) {
             <button
               acc-button
               variant="outline"
               size="sm"
-              (click)="integra.limparResultado()"
+              (click)="abrirEdicao()"
+              [disabled]="estadoCliente() !== 'pronto'"
             >
-              Limpar resultado
+              Editar
             </button>
-          </div>
-        }
-      </section>
-
-      <!-- Dívida Ativa -->
-      <section class="section section-divida">
-        <h2 class="section-title">Dívida Ativa (SERPRO)</h2>
-        <p class="section-desc">
-          Consulta pendências do cliente na Dívida Ativa da União.
-        </p>
-
-        @if (divida.erro()) {
-          <div class="alert-error" role="alert">{{ divida.erro() }}</div>
-        }
-
-        <form [formGroup]="formDivida" (ngSubmit)="onConsultarDivida()" class="divida-form">
-          <div class="field">
-            <label for="dividaDoc" class="label">CPF / CNPJ para consulta</label>
-            <input
-              id="dividaDoc"
-              type="text"
-              formControlName="documento"
-              autocomplete="off"
-              class="input"
-              placeholder="000.000.000-00 ou 00.000.000/0000-00"
-            />
-          </div>
-
-          <div class="form-actions">
-            <button
-              acc-button
-              type="submit"
-              variant="primary"
-              size="md"
-              [loading]="divida.carregando()"
-              [disabled]="formDivida.invalid || divida.carregando()"
-            >
-              Consultar devedor
-            </button>
-          </div>
-        </form>
-
-        @if (divida.ultimoDevedor()) {
-          <div class="resultado-card">
-            <h3>Resultado - Devedor</h3>
-            <div class="resultado-grid">
-              <div class="resultado-item">
-                <span class="resultado-label">Ambiente</span>
-                <span class="resultado-valor">{{ divida.ultimoDevedor()?.ambiente }}</span>
-              </div>
-              <div class="resultado-item">
-                <span class="resultado-label">Estado</span>
-                <span class="resultado-valor">{{ divida.ultimoDevedor()?.estado }}</span>
-              </div>
-              <div class="resultado-item">
-                <span class="resultado-label">Fonte</span>
-                <span class="resultado-valor">{{ divida.ultimoDevedor()?.fonteConsulta }}</span>
-              </div>
-              <div class="resultado-item">
-                <span class="resultado-label">Chave</span>
-                <span class="resultado-valor">{{ divida.ultimoDevedor()?.chaveMascarada }}</span>
-              </div>
-              <div class="resultado-item">
-                <span class="resultado-label">Horário</span>
-                <span class="resultado-valor">{{ divida.ultimoDevedor()?.horarioConsulta }}</span>
-              </div>
-            </div>
-            <div class="inscricoes-list">
-              <h4>Inscrições ({{ divida.ultimoDevedor()?.inscricoes.length }})</h4>
-              <table class="acc-table">
-                <thead>
-                  <tr>
-                    <th>Número</th>
-                    <th>Situação</th>
-                    <th>Nome do Devedor</th>
-                    <th>Valor Consolidado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (insc of divida.ultimoDevedor()?.inscricoes; track insc.numeroInscricao) {
-                    <tr>
-                      <td>{{ insc.numeroInscricao }}</td>
-                      <td>{{ insc.situacaoDescricao }}</td>
-                      <td>{{ insc.nomeDevedor ?? '—' }}</td>
-                      <td>{{ insc.valorTotalConsolidado.valor }} {{ insc.valorTotalConsolidado.remarca }}</td>
-                    </tr>
-                  } @empty {
-                    <tr>
-                      <td colspan="4">Nenhuma inscrição encontrada.</td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
-          </div>
-        }
-
-        <div class="divida-divider">
-          <span>Ou consultar por inscrição</span>
+          }
+          <button
+            acc-button
+            variant="primary"
+            size="sm"
+            (click)="abrirDividaAtiva()"
+            [disabled]="estadoCliente() !== 'pronto'"
+          >
+            Consultar Dívida Ativa
+          </button>
         </div>
+      </header>
 
-        <form [formGroup]="formInscricao" (ngSubmit)="onConsultarInscricao()" class="divida-form">
-          <div class="field">
-            <label for="dividaInscricao" class="label">Número da Inscrição</label>
-            <input
-              id="dividaInscricao"
-              type="text"
-              formControlName="numeroInscricao"
-              autocomplete="off"
-              class="input"
-              placeholder="ex: 12345678901234"
-            />
-          </div>
+      @if (estadoCliente() === 'carregando') {
+        <div class="carregando-cliente" aria-hidden="true">
+          @for (_ of [1, 2, 3]; track $index) {
+            <acc-skeleton variante="linha" altura="1.5rem" largura="100%" />
+          }
+        </div>
+      }
 
-          <div class="form-actions">
-            <button
-              acc-button
-              type="submit"
-              variant="primary"
-              size="md"
-              [loading]="divida.carregando()"
-              [disabled]="formInscricao.invalid || divida.carregando()"
-            >
-              Consultar inscrição
-            </button>
-          </div>
-        </form>
+      <!-- 404 alheio/inexistente: mesmo texto, sem vazar existência -->
+      @if (estadoCliente() === 'naoEncontrado') {
+        <acc-empty-state
+          title="Cliente não encontrado"
+          descricao="Verifique o endereço ou volte à lista para escolher um cliente."
+        >
+          <button acc-button variant="outline" size="md" (click)="voltarParaLista()">
+            Voltar à lista
+          </button>
+        </acc-empty-state>
+      }
 
-        @if (divida.ultimaInscricao()) {
-          <div class="resultado-card">
-            <h3>Resultado - Inscrição</h3>
-            <div class="resultado-grid">
-              <div class="resultado-item">
-                <span class="resultado-label">Número</span>
-                <span class="resultado-valor">{{ divida.ultimaInscricao()?.numeroInscricao }}</span>
-              </div>
-              <div class="resultado-item">
-                <span class="resultado-label">Situação</span>
-                <span class="resultado-valor">{{ divida.ultimaInscricao()?.situacao }}</span>
-              </div>
-              <div class="resultado-item">
-                <span class="resultado-label">Processo</span>
-                <span class="resultado-valor">{{ divida.ultimaInscricao()?.processoAdministrativo ?? '—' }}</span>
-              </div>
-              <div class="resultado-item">
-                <span class="resultado-label">Valor Inscrito</span>
-                <span class="resultado-valor">
-                  {{ divida.ultimaInscricao()?.valorTotalInscrito?.valor ?? '—' }} {{ divida.ultimaInscricao()?.valorTotalInscrito?.remarca ?? '' }}
-                </span>
-              </div>
-              <div class="resultado-item">
-                <span class="resultado-label">Valor Consolidado</span>
-                <span class="resultado-valor">
-                  {{ divida.ultimaInscricao()?.valorTotalConsolidado?.valor ?? '—' }} {{ divida.ultimaInscricao()?.valorTotalConsolidado?.remarca ?? '' }}
-                </span>
-              </div>
-              <div class="resultado-item">
-                <span class="resultado-label">Data Inscrição</span>
-                <span class="resultado-valor">{{ divida.ultimaInscricao()?.dataInscricao ?? '—' }}</span>
-              </div>
+      @if (estadoCliente() === 'erro') {
+        <div class="alert-error" role="alert" aria-live="polite">{{ erroCliente() }}</div>
+        <button acc-button variant="outline" size="md" (click)="recarregarCliente()">
+          Tentar novamente
+        </button>
+      }
+
+      @if (cliente(); as c) {
+        <acc-tabs
+          [tabs]="abas"
+          [active]="abaSincronizada()"
+          (activeChange)="trocarAba($event)"
+        />
+
+        <!-- ===== Aba: Visão geral ===== -->
+        @if (abaSincronizada() === 'visao-geral') {
+          <section class="section">
+            <div class="dado-card-grid">
+              <acc-card class="dado-card">
+                <h2 class="section-title">Dados cadastrais</h2>
+                <dl class="dado-lista">
+                  <div class="dado-item">
+                    <dt>Tipo</dt>
+                    <dd>{{ c.tipo === 'PF' ? 'Pessoa física' : 'Pessoa jurídica' }}</dd>
+                  </div>
+                  <div class="dado-item">
+                    <dt>{{ c.tipo === 'PF' ? 'CPF' : 'CNPJ' }}</dt>
+                    <dd>
+                      <span class="dado-valor">{{ aplicarMascara(c.cpfCnpj) }}</span>
+                      <acc-copy-button [valor]="c.cpfCnpj" />
+                    </dd>
+                  </div>
+                  <div class="dado-item">
+                    <dt>Nome / Razão social</dt>
+                    <dd>{{ c.nomeRazaoSocial }}</dd>
+                  </div>
+                  @if (c.nomeFantasia) {
+                    <div class="dado-item">
+                      <dt>Nome fantasia</dt>
+                      <dd>{{ c.nomeFantasia }}</dd>
+                    </div>
+                  }
+                  @if (c.porteRegime) {
+                    <div class="dado-item">
+                      <dt>Porte / Regime</dt>
+                      <dd>{{ rotuloPorte(c.porteRegime) }}</dd>
+                    </div>
+                  }
+                  <div class="dado-item">
+                    <dt>Cadastrado em</dt>
+                    <dd>{{ formatarData(c.criadoEm) }}</dd>
+                  </div>
+                  <div class="dado-item">
+                    <dt>Atualizado em</dt>
+                    <dd>{{ formatarData(c.atualizadoEm) }}</dd>
+                  </div>
+                </dl>
+              </acc-card>
             </div>
-          </div>
+          </section>
+
+          <section class="section">
+            <div class="section-header">
+              <h2 class="section-title">Situação fiscal</h2>
+            </div>
+            @if (consultas.avisoConsultivo(); as aviso) {
+              <p class="aviso-consultivo" role="note">{{ aviso }}</p>
+            }
+
+            @if (consultas.situacaoCarregando()) {
+              <div class="cartoes-grid" aria-hidden="true">
+                @for (_ of [1, 2]; track $index) {
+                  <acc-skeleton variante="card" altura="10rem" largura="100%" />
+                }
+              </div>
+            } @else if (consultas.erroSituacao(); as erro) {
+              <div class="alert-error" role="alert" aria-live="polite">{{ erro }}</div>
+              <button acc-button variant="outline" size="sm" (click)="recarregarSituacao()">
+                Tentar novamente
+              </button>
+            } @else {
+              <div class="cartoes-grid">
+                @for (cartao of cartoesFiscais(); track cartao.servico) {
+                  <acc-card class="cartao-fiscal" [attr.data-estado]="cartao.estado.leitura.status">
+                    <h3 class="cartao-titulo">{{ cartao.rotuloServico }}</h3>
+                    <acc-badge [status]="cartao.estado.leitura.status">
+                      {{ cartao.estado.leitura.rotulo }}
+                    </acc-badge>
+                    <p class="cartao-descricao">{{ cartao.estado.leitura.descricao }}</p>
+                    <ul class="cartao-meta">
+                      <li>
+                        <span>Cadastrado em</span>
+                        <strong>{{ formatarData(cartao.criadoEm) }}</strong>
+                      </li>
+                      <li>
+                        <span>Ambiente</span>
+                        <strong>{{ rotuloAmbiente(cartao.ambiente) }}</strong>
+                      </li>
+                      @if (cartao.chaveMascarada) {
+                        <li>
+                          <span>Chave consultada</span>
+                          <strong>{{ cartao.chaveMascarada }}</strong>
+                        </li>
+                      }
+                    </ul>
+                  </acc-card>
+                } @empty {
+                  <p class="aviso-consultivo">Nenhuma consulta registrada para este cliente ainda.</p>
+                }
+              </div>
+            }
+          </section>
         }
-      </section>
+
+        <!-- ===== Aba: Consultas ===== -->
+        @if (abaSincronizada() === 'consultas') {
+          <section class="section">
+            <div class="filtro-linha">
+              <label class="label" for="estado-consulta">Estado</label>
+              <select
+                id="estado-consulta"
+                class="input input--select filtro-estado"
+                [value]="consultas.filtroEstado() ?? ''"
+                (change)="trocarFiltroEstado($event)"
+              >
+                <option value="">Todos os estados</option>
+                @for (estado of estadosFiltro; track estado) {
+                  <option [value]="estado">{{ leitura(estado).rotulo }}</option>
+                }
+              </select>
+            </div>
+
+            @if (consultas.avisoConsultivo(); as aviso) {
+              <p class="aviso-consultivo" role="note">{{ aviso }}</p>
+            }
+
+            @if (consultas.carregando()) {
+              <div class="lista-consultas" aria-hidden="true">
+                @for (_ of [1, 2, 3]; track $index) {
+                  <acc-skeleton variante="linha" altura="3rem" largura="100%" />
+                }
+              </div>
+            } @else if (consultas.erroCarregamento(); as erro) {
+              <div class="alert-error" role="alert" aria-live="polite">{{ erro }}</div>
+              <button acc-button variant="outline" size="md" (click)="recarregarConsultas()">
+                Tentar novamente
+              </button>
+            } @else if (consultas.itens().length === 0) {
+              <acc-empty-state
+                title="Nenhuma consulta registrada"
+                descricao="As consultas de Dívida Ativa deste cliente aparecerão aqui."
+              >
+                <button acc-button variant="primary" size="md" (click)="abrirDividaAtiva()">
+                  Consultar agora
+                </button>
+              </acc-empty-state>
+            } @else {
+              <ul class="lista-consultas" role="list">
+                @for (consulta of consultas.itens(); track consulta.id) {
+                  <li>
+                    <button
+                      type="button"
+                      class="consulta-row"
+                      (click)="abrirDividaAtiva()"
+                      [attr.aria-label]="
+                        'Consulta de ' + rotuloServico(consulta.servico) + ' de ' + formatarData(consulta.criadoEm)
+                      "
+                    >
+                      <span class="consulta-col consulta-col--servico">
+                        <strong>{{ rotuloServico(consulta.servico) }}</strong>
+                        <span class="consulta-sub">{{ rotuloAmbiente(consulta.ambiente) }}</span>
+                      </span>
+                      <acc-badge [status]="leitura(consulta.estado).status">
+                        {{ leitura(consulta.estado).rotulo }}
+                      </acc-badge>
+                      <span class="consulta-col consulta-col--quando">
+                        <span>{{ formatarData(consulta.criadoEm) }}</span>
+                        @if (consulta.chaveConsultaMascarada) {
+                          <span class="consulta-sub">{{ consulta.chaveConsultaMascarada }}</span>
+                        }
+                      </span>
+                    </button>
+                  </li>
+                }
+              </ul>
+
+              <div class="paginacao" aria-label="Paginação do histórico">
+                <button
+                  acc-button
+                  variant="ghost"
+                  size="sm"
+                  [disabled]="!temPaginaAnterior()"
+                  (click)="trocarPagina(-1)"
+                >
+                  ← Anterior
+                </button>
+                <span class="paginacao-info">
+                  Página {{ consultas.pagina() }} de {{ totalDePaginas() }}
+                </span>
+                <button
+                  acc-button
+                  variant="ghost"
+                  size="sm"
+                  [disabled]="!temProximaPagina()"
+                  (click)="trocarPagina(1)"
+                >
+                  Próxima →
+                </button>
+              </div>
+            }
+          </section>
+        }
+
+        <!-- ===== Aba: Contatos ===== -->
+        @if (abaSincronizada() === 'contatos') {
+          <section class="section">
+            <div class="dado-card-grid">
+              <acc-card class="dado-card">
+                <h2 class="section-title">Contatos</h2>
+                @if (c.email || c.telefone) {
+                  <dl class="dado-lista">
+                    @if (c.email) {
+                      <div class="dado-item">
+                        <dt>E-mail</dt>
+                        <dd>
+                          <span class="dado-valor">{{ c.email }}</span>
+                          <acc-copy-button [valor]="c.email" />
+                        </dd>
+                      </div>
+                    }
+                    @if (c.telefone) {
+                      <div class="dado-item">
+                        <dt>Telefone</dt>
+                        <dd>
+                          <span class="dado-valor">{{ formatarTelefone(c.telefone) }}</span>
+                          <acc-copy-button [valor]="c.telefone" />
+                        </dd>
+                      </div>
+                    }
+                  </dl>
+                } @else {
+                  <acc-empty-state
+                    title="Sem contatos cadastrados"
+                    descricao="Use a aba de edição para atualizar o e-mail e o telefone."
+                  >
+                    @if (podeEditar()) {
+                      <button acc-button variant="outline" size="md" (click)="abrirEdicao()">
+                        Editar contatos
+                      </button>
+                    }
+                  </acc-empty-state>
+                }
+              </acc-card>
+            </div>
+          </section>
+        }
+
+        <!-- ===== Aba: Unidades (fase seguinte) ===== -->
+        @if (abaSincronizada() === 'unidades') {
+          <section class="section">
+            <acc-empty-state
+              title="Gestão de unidades em breve"
+              descricao="Os endereços deste cliente serão organizados aqui. Configure agora os contatos da matriz."
+            />
+          </section>
+        }
+      }
     </div>
   `,
   styles: `
@@ -773,6 +483,7 @@ const SERVICOS_INTEGRA_CONTADOR: ServicoIntegraContador[] = [
       align-items: center;
       gap: 1rem;
       margin-bottom: 1.5rem;
+      flex-wrap: wrap;
     }
 
     .page-title {
@@ -783,7 +494,6 @@ const SERVICOS_INTEGRA_CONTADOR: ServicoIntegraContador[] = [
     }
 
     .type-badge {
-      margin-left: auto;
       padding: 0.25rem 0.75rem;
       border-radius: var(--acc-radius-md);
       background-color: var(--acc-color-bg);
@@ -792,12 +502,21 @@ const SERVICOS_INTEGRA_CONTADOR: ServicoIntegraContador[] = [
       font-weight: 600;
     }
 
-    .section {
-      margin-bottom: 2rem;
+    .page-acoes {
+      margin-left: auto;
+      display: flex;
+      gap: 0.5rem;
     }
 
-    .card-section .card-cadastro {
-      margin-bottom: 1rem;
+    .carregando-cliente {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .section {
+      margin-bottom: 2rem;
     }
 
     .section-header {
@@ -811,40 +530,176 @@ const SERVICOS_INTEGRA_CONTADOR: ServicoIntegraContador[] = [
       font-size: 1.125rem;
       font-weight: 700;
       color: var(--acc-color-text-main);
-      margin: 0;
+      margin: 0 0 0.75rem;
     }
 
-    .section-desc {
-      font-size: 0.875rem;
-      color: var(--acc-color-text-muted);
-      margin: 0 0 1rem;
-    }
-
-    .cliente-form,
-    .integra-form,
-    .divida-form,
-    .modal-form {
-      display: flex;
-      flex-direction: column;
+    .dado-card-grid {
+      display: grid;
       gap: 1rem;
     }
 
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 0.375rem;
+    .dado-lista {
+      margin: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem;
     }
 
-    .field-checkbox {
-      flex-direction: row;
+    .dado-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .dado-item dt {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--acc-color-text-muted);
+    }
+
+    .dado-item dd {
+      margin: 0;
+      display: flex;
       align-items: center;
+      gap: 0.375rem;
+      font-size: 0.9375rem;
+      color: var(--acc-color-text-main);
+      word-break: break-word;
+    }
+
+    .cartoes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+
+    .cartao-fiscal {
+      display: flex;
+      flex-direction: column;
       gap: 0.5rem;
     }
 
-    .label {
-      font-size: 0.875rem;
-      font-weight: 500;
+    .cartao-titulo {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 700;
       color: var(--acc-color-text-main);
+    }
+
+    .cartao-descricao {
+      margin: 0;
+      font-size: 0.8125rem;
+      color: var(--acc-color-text-muted);
+    }
+
+    .cartao-meta {
+      margin: 0.25rem 0 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 0.375rem;
+      border-top: 1px solid var(--acc-color-border);
+      padding-top: 0.75rem;
+    }
+
+    .cartao-meta li {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      font-size: 0.8125rem;
+      color: var(--acc-color-text-muted);
+    }
+
+    .cartao-meta strong {
+      color: var(--acc-color-text-main);
+      font-weight: 600;
+      text-align: right;
+    }
+
+    .aviso-consultivo {
+      margin: 0 0 1rem;
+      padding: 0.625rem 0.875rem;
+      border-radius: var(--acc-radius-md);
+      background-color: var(--acc-color-warning-bg, #fffbeb);
+      color: var(--acc-color-warning, #b45309);
+      font-size: 0.8125rem;
+    }
+
+    .filtro-linha {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .filtro-estado {
+      max-width: 16rem;
+    }
+
+    .lista-consultas {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 0.5rem;
+    }
+
+    .consulta-row {
+      display: grid;
+      grid-template-columns: minmax(160px, 1fr) auto minmax(180px, max-content);
+      align-items: center;
+      gap: 1rem;
+      width: 100%;
+      padding: 0.75rem 1rem;
+      text-align: left;
+      background: var(--acc-color-surface);
+      border: 1px solid var(--acc-color-border);
+      border-radius: var(--acc-radius-md);
+      font-family: inherit;
+      cursor: pointer;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .consulta-row:hover {
+      border-color: var(--acc-color-primary);
+      box-shadow: var(--acc-shadow-sm, 0 1px 2px 0 rgb(0 0 0 / 0.05));
+    }
+
+    .consulta-row:focus-visible {
+      outline: 2px solid var(--acc-color-primary);
+      outline-offset: 1px;
+    }
+
+    .consulta-col {
+      display: flex;
+      flex-direction: column;
+      gap: 0.125rem;
+      font-size: 0.875rem;
+      color: var(--acc-color-text-main);
+    }
+
+    .consulta-col--quando {
+      text-align: right;
+      align-items: flex-end;
+    }
+
+    .consulta-sub {
+      font-size: 0.75rem;
+      color: var(--acc-color-text-muted);
+    }
+
+    .paginacao {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    .paginacao-info {
+      font-size: 0.8125rem;
+      color: var(--acc-color-text-muted);
     }
 
     .input {
@@ -862,10 +717,6 @@ const SERVICOS_INTEGRA_CONTADOR: ServicoIntegraContador[] = [
       box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
     }
 
-    .input--error {
-      border-color: var(--acc-color-danger);
-    }
-
     .input--select {
       appearance: none;
       background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3e%3cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3e%3c/svg%3e");
@@ -875,14 +726,10 @@ const SERVICOS_INTEGRA_CONTADOR: ServicoIntegraContador[] = [
       padding-right: 2.5rem;
     }
 
-    .input--textarea {
-      font-family: inherit;
-      resize: vertical;
-    }
-
-    .field-error {
-      font-size: 0.75rem;
-      color: var(--acc-color-danger);
+    .label {
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--acc-color-text-main);
     }
 
     .alert-error {
@@ -894,529 +741,232 @@ const SERVICOS_INTEGRA_CONTADOR: ServicoIntegraContador[] = [
       margin-bottom: 1rem;
     }
 
-    .form-actions {
-      display: flex;
-      gap: 0.75rem;
-      margin-top: 0.5rem;
-    }
-
-    .empty-state {
-      padding: 2rem;
-      text-align: center;
-      color: var(--acc-color-text-muted);
-    }
-
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 0.25rem 0.625rem;
-      border-radius: var(--acc-radius-md);
-      font-size: 0.75rem;
-      font-weight: 600;
-      text-transform: uppercase;
-    }
-
-    .status-aberta {
-      background-color: #fef3c7;
-      color: #92400e;
-    }
-
-    .status-paga {
-      background-color: #d1fae5;
-      color: #065f46;
-    }
-
-    .status-vencida {
-      background-color: #fee2e2;
-      color: #991b1b;
-    }
-
-    .resultado-card {
-      margin-top: 1rem;
-      border: 1px solid var(--acc-color-border);
-      border-radius: var(--acc-radius-md);
-      padding: 1rem;
-      background-color: var(--acc-color-bg);
-    }
-
-    .resultado-card h3 {
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--acc-color-text-main);
-      margin: 0 0 1rem;
-    }
-
-    .resultado-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 0.75rem;
-      margin-bottom: 1rem;
-    }
-
-    .resultado-item {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-
-    .resultado-label {
-      font-size: 0.75rem;
-      color: var(--acc-color-text-muted);
-    }
-
-    .resultado-valor {
-      font-size: 0.875rem;
-      color: var(--acc-color-text-main);
-      word-break: break-word;
-    }
-
-    .resultado-codigos {
-      grid-column: 1 / -1;
-    }
-
-    .inscricoes-list {
-      margin-top: 1rem;
-    }
-
-    .inscricoes-list h4 {
-      font-size: 0.9375rem;
-      font-weight: 700;
-      color: var(--acc-color-text-main);
-      margin: 0 0 0.5rem;
-    }
-
-    .acc-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.875rem;
-    }
-
-    .acc-table th {
-      padding: 0.5rem 0.75rem;
-      border-bottom: 1px solid var(--acc-color-border);
-      color: var(--acc-color-text-muted);
-      font-weight: 600;
-      text-align: left;
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .acc-table td {
-      padding: 0.5rem 0.75rem;
-      border-bottom: 1px solid var(--acc-color-border);
-    }
-
-    .divida-divider {
-      display: flex;
-      align-items: center;
-      text-align: center;
-      margin: 1.5rem 0;
-      color: var(--acc-color-text-muted);
-      font-size: 0.875rem;
-    }
-
-    .divida-divider::before,
-    .divida-divider::after {
-      content: '';
-      flex: 1;
-      border-bottom: 1px solid var(--acc-color-border);
-    }
-
-    .divida-divider:not(:empty)::before {
-      margin-right: 0.75rem;
-    }
-
-    .divida-divider:not(:empty)::after {
-      margin-left: 0.75rem;
-    }
-
-    /* Modal nova pendência */
-    .overlay {
-      position: fixed;
-      inset: 0;
-      background-color: rgba(0, 0, 0, 0.45);
-      backdrop-filter: blur(2px);
-      z-index: 1000;
-    }
-
-    .modal {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 100%;
-      max-width: 480px;
-      background-color: var(--acc-color-surface);
-      border: 1px solid var(--acc-color-border);
-      border-radius: var(--acc-radius-lg);
-      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15);
-      z-index: 1001;
-      animation: slideUp 0.25s ease-out;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .modal-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 1.5rem 1.5rem 1rem;
-      border-bottom: 1px solid var(--acc-color-border);
-    }
-
-    .modal-body {
-      padding: 1.5rem;
-    }
-
-    .modal-title {
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: var(--acc-color-text-main);
-      margin: 0;
-    }
-
-    .modal-actions {
-      display: flex;
-      gap: 0.75rem;
-      justify-content: flex-end;
-      padding: 1rem 1.5rem 1.5rem;
-      border-top: 1px solid var(--acc-color-border);
-    }
-
-    .aviso-exclusao {
-      margin-top: 0.5rem;
-      font-size: 0.8125rem;
-      color: var(--acc-color-text-muted);
-    }
-
-    @keyframes slideUp {
-      from { opacity: 0; transform: translate(-50%, -40%); }
-      to { opacity: 1; transform: translate(-50%, -50%); }
-    }
-
     @media (max-width: 640px) {
       .page-container {
         padding: 1rem;
       }
 
-      .form-actions,
-      .modal-actions {
-        flex-direction: column;
+      .page-acoes {
+        width: 100%;
+        margin-left: 0;
       }
 
-      .form-actions button,
-      .modal-actions button {
-        width: 100%;
+      .consulta-row {
+        grid-template-columns: 1fr auto;
+      }
+
+      .consulta-col--quando {
+        grid-column: 1 / -1;
+        text-align: left;
+        align-items: flex-start;
       }
     }
   `,
 })
 export class ClienteDetalhesPage implements OnInit {
+  protected readonly consultas = inject(ConsultasFiscaisService);
   protected readonly clienteService = inject(ClienteService);
-  protected readonly integra = inject(IntegraContadorService);
-  protected readonly divida = inject(DividaAtivaService);
+  protected readonly sessao = inject(SessionStore);
+  private readonly route = inject(ActivatedRoute);
   protected readonly router = inject(Router);
-  protected readonly route = inject(ActivatedRoute);
-  protected readonly fb = inject(FormBuilder);
 
   protected readonly cliente = signal<ClienteDto | null>(null);
+  protected readonly estadoCliente = signal<EstadoCliente>('carregando');
+  protected readonly erroCliente = signal<string | null>(null);
 
-  protected readonly carregando = this.clienteService.carregando;
-  protected readonly erroGeral = this.clienteService.erro;
+  protected readonly aba = signal<AbaId>('visao-geral');
+  /** ID/aba em sincronia com a URL (`?aba=`) — fonte única do switch de abas. */
+  protected readonly abaSincronizada = this.aba.asReadonly();
+  protected readonly abas = ABAS;
+  protected readonly estadosFiltro = ESTADOS_FILTRO;
 
-  // Confirmação de exclusão
-  protected readonly confirmarExclusaoAberta = signal(false);
+  protected readonly podeEditar = computed(() => this.sessao.user()?.role === 'OPERADOR');
 
-  // Pendências locais (simulação, sem backend)
-  protected readonly pendencias = signal<PendenciaDto[]>([
-    {
-      id: '1',
-      descricao: 'Débito de ICMS - Referente a 2024',
-      valor: 1250.00,
-      vencimento: '2025-06-30',
-      status: 'ABERTA',
-      origem: 'Dívida Ativa',
-    },
-    {
-      id: '2',
-      descricao: 'Multa por atraso na entrega de declaração',
-      valor: 520.50,
-      vencimento: '2025-05-15',
-      status: 'PAGA',
-      origem: 'SICALC',
-    },
-    {
-      id: '3',
-      descricao: 'IPTU comercial atrasado',
-      valor: 890.00,
-      vencimento: '2025-04-10',
-      status: 'VENCIDA',
-      origem: 'Municipal',
-    },
-  ]);
-
-  protected readonly novaPendenciaAberta = signal(false);
-
-  protected readonly servicosIntegra = signal<ServicoIntegraContador[]>(SERVICOS_INTEGRA_CONTADOR);
-
-  protected readonly form = this.fb.group({
-    tipo: ['', [Validators.required]],
-    cpfCnpj: ['', [Validators.required]],
-    nomeRazaoSocial: ['', [Validators.required, Validators.minLength(3)]],
-    nomeFantasia: [''],
-    porteRegime: [''],
-    email: ['', [Validators.email]],
-    telefone: [''],
+  protected readonly temPaginaAnterior = computed(() => this.consultas.pagina() > 1);
+  protected readonly temProximaPagina = computed(
+    () => this.consultas.pagina() * this.consultas.tamanho() < this.consultas.total(),
+  );
+  protected readonly totalDePaginas = computed(() => {
+    const total = this.consultas.total();
+    if (total === 0) return 1;
+    return Math.max(1, Math.ceil(total / this.consultas.tamanho()));
   });
 
-  protected readonly formIntegra = this.fb.group({
-    documentoContribuinte: ['', [Validators.required]],
-    idSistema: ['', [Validators.required]],
-    idServico: ['', [Validators.required]],
-    verbo: ['', [Validators.required]],
-    versaoSistema: [''],
-    dados: ['', [Validators.required]],
-    confirmacaoExplicita: [false],
-    chaveIdempotencia: [''],
-  });
+  private idCliente: string | null = null;
 
-  protected readonly formDivida = this.fb.group({
-    documento: ['', [Validators.required]],
-  });
+  async ngOnInit(): Promise<void> {
+    const aba = this.route.snapshot.queryParamMap.get('aba');
+    if (aba && ABAS_VALIDAS.includes(aba) && this.ehAbaHabilitada(aba)) {
+      this.aba.set(aba as AbaId);
+    }
 
-  protected readonly formInscricao = this.fb.group({
-    numeroInscricao: ['', [Validators.required]],
-  });
-
-  protected readonly formNovaPendencia = this.fb.group({
-    descricao: ['', [Validators.required]],
-    valor: [null, [Validators.required, Validators.min(0)]],
-    vencimento: ['', [Validators.required]],
-    status: ['ABERTA', [Validators.required]],
-    origem: ['', [Validators.required]],
-  });
-
-  ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
-    if (id) {
-      this.carregarCliente(id);
-    }
-
-    // Quando o sistema muda, filtra os serviços disponíveis
-    this.formIntegra.get('idSistema')?.valueChanges?.subscribe(() => {
-      this.formIntegra.get('idServico')?.setValue('');
-      this.formIntegra.get('verbo')?.setValue('');
-      this.formIntegra.get('versaoSistema')?.setValue('');
-    });
-
-    // Quando o serviço muda, preenche verbo e versão automaticamente
-    this.formIntegra.get('idServico')?.valueChanges?.subscribe((idServico) => {
-      const servico = this.servicosIntegra().find((s) => s.idServico === idServico);
-      if (servico) {
-        this.formIntegra.get('verbo')?.setValue(servico.verbo, { emitEvent: false });
-        this.formIntegra.get('versaoSistema')?.setValue(servico.versaoSistema ?? '', { emitEvent: false });
-      }
-    });
-  }
-
-  protected servicosFiltrados(): ServicoIntegraContador[] {
-    const sistema = this.formIntegra.get('idSistema')?.value;
-    if (!sistema) return [];
-    return this.servicosIntegra().filter((s) => s.idSistema === sistema);
-  }
-
-  protected isInvalid(field: string): boolean {
-    const c = this.form.get(field);
-    return !!(c?.invalid && c.touched);
-  }
-
-  protected cpfCnpjErro(): string | null {
-    const c = this.form.get('cpfCnpj');
-    if (c?.touched && c?.invalid) {
-      return 'CPF/CNPJ inválido.';
-    }
-    return null;
-  }
-
-  private async carregarCliente(id: string): Promise<void> {
-    try {
-      const cliente = await this.clienteService.obter(id);
-      this.cliente.set(cliente);
-      this.form.patchValue({
-        tipo: cliente.tipo,
-        cpfCnpj: cliente.cpfCnpj,
-        nomeRazaoSocial: cliente.nomeRazaoSocial,
-        nomeFantasia: cliente.nomeFantasia ?? '',
-        porteRegime: cliente.porteRegime ?? '',
-        email: cliente.email ?? '',
-        telefone: cliente.telefone ?? '',
-      });
-    } catch (err: any) {
-      this.clienteService.definirErro(err.message ?? 'Falha ao carregar cliente.');
-    }
-  }
-
-  protected async onSalvar(): Promise<void> {
-    if (this.form.invalid) {
-      this.form.markAllAsTouched();
+    this.idCliente = id;
+    if (!id) {
+      this.estadoCliente.set('naoEncontrado');
       return;
     }
 
-    const id = this.route.snapshot.paramMap.get('id');
-    if (!id) return;
-
-    const cpfCnpj = sanitizeDocument(this.form.get('cpfCnpj')?.value ?? '');
-    const telefone = (this.form.get('telefone')?.value ?? '').replace(/\D/g, '');
-    const email = (this.form.get('email')?.value ?? '').trim().toLowerCase() || undefined;
-
-    const payload: UpdateClienteRequestDto = {
-      tipo: (this.form.get('tipo')?.value ?? 'PF') as TipoCliente,
-      porteRegime: (this.form.get('porteRegime')?.value || undefined) as PorteRegime | undefined,
-      cpfCnpj,
-      nomeRazaoSocial: (this.form.get('nomeRazaoSocial')?.value ?? '').trim(),
-      nomeFantasia: (this.form.get('nomeFantasia')?.value ?? '').trim() || undefined,
-      email,
-      telefone: telefone || undefined,
-    };
-
-    try {
-      await this.clienteService.atualizar(id, payload);
-      this.router.navigate(['/clientes']);
-    } catch {
-      // erro já é exibido pelo clienteService.erro()
-    }
+    await this.carregarCliente(id);
+    // Dados do cliente prontos: histórico e cartões em paralelo.
+    await this.consultas.carregar(id);
   }
 
-  protected onCancelar(): void {
+  /** Cartões genéricos por serviço federal (Situação fiscal da visão geral). */
+  protected readonly cartoesFiscais = computed<{
+    servico: string;
+    rotuloServico: string;
+    estado: { leitura: LeituraEstado };
+    ambiente: string;
+    chaveMascarada: string | null;
+    criadoEm: string | null;
+  }[]>(() => {
+    const situacao = this.consultas.situacao();
+    if (!situacao) return [];
+
+    return situacao.servicos.map((servico) => ({
+      servico: servico.servico,
+      rotuloServico: this.rotuloServico(servico.servico),
+      estado: { leitura: leituraEstado(servico.estado) },
+      ambiente: this.rotuloAmbiente(servico.ambiente),
+      chaveMascarada: servico.chaveConsultaMascarada,
+      criadoEm: servico.criadoEm,
+    }));
+  });
+
+  protected ehAbaHabilitada(id: string): boolean {
+    const tab = this.abas.find((t) => t.id === id);
+    return !!tab && !tab.disabled;
+  }
+
+  protected trocarAba(nova: string): void {
+    if (!this.ehAbaHabilitada(nova)) return;
+    this.aba.set(nova as AbaId);
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { aba: nova },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  protected voltarParaLista(): void {
     this.router.navigate(['/clientes']);
   }
 
-  protected async onExecutarIntegra(): Promise<void> {
-    if (this.formIntegra.invalid) {
-      this.formIntegra.markAllAsTouched();
-      return;
-    }
-
-    const raw = this.formIntegra.getRawValue();
-    const request = {
-      documentoContribuinte: raw.documentoContribuinte!,
-      verbo: raw.verbo as 'Consultar' | 'Declarar' | 'Emitir' | 'Apoiar' | 'Monitorar',
-      pedidoDados: {
-        idSistema: raw.idSistema!,
-        idServico: raw.idServico!,
-        versaoSistema: raw.versaoSistema!,
-        dados: raw.dados!,
-      },
-      confirmacaoExplicita: raw.confirmacaoExplicita ?? false,
-      chaveIdempotencia: raw.chaveIdempotencia || undefined,
-    };
-
-    try {
-      await this.integra.executar(request);
-    } catch {
-      // erro já é exibido pelo integra.erro()
+  protected abrirEdicao(): void {
+    const id = this.idCliente ?? this.cliente()?.id;
+    if (id) {
+      void this.router.navigate(['/clientes', id, 'editar']);
     }
   }
 
-  protected async onConsultarDivida(): Promise<void> {
-    if (this.formDivida.invalid) {
-      this.formDivida.markAllAsTouched();
-      return;
-    }
-
-    try {
-      await this.divida.consultarDevedor(
-        this.formDivida.get('documento')?.value ?? ''
-      );
-    } catch {
-      // erro já é exibido pelo divida.erro()
-    }
+  protected abrirDividaAtiva(): void {
+    const cliente = this.cliente();
+    if (!cliente) return;
+    this.router.navigate(['/divida-ativa'], { queryParams: { clienteId: cliente.id } });
   }
 
-  protected async onConsultarInscricao(): Promise<void> {
-    if (this.formInscricao.invalid) {
-      this.formInscricao.markAllAsTouched();
-      return;
-    }
-
-    try {
-      await this.divida.consultarInscricao(
-        this.formInscricao.get('numeroInscricao')?.value ?? ''
-      );
-    } catch {
-      // erro já é exibido pelo divida.erro()
-    }
+  protected recarregarCliente(): void {
+    if (this.idCliente) void this.carregarCliente(this.idCliente);
   }
 
-  // === Pendências ===
-
-  protected abrirNovaPendencia(): void {
-    this.formNovaPendencia.reset({
-      descricao: '',
-      valor: null,
-      vencimento: '',
-      status: 'ABERTA',
-      origem: '',
-    });
-    this.novaPendenciaAberta.set(true);
+  protected recarregarConsultas(): void {
+    const id = this.idCliente;
+    if (id) void this.consultas.carregar(id, { pagina: this.consultas.pagina() });
   }
 
-  protected fecharNovaPendencia(): void {
-    this.novaPendenciaAberta.set(false);
+  protected recarregarSituacao(): void {
+    const id = this.idCliente;
+    if (id) void this.consultas.carregarSituacao(id);
   }
 
-  protected confirmarExclusao(): void {
-    this.confirmarExclusaoAberta.set(true);
-  }
-
-  protected fecharConfirmarExclusao(): void {
-    this.confirmarExclusaoAberta.set(false);
-  }
-
-  protected async excluirCliente(): Promise<void> {
-    const id = this.route.snapshot.paramMap.get('id');
+  protected trocarFiltroEstado(evento: Event): void {
+    const valor = (evento.target as HTMLSelectElement).value;
+    const id = this.idCliente;
     if (!id) return;
+    void this.consultas.carregar(
+      id,
+      valor === '' ? { pagina: 1 } : { pagina: 1, estado: valor as EstadoConsultaFiscal },
+    );
+  }
 
-    try {
-      await this.clienteService.excluir(id);
-      this.router.navigate(['/clientes']);
-    } catch {
-      // erro já é exibido pelo clienteService.erro()
-      this.fecharConfirmarExclusao();
+  protected trocarPagina(direcao: -1 | 1): void {
+    const id = this.idCliente;
+    if (!id) return;
+    void this.consultas.carregar(id, { pagina: this.consultas.pagina() + direcao });
+  }
+
+  protected leitura(estado: EstadoConsultaFiscal): LeituraEstado {
+    return leituraEstado(estado);
+  }
+
+  protected rotuloServico(servico: string): string {
+    switch (servico) {
+      case 'DEVEDOR':
+        return 'Devedor (Dívida Ativa)';
+      case 'INSCRICAO':
+        return 'Inscrição (Dívida Ativa)';
+      default:
+        return servico;
     }
   }
 
-  protected async onSalvarPendencia(): Promise<void> {
-    if (this.formNovaPendencia.invalid) {
-      this.formNovaPendencia.markAllAsTouched();
-      return;
-    }
+  protected rotuloAmbiente(ambiente: string): string {
+    return ambiente === 'TRIAL' ? 'Ambiente de avaliação' : 'Produção';
+  }
 
-    const raw = this.formNovaPendencia.getRawValue();
-    const nova: PendenciaDto = {
-      id: Date.now().toString(),
-      descricao: raw.descricao!,
-      valor: raw.valor!,
-      vencimento: raw.vencimento!,
-      status: raw.status as 'ABERTA' | 'PAGA' | 'VENCIDA',
-      origem: raw.origem!,
+  protected rotuloPorte(porte: string): string {
+    const rotulos: Record<string, string> = {
+      MEI: 'MEI',
+      SIMPLES_NACIONAL: 'Simples Nacional',
+      LUCRO_PRESUMIDO: 'Lucro presumido',
+      LUCRO_REAL: 'Lucro real',
     };
-
-    this.pendencias.update((atual) => [nova, ...atual]);
-    this.fecharNovaPendencia();
+    return rotulos[porte] ?? porte;
   }
 
-  protected excluirPendencia(id: string): void {
-    this.pendencias.update((atual) => atual.filter((p) => p.id !== id));
+  protected formatarData = formatarData;
+
+  protected aplicarMascara(documento: string): string {
+    if (documento.length === 11) {
+      return documento.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    }
+    if (documento.length === 14) {
+      return documento.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+    }
+    return documento;
   }
 
-  protected formatarData(iso: string): string {
-    const d = new Date(iso);
-    return d.toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
+  protected formatarTelefone(telefone: string): string {
+    const digitos = sanitizeDocument(telefone) ?? telefone;
+    if (digitos.length === 10) {
+      return digitos.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+    }
+    if (digitos.length === 11) {
+      return digitos.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+    }
+    return telefone;
+  }
+
+  private async carregarCliente(id: string): Promise<void> {
+    this.estadoCliente.set('carregando');
+    this.erroCliente.set(null);
+    try {
+      // 404 de cliente alheio/inexistente chega como `NAO_ENCONTRADO`.
+      const cliente = await this.clienteService.obter(id);
+      this.cliente.set(cliente);
+      this.estadoCliente.set('pronto');
+    } catch (erro) {
+      const codigo = (erro as { error?: { code?: string } })?.error?.code ?? null;
+      if (codigo === 'NAO_ENCONTRADO') {
+        this.estadoCliente.set('naoEncontrado');
+      } else {
+        this.estadoCliente.set('erro');
+        this.erroCliente.set(
+          (erro as { error?: { message?: string } })?.error?.message ??
+            'Falha ao carregar os dados do cliente.',
+        );
+      }
+    }
   }
 }
