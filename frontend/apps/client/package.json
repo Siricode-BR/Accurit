@@ -9,6 +9,7 @@
     "watch": "ng build --watch --configuration development",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "test": "ng test",
+"test:vitest": "vitest run",
     "clean": "Remove-Item -Recurse -Force dist, .angular -ErrorAction SilentlyContinue"
   },
   "private": true,
