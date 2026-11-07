@@ -1,0 +1,10 @@
+:host {
+  display: inline-flex;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.acc-icon {
+  width: var(--acc-icon-size, 1.25rem);
+  height: var(--acc-icon-size, 1.25rem);
+}

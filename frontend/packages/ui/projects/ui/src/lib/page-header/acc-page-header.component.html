@@ -1,0 +1,11 @@
+<header class="acc-page-header">
+  <div class="acc-page-header__texts">
+    <h1 class="acc-page-header__title">{{ title() }}</h1>
+    @if (subtitle()) {
+      <p class="acc-page-header__subtitle">{{ subtitle() }}</p>
+    }
+  </div>
+  <div class="acc-page-header__actions">
+    <ng-content></ng-content>
+  </div>
+</header>

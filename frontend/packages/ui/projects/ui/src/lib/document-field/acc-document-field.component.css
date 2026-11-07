@@ -1,0 +1,79 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.acc-doc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.acc-doc__label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--acc-color-text-main, #0f172a);
+}
+
+.acc-doc__box {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--acc-color-border, #e2e8f0);
+  border-radius: var(--acc-radius-md, 8px);
+  background-color: var(--acc-color-surface, #ffffff);
+}
+
+.acc-doc__box:focus-within {
+  border-color: var(--acc-color-primary, #1e40af);
+  box-shadow: 0 0 0 3px rgb(30 64 175 / 0.15);
+}
+
+.acc-doc__box--locked {
+  background-color: var(--acc-color-bg, #f8fafc);
+}
+
+.acc-doc__box--locked:focus-within {
+  box-shadow: none;
+  border-color: var(--acc-color-border, #e2e8f0);
+}
+
+.acc-doc__box--invalid {
+  border-color: var(--acc-color-danger, #b91c1c);
+}
+
+.acc-doc__input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.625rem 0.875rem;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.875rem;
+  color: var(--acc-color-text-main, #0f172a);
+  outline: none;
+}
+
+.acc-doc__box--locked .acc-doc__input {
+  color: var(--acc-color-text-muted, #64748b);
+  cursor: not-allowed;
+}
+
+.acc-doc__lock {
+  margin-right: 0.75rem;
+  color: var(--acc-color-text-muted, #64748b);
+  --acc-icon-size: 1rem;
+}
+
+.acc-doc__hint,
+.acc-doc__error {
+  margin: 0;
+  font-size: 0.75rem;
+}
+
+.acc-doc__hint {
+  color: var(--acc-color-text-muted, #64748b);
+}
+
+.acc-doc__error {
+  color: var(--acc-color-danger, #b91c1c);
+}

@@ -1,0 +1,64 @@
+<div class="acc-shell" [class.acc-shell--collapsed]="recolhida()">
+  @if (menuMobileAberto()) {
+    <div class="acc-shell__backdrop" (click)="fecharMenuMobile()" aria-hidden="true"></div>
+  }
+
+  <aside
+    class="acc-shell__aside"
+    [class.acc-shell__aside--open]="menuMobileAberto()"
+    [attr.aria-label]="portal()"
+  >
+    <div class="acc-shell__brand">
+      <span class="acc-shell__brand-name">{{ brand() }}</span>
+      @if (!recolhida()) {
+        <span class="acc-shell__brand-portal">{{ portal() }}</span>
+      }
+    </div>
+    <acc-sidebar [groups]="groups()" [collapsed]="recolhida()" (navegou)="fecharMenuMobile()" />
+  </aside>
+
+  <div class="acc-shell__body">
+    <header class="acc-shell__topbar">
+      <button
+        type="button"
+        class="acc-shell__icon-btn acc-shell__toggle-mobile"
+        aria-label="Abrir menu"
+        [attr.aria-expanded]="menuMobileAberto()"
+        (click)="menuMobileAberto.set(!menuMobileAberto())"
+      >
+        <acc-icon name="menu" />
+      </button>
+      <button
+        type="button"
+        class="acc-shell__icon-btn acc-shell__toggle-desktop"
+        [attr.aria-label]="recolhida() ? 'Expandir menu lateral' : 'Recolher menu lateral'"
+        (click)="recolhida.set(!recolhida())"
+      >
+        <acc-icon [name]="recolhida() ? 'menu' : 'chevron-left'" />
+      </button>
+
+      <div class="acc-shell__topbar-slot">
+        <ng-content select="[acc-shell-topbar]"></ng-content>
+      </div>
+
+      @if (usuario(); as u) {
+        <div class="acc-shell__user">
+          <span class="acc-shell__avatar" aria-hidden="true">{{ iniciais() }}</span>
+          <span class="acc-shell__user-info">
+            <span class="acc-shell__user-name">{{ u.nome }}</span>
+            @if (u.detalhe) {
+              <span class="acc-shell__user-detail">{{ u.detalhe }}</span>
+            }
+          </span>
+          <button type="button" class="acc-shell__icon-btn" aria-label="Sair" title="Sair" (click)="sair.emit()">
+            <acc-icon name="logout" />
+          </button>
+        </div>
+      }
+    </header>
+
+    <main class="acc-shell__content" id="conteudo-principal">
+      <ng-content></ng-content>
+    </main>
+  </div>
+</div>

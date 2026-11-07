@@ -1,0 +1,68 @@
+<div class="page-container">
+  <acc-page-header [title]="saudacao()" [subtitle]="subtitulo()" />
+
+  @if (isTrial()) {
+    <p class="aviso-trial" role="note">
+      Ambiente de avaliação (Trial): os dados retornados pelo SERPRO podem ser demonstrativos.
+    </p>
+  }
+
+  <section class="indicadores" aria-label="Indicadores">
+    <acc-stat-card
+      label="Clientes cadastrados"
+      [value]="totalClientes()"
+      [loading]="carregandoClientes()"
+      hint="Contribuintes vinculados ao escritório"
+    />
+    <acc-stat-card
+      label="Ambiente SERPRO"
+      tone="info"
+      [value]="rotuloAmbiente()"
+      [loading]="carregandoAmbiente()"
+    />
+  </section>
+
+  <section class="bloco" aria-labelledby="titulo-acoes">
+    <h2 id="titulo-acoes" class="bloco-titulo">Ações rápidas</h2>
+    <div class="acoes">
+      @for (acao of acoes; track acao.id) {
+        <a class="acao" [routerLink]="acao.rota">
+          <acc-icon [name]="acao.icone" />
+          <span class="acao-textos">
+            <span class="acao-titulo">{{ acao.titulo }}</span>
+            <span class="acao-descricao">{{ acao.descricao }}</span>
+          </span>
+        </a>
+      }
+    </div>
+  </section>
+
+  <section class="bloco" aria-labelledby="titulo-recentes">
+    <h2 id="titulo-recentes" class="bloco-titulo">Clientes recentes</h2>
+
+    @if (carregandoClientes()) {
+      <acc-skeleton />
+    } @else if (erroClientes(); as erro) {
+      <div class="alert-error" role="alert">{{ erro }}</div>
+    } @else if (recentes().length === 0) {
+      <acc-empty-state
+        title="Nenhum cliente cadastrado"
+        descricao="Cadastre o primeiro cliente para começar a consultar."
+      >
+        <a acc-button variant="primary" routerLink="/clientes/novo">Cadastrar cliente</a>
+      </acc-empty-state>
+    } @else {
+      <ul class="recentes">
+        @for (c of recentes(); track c.id) {
+          <li>
+            <a class="recente" [routerLink]="['/clientes', c.id]">
+              <span class="recente-nome">{{ c.nomeRazaoSocial }}</span>
+              <span class="recente-doc">{{ formatarDocumento(c.cpfCnpj) }}</span>
+              <acc-badge [status]="c.tipo === 'PJ' ? 'info' : 'neutral'">{{ c.tipo }}</acc-badge>
+            </a>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+</div>

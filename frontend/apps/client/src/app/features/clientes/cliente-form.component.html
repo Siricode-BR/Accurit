@@ -1,0 +1,135 @@
+<div class="form-layout">
+  <div class="form-brand">
+    <span class="brand-name">Accurit</span>
+    <p class="brand-tagline">Cadastro de Cliente</p>
+  </div>
+
+  <acc-card>
+    <form [formGroup]="form" (ngSubmit)="onSubmit()" class="cliente-form">
+      <h2 class="form-title">Novo Cliente</h2>
+
+      @if (clienteService.erro()) {
+        <div class="alert-error" role="alert">{{ clienteService.erro() }}</div>
+      }
+
+      <div class="field">
+        <label for="tipo" class="label">Tipo de Pessoa</label>
+        <select id="tipo" formControlName="tipo" class="input input--select">
+          <option value="PF">Pessoa Física (CPF)</option>
+          <option value="PJ">Pessoa Jurídica (CNPJ)</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="cpfCnpj" class="label">CPF / CNPJ</label>
+        <input
+          id="cpfCnpj"
+          type="text"
+          accDocMask
+          formControlName="cpfCnpj"
+          autocomplete="off"
+          class="input"
+          [class.input--error]="isInvalid('cpfCnpj')"
+          placeholder="000.000.000-00 ou 00.000.000/0000-00"
+        />
+        @if (isInvalid('cpfCnpj')) {
+          <span class="field-error">
+            {{ cpfCnpjErro() ?? 'Informe um CPF/CNPJ válido.' }}
+          </span>
+        }
+      </div>
+
+      <div class="field">
+        <label for="nomeRazaoSocial" class="label">Nome / Razão Social</label>
+        <input
+          id="nomeRazaoSocial"
+          type="text"
+          formControlName="nomeRazaoSocial"
+          autocomplete="off"
+          class="input"
+          [class.input--error]="isInvalid('nomeRazaoSocial')"
+          placeholder="ex: João Silva ou Silva Contabilidade Ltda."
+        />
+      </div>
+
+      <div class="field">
+        <label for="nomeFantasia" class="label">Nome Fantasia</label>
+        <input
+          id="nomeFantasia"
+          type="text"
+          formControlName="nomeFantasia"
+          autocomplete="off"
+          class="input"
+          placeholder="ex: Silva & Associados (opcional)"
+        />
+      </div>
+
+      <div class="field">
+        <label for="porteRegime" class="label">Porte / Regime Tributário</label>
+        <select id="porteRegime" formControlName="porteRegime" class="input input--select">
+          <option value="">Selecione (opcional)</option>
+          <option value="MEI">MEI</option>
+          <option value="SIMPLES_NACIONAL">Simples Nacional</option>
+          <option value="LUCRO_PRESUMIDO">Lucro Presumido</option>
+          <option value="LUCRO_REAL">Lucro Real</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="email" class="label">E-mail</label>
+        <input
+          id="email"
+          type="email"
+          formControlName="email"
+          autocomplete="email"
+          class="input"
+          [class.input--error]="isInvalid('email')"
+          placeholder="cliente@email.com.br"
+        />
+        @if (isInvalid('email')) {
+          <span class="field-error">{{ emailErro() }}</span>
+        }
+      </div>
+
+      <div class="field">
+        <label for="telefone" class="label">Telefone</label>
+        <input
+          id="telefone"
+          type="tel"
+          formControlName="telefone"
+          autocomplete="tel"
+          class="input"
+          [class.input--error]="isInvalid('telefone')"
+          placeholder="(11) 99999-9999"
+        />
+        @if (isInvalid('telefone')) {
+          <span class="field-error">{{ telefoneErro() }}</span>
+        }
+      </div>
+
+      <div class="actions">
+        <button
+          acc-button
+          type="submit"
+          variant="primary"
+          size="lg"
+          [loading]="clienteService.carregando()"
+          [disabled]="form.invalid || clienteService.carregando()"
+          class="cliente-submit"
+        >
+          Cadastrar Cliente
+        </button>
+        <button
+          acc-button
+          type="button"
+          variant="outline"
+          size="lg"
+          (click)="router.navigate(['/clientes'])"
+          class="cliente-cancel"
+        >
+          Cancelar
+        </button>
+      </div>
+    </form>
+  </acc-card>
+</div>

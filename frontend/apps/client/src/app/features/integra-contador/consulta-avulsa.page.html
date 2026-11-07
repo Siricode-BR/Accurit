@@ -1,0 +1,12 @@
+<div class="page-container">
+  <acc-page-header
+    title="Consulta Integra Contador"
+    subtitle="Consulta avulsa para contribuinte não cadastrado como cliente do escritório."
+  />
+
+  @if (ambienteEfetivo(); as env) {
+    <p class="ambiente-sel">Ambiente: {{ env === 'TRIAL' ? 'Trial (avaliação)' : 'Produção' }}</p>
+  }
+
+  <app-integra-contador-consulta />
+</div>

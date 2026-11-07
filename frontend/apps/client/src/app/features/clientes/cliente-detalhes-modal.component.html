@@ -1,0 +1,71 @@
+<div class="overlay" (click)="fechar.emit()"></div>
+
+<div class="modal" role="dialog" aria-modal="true" aria-label="Detalhes do cliente">
+  <div class="modal-header">
+    <h2 class="modal-title">Detalhes do Cliente</h2>
+    <button acc-button variant="ghost" size="sm" (click)="fechar.emit()">
+      ×
+    </button>
+  </div>
+
+  <div class="modal-body">
+    <div class="detalhe-row">
+      <span class="detalhe-label">Tipo</span>
+      <span class="detalhe-valor">{{ cliente.tipo }}</span>
+    </div>
+
+    <div class="detalhe-row">
+      <span class="detalhe-label">CPF / CNPJ</span>
+      <span class="detalhe-valor">{{ formatarDoc(cliente.cpfCnpj) }}</span>
+    </div>
+
+    <div class="detalhe-row">
+      <span class="detalhe-label">Nome / Razão Social</span>
+      <span class="detalhe-valor">{{ cliente.nomeRazaoSocial }}</span>
+    </div>
+
+    @if (cliente.nomeFantasia) {
+      <div class="detalhe-row">
+        <span class="detalhe-label">Nome Fantasia</span>
+        <span class="detalhe-valor">{{ cliente.nomeFantasia }}</span>
+      </div>
+    }
+
+    @if (cliente.porteRegime) {
+      <div class="detalhe-row">
+        <span class="detalhe-label">Porte / Regime Tributário</span>
+        <span class="detalhe-valor">{{ cliente.porteRegime }}</span>
+      </div>
+    }
+
+    @if (cliente.email) {
+      <div class="detalhe-row">
+        <span class="detalhe-label">E-mail</span>
+        <span class="detalhe-valor">{{ cliente.email }}</span>
+      </div>
+    }
+
+    @if (cliente.telefone) {
+      <div class="detalhe-row">
+        <span class="detalhe-label">Telefone</span>
+        <span class="detalhe-valor">{{ cliente.telefone }}</span>
+      </div>
+    }
+
+    <div class="detalhe-row">
+      <span class="detalhe-label">Criado em</span>
+      <span class="detalhe-valor">{{ formatarData(cliente.criadoEm) }}</span>
+    </div>
+
+    <div class="detalhe-row">
+      <span class="detalhe-label">Atualizado em</span>
+      <span class="detalhe-valor">{{ formatarData(cliente.atualizadoEm) }}</span>
+    </div>
+  </div>
+
+  <div class="modal-footer">
+    <button acc-button variant="outline" size="md" (click)="fechar.emit()">
+      Fechar
+    </button>
+  </div>
+</div>

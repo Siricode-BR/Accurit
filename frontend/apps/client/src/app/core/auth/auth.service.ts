@@ -55,7 +55,7 @@ export class AuthService {
             tenantId: res.usuario.escritorio_id ?? undefined,
           };
           this.session.setSession(usuario, res.accessToken);
-          this.router.navigate(['/clientes']);
+          void this.router.navigateByUrl(this.destinoAposLogin());
         },
         error: (err: { error?: { message?: string }; message?: string }) => {
           this.#status.set('error');
@@ -64,6 +64,17 @@ export class AuthService {
           );
         },
       });
+  }
+
+  /** Destino pós-login: `returnUrl` interno e válido; caso contrário, o dashboard. */
+  private destinoAposLogin(): string {
+    const retorno = this.router.parseUrl(this.router.url).queryParams['returnUrl'];
+    const valido =
+      typeof retorno === 'string' &&
+      retorno.startsWith('/') &&
+      !retorno.startsWith('//') &&
+      !retorno.startsWith('/login');
+    return valido ? retorno : '/dashboard';
   }
 
   logout(): void {

@@ -1,0 +1,17 @@
+.page-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.cliente-info {
+  margin: 0 0 1rem;
+  font-size: 0.9375rem;
+  color: var(--acc-color-text-main);
+}
+
+.ambiente-sel {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  color: var(--acc-color-text-muted);
+}

@@ -1,0 +1,40 @@
+<nav class="acc-sidebar" aria-label="Navegação principal">
+  @for (grupo of groups(); track grupo.id) {
+    <div class="acc-sidebar__group">
+      @if (grupo.label && !collapsed()) {
+        <p class="acc-sidebar__group-label">{{ grupo.label }}</p>
+      }
+      <ul class="acc-sidebar__list">
+        @for (item of grupo.items; track item.id) {
+          <li>
+            @if (item.emBreve) {
+              <span class="acc-sidebar__link acc-sidebar__link--disabled" aria-disabled="true" [attr.title]="item.label + ' (em breve)'">
+                <acc-icon [name]="item.icon" />
+                @if (!collapsed()) {
+                  <span class="acc-sidebar__text">{{ item.label }}</span>
+                  <span class="acc-sidebar__soon">Em breve</span>
+                }
+              </span>
+            } @else {
+              <a
+                class="acc-sidebar__link"
+                routerLinkActive="acc-sidebar__link--active"
+                ariaCurrentWhenActive="page"
+                [routerLink]="item.route"
+                [routerLinkActiveOptions]="{ exact: item.exact ?? false }"
+                [attr.title]="collapsed() ? item.label : null"
+                [attr.aria-label]="collapsed() ? item.label : null"
+                (click)="navegou.emit()"
+              >
+                <acc-icon [name]="item.icon" />
+                @if (!collapsed()) {
+                  <span class="acc-sidebar__text">{{ item.label }}</span>
+                }
+              </a>
+            }
+          </li>
+        }
+      </ul>
+    </div>
+  }
+</nav>

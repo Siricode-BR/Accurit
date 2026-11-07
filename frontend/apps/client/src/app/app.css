@@ -1,47 +1,24 @@
-.app-layout {
+.app-publico {
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
 }
 
-.app-navbar {
-  height: 64px;
-  background-color: var(--acc-color-surface);
-  border-bottom: 1px solid var(--acc-color-border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 2rem;
+.ambiente {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--acc-color-info);
 }
 
-.navbar-brand {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+.ambiente:empty {
+  display: none;
 }
 
-.brand-badge {
-  font-weight: 800;
-  font-size: 1.25rem;
-  color: var(--acc-color-primary);
-  letter-spacing: -0.025em;
+.ambiente {
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+  background-color: var(--acc-color-info-bg);
 }
 
-.brand-divider {
-  color: var(--acc-color-border);
+.ambiente--trial {
+  background-color: var(--acc-color-warning-bg);
+  color: var(--acc-color-warning);
 }
-
-.brand-portal {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--acc-color-text-muted);
-}
-
-.text-muted {
-  color: var(--acc-color-text-muted);
-}
-
-.app-main {
-  flex: 1;
-}
-

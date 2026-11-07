@@ -1,0 +1,190 @@
+:host {
+  display: block;
+}
+
+.aviso-consultivo {
+  margin: 0 0 1rem;
+  padding: 0.625rem 0.875rem;
+  border-radius: var(--acc-radius-md);
+  background-color: var(--acc-color-warning-bg);
+  color: var(--acc-color-warning);
+  font-size: 0.8125rem;
+}
+
+.section {
+  margin-bottom: 1.5rem;
+}
+
+.modos {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  margin-bottom: 1rem;
+  background-color: var(--acc-color-surface);
+  border: 1px solid var(--acc-color-border);
+  border-radius: var(--acc-radius-md);
+  flex-wrap: wrap;
+}
+
+.modo {
+  padding: 0.4375rem 0.875rem;
+  border: 0;
+  border-radius: var(--acc-radius-sm);
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--acc-color-text-muted);
+  cursor: pointer;
+}
+
+.modo:hover {
+  color: var(--acc-color-text-main);
+}
+
+.modo:focus-visible {
+  outline: 2px solid var(--acc-color-primary);
+}
+
+.modo--ativo,
+.modo--ativo:hover {
+  background-color: var(--acc-color-primary-light);
+  color: var(--acc-color-primary);
+  font-weight: 600;
+}
+
+.consulta-form {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.consulta-form > acc-document-field,
+.consulta-form > .field {
+  flex: 1;
+  min-width: 14rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--acc-color-text-main);
+}
+
+.input {
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--acc-color-border);
+  border-radius: var(--acc-radius-md);
+  font-size: 0.875rem;
+  font-family: inherit;
+  background-color: var(--acc-color-surface);
+  outline: none;
+}
+
+.input:focus-visible {
+  border-color: var(--acc-color-primary);
+  box-shadow: 0 0 0 3px rgb(30 64 175 / 0.15);
+}
+
+.alert-error {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: var(--acc-radius-md);
+  background-color: var(--acc-color-danger-bg);
+  color: var(--acc-color-danger);
+  font-size: 0.875rem;
+}
+
+.resultado-card {
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.resultado-titulo {
+  margin: 0 0 0.75rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--acc-color-text-main);
+}
+
+.resultado-lista {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.resultado-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.resultado-item dt {
+  margin: 0;
+  color: var(--acc-color-text-muted);
+}
+
+.resultado-item dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--acc-color-text-main);
+  word-break: break-word;
+}
+
+.aviso-inline {
+  color: var(--acc-color-warning);
+}
+
+.inscricoes-titulo {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--acc-color-text-main);
+}
+
+.inscricoes-lista {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inscricao-item {
+  display: flex;
+  gap: 1rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--acc-color-surface);
+  border: 1px solid var(--acc-color-border);
+  border-radius: var(--acc-radius-md);
+  font-size: 0.875rem;
+}
+
+.inscricao-numero {
+  font-weight: 600;
+  color: var(--acc-color-text-main);
+}
+
+.inscricao-situacao {
+  color: var(--acc-color-text-muted);
+}
+
+.inscricao-valor {
+  margin-left: auto;
+  font-weight: 600;
+  color: var(--acc-color-text-main);
+}
+
+.sem-pendencias {
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  color: var(--acc-color-text-muted);
+}

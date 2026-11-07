@@ -1,0 +1,335 @@
+<div class="page-container">
+  <header class="page-header">
+    <button
+      acc-button
+      variant="ghost"
+      size="sm"
+      (click)="voltarParaLista()"
+    >
+      ← Voltar à lista
+    </button>
+    <h1 class="page-title">Detalhes do cliente</h1>
+    @if (cliente(); as c) {
+      <span class="type-badge">{{ c.tipo }}</span>
+    }
+    <div class="page-acoes">
+      @if (podeEditar()) {
+        <button
+          acc-button
+          variant="outline"
+          size="sm"
+          (click)="abrirEdicao()"
+          [disabled]="estadoCliente() !== 'pronto'"
+        >
+          Editar
+        </button>
+      }
+      <button
+        acc-button
+        variant="primary"
+        size="sm"
+        (click)="abrirDividaAtiva()"
+        [disabled]="estadoCliente() !== 'pronto'"
+      >
+        Consultar Dívida Ativa
+      </button>
+      <button
+        acc-button
+        variant="outline"
+        size="sm"
+        (click)="abrirIntegraContador()"
+        [disabled]="estadoCliente() !== 'pronto'"
+      >
+        Integra Contador
+      </button>
+    </div>
+  </header>
+
+  @if (estadoCliente() === 'carregando') {
+    <div class="carregando-cliente" aria-hidden="true">
+      @for (_ of [1, 2, 3]; track $index) {
+        <acc-skeleton variante="linha" altura="1.5rem" largura="100%" />
+      }
+    </div>
+  }
+
+  <!-- 404 alheio/inexistente: mesmo texto, sem vazar existência -->
+  @if (estadoCliente() === 'naoEncontrado') {
+    <acc-empty-state
+      title="Cliente não encontrado"
+      descricao="Verifique o endereço ou volte à lista para escolher um cliente."
+    >
+      <button acc-button variant="outline" size="md" (click)="voltarParaLista()">
+        Voltar à lista
+      </button>
+    </acc-empty-state>
+  }
+
+  @if (estadoCliente() === 'erro') {
+    <div class="alert-error" role="alert" aria-live="polite">{{ erroCliente() }}</div>
+    <button acc-button variant="outline" size="md" (click)="recarregarCliente()">
+      Tentar novamente
+    </button>
+  }
+
+  @if (cliente(); as c) {
+    <acc-tabs
+      [tabs]="abas"
+      [active]="abaSincronizada()"
+      (activeChange)="trocarAba($event)"
+    />
+
+    <!-- ===== Aba: Visão geral ===== -->
+    @if (abaSincronizada() === 'visao-geral') {
+      <section class="section">
+        <div class="dado-card-grid">
+          <acc-card class="dado-card">
+            <h2 class="section-title">Dados cadastrais</h2>
+            <dl class="dado-lista">
+              <div class="dado-item">
+                <dt>Tipo</dt>
+                <dd>{{ c.tipo === 'PF' ? 'Pessoa física' : 'Pessoa jurídica' }}</dd>
+              </div>
+              <div class="dado-item">
+                <dt>{{ c.tipo === 'PF' ? 'CPF' : 'CNPJ' }}</dt>
+                <dd>
+                  <span class="dado-valor">{{ aplicarMascara(c.cpfCnpj) }}</span>
+                  <acc-copy-button [valor]="c.cpfCnpj" />
+                </dd>
+              </div>
+              <div class="dado-item">
+                <dt>Nome / Razão social</dt>
+                <dd>{{ c.nomeRazaoSocial }}</dd>
+              </div>
+              @if (c.nomeFantasia) {
+                <div class="dado-item">
+                  <dt>Nome fantasia</dt>
+                  <dd>{{ c.nomeFantasia }}</dd>
+                </div>
+              }
+              @if (c.porteRegime) {
+                <div class="dado-item">
+                  <dt>Porte / Regime</dt>
+                  <dd>{{ rotuloPorte(c.porteRegime) }}</dd>
+                </div>
+              }
+              <div class="dado-item">
+                <dt>Cadastrado em</dt>
+                <dd>{{ formatarData(c.criadoEm) }}</dd>
+              </div>
+              <div class="dado-item">
+                <dt>Atualizado em</dt>
+                <dd>{{ formatarData(c.atualizadoEm) }}</dd>
+              </div>
+            </dl>
+          </acc-card>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <h2 class="section-title">Situação fiscal</h2>
+        </div>
+        @if (consultas.avisoConsultivo(); as aviso) {
+          <p class="aviso-consultivo" role="note">{{ aviso }}</p>
+        }
+
+        @if (consultas.situacaoCarregando()) {
+          <div class="cartoes-grid" aria-hidden="true">
+            @for (_ of [1, 2]; track $index) {
+              <acc-skeleton variante="card" altura="10rem" largura="100%" />
+            }
+          </div>
+        } @else if (consultas.erroSituacao(); as erro) {
+          <div class="alert-error" role="alert" aria-live="polite">{{ erro }}</div>
+          <button acc-button variant="outline" size="sm" (click)="recarregarSituacao()">
+            Tentar novamente
+          </button>
+        } @else {
+          <div class="cartoes-grid">
+            @for (cartao of cartoesFiscais(); track cartao.servico) {
+              <acc-card class="cartao-fiscal" [attr.data-estado]="cartao.estado.leitura.status">
+                <h3 class="cartao-titulo">{{ cartao.rotuloServico }}</h3>
+                <acc-badge [status]="cartao.estado.leitura.status">
+                  {{ cartao.estado.leitura.rotulo }}
+                </acc-badge>
+                <p class="cartao-descricao">{{ cartao.estado.leitura.descricao }}</p>
+                <ul class="cartao-meta">
+                  <li>
+                    <span>Cadastrado em</span>
+                    <strong>{{ formatarData(cartao.criadoEm) }}</strong>
+                  </li>
+                  <li>
+                    <span>Ambiente</span>
+                    <strong>{{ rotuloAmbiente(cartao.ambiente) }}</strong>
+                  </li>
+                  @if (cartao.chaveMascarada) {
+                    <li>
+                      <span>Chave consultada</span>
+                      <strong>{{ cartao.chaveMascarada }}</strong>
+                    </li>
+                  }
+                </ul>
+              </acc-card>
+            } @empty {
+              <p class="aviso-consultivo">Nenhuma consulta registrada para este cliente ainda.</p>
+            }
+          </div>
+        }
+      </section>
+    }
+
+    <!-- ===== Aba: Consultas ===== -->
+    @if (abaSincronizada() === 'consultas') {
+      <section class="section">
+        <div class="filtro-linha">
+          <label class="label" for="estado-consulta">Estado</label>
+          <select
+            id="estado-consulta"
+            class="input input--select filtro-estado"
+            [value]="consultas.filtroEstado() ?? ''"
+            (change)="trocarFiltroEstado($event)"
+          >
+            <option value="">Todos os estados</option>
+            @for (estado of estadosFiltro; track estado) {
+              <option [value]="estado">{{ leitura(estado).rotulo }}</option>
+            }
+          </select>
+        </div>
+
+        @if (consultas.avisoConsultivo(); as aviso) {
+          <p class="aviso-consultivo" role="note">{{ aviso }}</p>
+        }
+
+        @if (consultas.carregando()) {
+          <div class="lista-consultas" aria-hidden="true">
+            @for (_ of [1, 2, 3]; track $index) {
+              <acc-skeleton variante="linha" altura="3rem" largura="100%" />
+            }
+          </div>
+        } @else if (consultas.erroCarregamento(); as erro) {
+          <div class="alert-error" role="alert" aria-live="polite">{{ erro }}</div>
+          <button acc-button variant="outline" size="md" (click)="recarregarConsultas()">
+            Tentar novamente
+          </button>
+        } @else if (consultas.itens().length === 0) {
+          <acc-empty-state
+            title="Nenhuma consulta registrada"
+            descricao="As consultas de Dívida Ativa deste cliente aparecerão aqui."
+          >
+            <button acc-button variant="primary" size="md" (click)="abrirDividaAtiva()">
+              Consultar agora
+            </button>
+          </acc-empty-state>
+        } @else {
+          <ul class="lista-consultas" role="list">
+            @for (consulta of consultas.itens(); track consulta.id) {
+              <li>
+                <button
+                  type="button"
+                  class="consulta-row"
+                  (click)="abrirDividaAtiva()"
+                  [attr.aria-label]="
+                    'Consulta de ' + rotuloServico(consulta.servico) + ' de ' + formatarData(consulta.criadoEm)
+                  "
+                >
+                  <span class="consulta-col consulta-col--servico">
+                    <strong>{{ rotuloServico(consulta.servico) }}</strong>
+                    <span class="consulta-sub">{{ rotuloAmbiente(consulta.ambiente) }}</span>
+                  </span>
+                  <acc-badge [status]="leitura(consulta.estado).status">
+                    {{ leitura(consulta.estado).rotulo }}
+                  </acc-badge>
+                  <span class="consulta-col consulta-col--quando">
+                    <span>{{ formatarData(consulta.criadoEm) }}</span>
+                    @if (consulta.chaveConsultaMascarada) {
+                      <span class="consulta-sub">{{ consulta.chaveConsultaMascarada }}</span>
+                    }
+                  </span>
+                </button>
+              </li>
+            }
+          </ul>
+
+          <div class="paginacao" aria-label="Paginação do histórico">
+            <button
+              acc-button
+              variant="ghost"
+              size="sm"
+              [disabled]="!temPaginaAnterior()"
+              (click)="trocarPagina(-1)"
+            >
+              ← Anterior
+            </button>
+            <span class="paginacao-info">
+              Página {{ consultas.pagina() }} de {{ totalDePaginas() }}
+            </span>
+            <button
+              acc-button
+              variant="ghost"
+              size="sm"
+              [disabled]="!temProximaPagina()"
+              (click)="trocarPagina(1)"
+            >
+              Próxima →
+            </button>
+          </div>
+        }
+      </section>
+    }
+
+    <!-- ===== Aba: Contatos ===== -->
+    @if (abaSincronizada() === 'contatos') {
+      <section class="section">
+        <div class="dado-card-grid">
+          <acc-card class="dado-card">
+            <h2 class="section-title">Contatos</h2>
+            @if (c.email || c.telefone) {
+              <dl class="dado-lista">
+                @if (c.email) {
+                  <div class="dado-item">
+                    <dt>E-mail</dt>
+                    <dd>
+                      <span class="dado-valor">{{ c.email }}</span>
+                      <acc-copy-button [valor]="c.email" />
+                    </dd>
+                  </div>
+                }
+                @if (c.telefone) {
+                  <div class="dado-item">
+                    <dt>Telefone</dt>
+                    <dd>
+                      <span class="dado-valor">{{ formatarTelefone(c.telefone) }}</span>
+                      <acc-copy-button [valor]="c.telefone" />
+                    </dd>
+                  </div>
+                }
+              </dl>
+            } @else {
+              <acc-empty-state
+                title="Sem contatos cadastrados"
+                descricao="Use a aba de edição para atualizar o e-mail e o telefone."
+              >
+                @if (podeEditar()) {
+                  <button acc-button variant="outline" size="md" (click)="abrirEdicao()">
+                    Editar contatos
+                  </button>
+                }
+              </acc-empty-state>
+            }
+          </acc-card>
+        </div>
+      </section>
+    }
+
+    <!-- ===== Aba: Unidades (fase seguinte) ===== -->
+    @if (abaSincronizada() === 'unidades') {
+      <section class="section">
+        <acc-empty-state
+          title="Gestão de unidades em breve"
+          descricao="Os endereços deste cliente serão organizados aqui. Configure agora os contatos da matriz."
+        />
+      </section>
+    }
+  }
+</div>

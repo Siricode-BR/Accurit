@@ -1,0 +1,28 @@
+<div class="acc-doc">
+  <label class="acc-doc__label" [for]="inputId">{{ label() }}</label>
+  <div class="acc-doc__box" [class.acc-doc__box--locked]="bloqueado()" [class.acc-doc__box--invalid]="mensagemErro()">
+    <input
+      class="acc-doc__input"
+      type="text"
+      inputmode="numeric"
+      autocomplete="off"
+      [id]="inputId"
+      [value]="exibicao()"
+      [readOnly]="bloqueado()"
+      [attr.aria-readonly]="bloqueado() ? 'true' : null"
+      [attr.aria-invalid]="mensagemErro() ? 'true' : null"
+      [attr.aria-describedby]="descricaoId()"
+      [placeholder]="placeholder()"
+      (input)="aoDigitar($event)"
+      (blur)="tocado.set(true)"
+    />
+    @if (bloqueado()) {
+      <acc-icon class="acc-doc__lock" name="lock" />
+    }
+  </div>
+  @if (mensagemErro(); as erro) {
+    <p class="acc-doc__error" [id]="inputId + '-msg'" role="alert">{{ erro }}</p>
+  } @else if (hint()) {
+    <p class="acc-doc__hint" [id]="inputId + '-msg'">{{ hint() }}</p>
+  }
+</div>

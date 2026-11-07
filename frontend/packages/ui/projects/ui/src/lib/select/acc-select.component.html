@@ -1,0 +1,20 @@
+<div class="acc-select">
+  <label class="acc-select__label" [for]="selectId">{{ label() }}</label>
+  <select
+    class="acc-select__control"
+    [id]="selectId"
+    [disabled]="disabled()"
+    [attr.aria-describedby]="hint() ? selectId + '-hint' : null"
+    (change)="aoMudar($event)"
+  >
+    @if (placeholder() !== null) {
+      <option value="" [selected]="!value()">{{ placeholder() }}</option>
+    }
+    @for (opcao of options(); track opcao.value) {
+      <option [value]="opcao.value" [selected]="opcao.value === value()">{{ opcao.label }}</option>
+    }
+  </select>
+  @if (hint()) {
+    <p class="acc-select__hint" [id]="selectId + '-hint'">{{ hint() }}</p>
+  }
+</div>

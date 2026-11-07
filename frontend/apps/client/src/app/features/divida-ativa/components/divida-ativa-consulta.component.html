@@ -1,0 +1,114 @@
+@if (avisoConsultivo(); as aviso) {
+  <p class="aviso-consultivo" role="note">{{ aviso }}</p>
+}
+
+<section class="section">
+  <div class="modos" role="group" aria-label="Forma de consulta">
+    @for (m of modos; track m.id) {
+      <button
+        type="button"
+        class="modo"
+        [class.modo--ativo]="modo() === m.id"
+        [attr.aria-pressed]="modo() === m.id"
+        (click)="selecionarModo(m.id)"
+      >
+        {{ m.label }}
+      </button>
+    }
+  </div>
+
+  <form (ngSubmit)="consultar()" class="consulta-form" novalidate>
+    @if (modo() === 'devedor') {
+      <acc-document-field
+        label="CPF/CNPJ do devedor"
+        [bloqueado]="documentoBloqueado()"
+        [validarDigitos]="!isTrial()"
+        [hint]="documentoBloqueado() ? 'Definido pelo cliente selecionado e não pode ser alterado.' : null"
+        [(value)]="documento"
+      />
+    } @else {
+      <div class="field">
+        <label for="da-inscricao" class="label">Número da inscrição</label>
+        <input
+          id="da-inscricao"
+          type="text"
+          class="input"
+          inputmode="numeric"
+          autocomplete="off"
+          placeholder="ex.: 123456789"
+          [value]="inscricao()"
+          (input)="inscricao.set($any($event.target).value)"
+        />
+      </div>
+    }
+
+    <button acc-button type="submit" variant="primary" [loading]="carregando()" [disabled]="!podeConsultar()">
+      Consultar
+    </button>
+  </form>
+</section>
+
+@if (erro()) {
+  <div class="alert-error" role="alert" aria-live="polite">{{ erro() }}</div>
+  <button acc-button variant="outline" size="md" (click)="limpar()">Limpar</button>
+}
+
+@if (devedor(); as d) {
+  <acc-card class="resultado-card">
+    <h2 class="resultado-titulo">Devedor</h2>
+    <dl class="resultado-lista">
+      <div class="resultado-item"><dt>Estado</dt><dd>{{ d.estado }}</dd></div>
+      <div class="resultado-item"><dt>Ambiente</dt><dd>{{ d.ambiente }}</dd></div>
+      <div class="resultado-item"><dt>Chave consultada</dt><dd>{{ d.chaveMascarada }}</dd></div>
+      <div class="resultado-item"><dt>Horário da consulta</dt><dd>{{ d.horarioConsulta }}</dd></div>
+      <div class="resultado-item"><dt>Tentativas</dt><dd>{{ d.tentativas }}</dd></div>
+      @if (d.aviso) {
+        <div class="resultado-item"><dt>Aviso</dt><dd class="aviso-inline">{{ d.aviso }}</dd></div>
+      }
+    </dl>
+
+    @if (d.inscricoes.length) {
+      <h3 class="inscricoes-titulo">Inscrições</h3>
+      <ul class="inscricoes-lista">
+        @for (inc of d.inscricoes; track inc.numeroInscricao) {
+          <li class="inscricao-item">
+            <span class="inscricao-numero">{{ inc.numeroInscricao }}</span>
+            <span class="inscricao-situacao">{{ inc.situacaoDescricao }}</span>
+            <span class="inscricao-valor">{{ inc.valorTotalConsolidado.valor }}</span>
+          </li>
+        }
+      </ul>
+    } @else {
+      <p class="sem-pendencias">Sem inscrições pendentes para este devedor.</p>
+    }
+  </acc-card>
+}
+
+@if (inscricaoResultado(); as i) {
+  <acc-card class="resultado-card">
+    <h2 class="resultado-titulo">Inscrição</h2>
+    <dl class="resultado-lista">
+      <div class="resultado-item"><dt>Número</dt><dd>{{ i.numeroInscricao }}</dd></div>
+      <div class="resultado-item"><dt>Situação</dt><dd>{{ i.situacao }}</dd></div>
+      <div class="resultado-item"><dt>Ambiente</dt><dd>{{ i.ambiente }}</dd></div>
+      <div class="resultado-item"><dt>Chave consultada</dt><dd>{{ i.chaveMascarada }}</dd></div>
+      <div class="resultado-item"><dt>Horário da consulta</dt><dd>{{ i.horarioConsulta }}</dd></div>
+      @if (i.dataInscricao) {
+        <div class="resultado-item"><dt>Data de inscrição</dt><dd>{{ i.dataInscricao }}</dd></div>
+      }
+      @if (i.valorTotalConsolidado) {
+        <div class="resultado-item"><dt>Valor total consolidado</dt><dd>{{ i.valorTotalConsolidado.valor }}</dd></div>
+      }
+      @if (i.aviso) {
+        <div class="resultado-item"><dt>Aviso</dt><dd class="aviso-inline">{{ i.aviso }}</dd></div>
+      }
+    </dl>
+  </acc-card>
+}
+
+@if (consultou() && !carregando() && !erro() && !devedor() && !inscricaoResultado()) {
+  <acc-empty-state
+    title="Sem resultado"
+    descricao="Não foi encontrado nenhum resultado para a chave informada."
+  />
+}

@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "peerDependencies": {
     "@angular/common": ">=18.0.0",
-    "@angular/core": ">=18.0.0"
+    "@angular/core": ">=18.0.0",
+    "@angular/router": ">=18.0.0"
   },
   "dependencies": {
     "@accurit/shared": "workspace:*",

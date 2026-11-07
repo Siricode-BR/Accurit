@@ -23,6 +23,6 @@ export const publicGuard: CanActivateFn = () => {
     return true;
   }
 
-  return router.createUrlTree(['/clientes']);
+  return router.createUrlTree(['/dashboard']);
 };
 

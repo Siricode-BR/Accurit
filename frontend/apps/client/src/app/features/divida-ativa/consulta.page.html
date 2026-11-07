@@ -1,0 +1,34 @@
+<div class="page-container">
+  <acc-page-header
+    title="Consulta Dívida Ativa"
+    subtitle="Consulte inscrições na Dívida Ativa para um cliente cadastrado."
+  >
+    <button acc-button variant="ghost" size="sm" (click)="voltar()">← Voltar</button>
+  </acc-page-header>
+
+  @if (ambienteEfetivo(); as env) {
+    <p class="ambiente-sel">Ambiente: {{ env === 'TRIAL' ? 'Trial (avaliação)' : 'Produção' }}</p>
+  }
+
+  @switch (estado()) {
+    @case ('carregando') {
+      <acc-skeleton />
+    }
+    @case ('pronto') {
+      @if (cliente(); as c) {
+        <p class="cliente-info">
+          Consultando para: <strong>{{ c.nomeRazaoSocial }}</strong>
+        </p>
+        <app-divida-ativa-consulta [documentoInicial]="c.cpfCnpj" [documentoBloqueado]="true" />
+      }
+    }
+    @default {
+      <acc-empty-state
+        title="Cliente não encontrado"
+        descricao="Não foi possível carregar o cliente informado. Escolha outro cliente ou faça uma consulta avulsa."
+      >
+        <a acc-button variant="outline" routerLink="/consultas/divida-ativa">Consulta avulsa</a>
+      </acc-empty-state>
+    }
+  }
+</div>

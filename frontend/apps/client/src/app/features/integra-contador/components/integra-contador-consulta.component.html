@@ -1,0 +1,111 @@
+<section class="section">
+  <form (ngSubmit)="executar()" class="consulta-form" novalidate>
+    <div class="grid">
+      <acc-select
+        label="Verbo"
+        [options]="opcoesVerbo"
+        [placeholder]="null"
+        [(value)]="verbo"
+      />
+
+      <acc-select
+        label="Sistema (idSistema)"
+        placeholder="Selecione um sistema"
+        [options]="opcoesSistema()"
+        [disabled]="opcoesSistema().length === 0"
+        [hint]="opcoesSistema().length === 0 ? 'Nenhum sistema disponível para este verbo.' : null"
+        [(value)]="idSistema"
+      />
+
+      <acc-select
+        label="Serviço (idServico)"
+        placeholder="Selecione um serviço"
+        [options]="opcoesServico()"
+        [disabled]="opcoesServico().length === 0"
+        [hint]="idSistema() && opcoesServico().length === 0 ? 'Nenhum serviço disponível para este sistema.' : null"
+        [(value)]="idServico"
+      />
+
+      <acc-select
+        label="Versão do sistema"
+        placeholder="Selecione uma versão"
+        [options]="opcoesVersao()"
+        [disabled]="opcoesVersao().length === 0"
+        [hint]="idServico() && opcoesVersao().length === 0 ? 'Este serviço não utiliza versão.' : null"
+        [(value)]="versao"
+      />
+    </div>
+
+    <acc-document-field
+      [bloqueado]="documentoBloqueado()"
+      [validarDigitos]="!isTrial()"
+      [hint]="documentoBloqueado() ? 'Definido pelo cliente selecionado e não pode ser alterado.' : null"
+      [(value)]="documento"
+    />
+
+    <div class="field">
+      <label for="ic-dados" class="label">Dados (JSON)</label>
+      <textarea
+        id="ic-dados"
+        class="input textarea"
+        placeholder='ex.: {"anoCalendario": "2025"}'
+        [value]="dados()"
+        [attr.aria-invalid]="dadosInvalidos() ? 'true' : null"
+        (input)="dados.set($any($event.target).value)"
+      ></textarea>
+      @if (dadosInvalidos()) {
+        <p class="campo-erro" role="alert">O conteúdo informado não é um JSON válido.</p>
+      }
+    </div>
+
+    <label class="checkbox">
+      <input
+        type="checkbox"
+        [checked]="confirmacaoExplicita()"
+        (change)="confirmacaoExplicita.set($any($event.target).checked)"
+      />
+      Confirmação explícita de execução
+    </label>
+
+    <div>
+      <button acc-button type="submit" variant="primary" [loading]="carregando()" [disabled]="!podeExecutar()">
+        Executar
+      </button>
+    </div>
+  </form>
+</section>
+
+@if (erro()) {
+  <div class="alert-error" role="alert" aria-live="polite">{{ erro() }}</div>
+  <button acc-button variant="outline" size="md" (click)="limpar()">Limpar</button>
+}
+
+@if (resultado(); as r) {
+  <acc-card class="resultado-card">
+    <h2 class="resultado-titulo">Resultado da execução</h2>
+    <dl class="resultado-lista">
+      <div class="resultado-item"><dt>Verbo</dt><dd>{{ r.verbo }}</dd></div>
+      <div class="resultado-item"><dt>idSistema</dt><dd>{{ r.idSistema }}</dd></div>
+      <div class="resultado-item"><dt>idServico</dt><dd>{{ r.idServico }}</dd></div>
+      <div class="resultado-item"><dt>Estado</dt><dd>{{ r.estado }}</dd></div>
+      <div class="resultado-item"><dt>Ambiente</dt><dd>{{ r.ambiente }}</dd></div>
+      <div class="resultado-item"><dt>Status SERPRO</dt><dd>{{ r.statusSerpro }}</dd></div>
+      <div class="resultado-item"><dt>Mensagem</dt><dd>{{ r.mensagem }}</dd></div>
+      @if (r.referenciaResposta) {
+        <div class="resultado-item"><dt>Referência de resposta</dt><dd>{{ r.referenciaResposta }}</dd></div>
+      }
+      @if (r.tempoEsperaSegundos !== null && r.tempoEsperaSegundos !== undefined) {
+        <div class="resultado-item"><dt>Tempo de espera (s)</dt><dd>{{ r.tempoEsperaSegundos }}</dd></div>
+      }
+      @if (r.etag) {
+        <div class="resultado-item"><dt>ETag</dt><dd>{{ r.etag }}</dd></div>
+      }
+      @if (r.expires) {
+        <div class="resultado-item"><dt>Expira em</dt><dd>{{ r.expires }}</dd></div>
+      }
+      @if (r.codigosMensagem.length) {
+        <div class="resultado-item"><dt>Códigos de mensagem</dt><dd>{{ r.codigosMensagem.join(', ') }}</dd></div>
+      }
+    </dl>
+  </acc-card>
+}

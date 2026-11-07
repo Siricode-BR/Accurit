@@ -1,0 +1,114 @@
+:host {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1000;
+  display: block;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+  animation: fadeIn 0.2s ease;
+}
+
+.modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  background-color: var(--acc-color-surface);
+  border: 1px solid var(--acc-color-border);
+  border-radius: var(--acc-radius-lg);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  animation: slideUp 0.25s ease-out;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--acc-color-border);
+}
+
+.modal-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--acc-color-text-main);
+  margin: 0;
+}
+
+.modal-body {
+  padding: 1.5rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.detalhe-row {
+  display: flex;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--acc-color-border);
+  padding-bottom: 0.5rem;
+  align-items: baseline;
+}
+
+.detalhe-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--acc-color-text-muted);
+  min-width: 140px;
+  white-space: nowrap;
+}
+
+.detalhe-valor {
+  font-size: 0.9375rem;
+  color: var(--acc-color-text-main);
+  word-break: break-word;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem 1.5rem;
+  border-top: 1px solid var(--acc-color-border);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translate(-50%, -40%); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+@media (max-width: 480px) {
+  .modal {
+    width: 92%;
+    max-height: 95vh;
+  }
+
+  .detalhe-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+
+  .detalhe-label {
+    min-width: auto;
+  }
+}

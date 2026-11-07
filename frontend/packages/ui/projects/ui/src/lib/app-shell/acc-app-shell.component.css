@@ -1,0 +1,200 @@
+:host {
+  display: block;
+}
+
+.acc-shell {
+  --acc-shell-aside-width: 16rem;
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--acc-color-bg, #f8fafc);
+}
+
+.acc-shell--collapsed {
+  --acc-shell-aside-width: 4.5rem;
+}
+
+.acc-shell__aside {
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  flex: 0 0 var(--acc-shell-aside-width);
+  width: var(--acc-shell-aside-width);
+  height: 100vh;
+  overflow-y: auto;
+  background-color: var(--acc-color-surface, #ffffff);
+  border-right: 1px solid var(--acc-color-border, #e2e8f0);
+  transition: width 0.15s ease-in-out, flex-basis 0.15s ease-in-out;
+  z-index: 20;
+}
+
+.acc-shell__brand {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 4rem;
+  padding: 0 1.25rem;
+  border-bottom: 1px solid var(--acc-color-border, #e2e8f0);
+}
+
+.acc-shell--collapsed .acc-shell__brand {
+  align-items: center;
+  padding: 0;
+}
+
+.acc-shell__brand-name {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--acc-color-primary, #1e40af);
+}
+
+.acc-shell--collapsed .acc-shell__brand-name {
+  font-size: 1rem;
+  max-width: 3rem;
+  overflow: hidden;
+}
+
+.acc-shell__brand-portal {
+  font-size: 0.75rem;
+  color: var(--acc-color-text-muted, #64748b);
+}
+
+.acc-shell__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.acc-shell__topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  height: 4rem;
+  padding: 0 1.5rem;
+  background-color: var(--acc-color-surface, #ffffff);
+  border-bottom: 1px solid var(--acc-color-border, #e2e8f0);
+}
+
+.acc-shell__topbar-slot {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.acc-shell__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.acc-shell__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 0;
+  border-radius: var(--acc-radius-md, 8px);
+  background: transparent;
+  color: var(--acc-color-text-muted, #64748b);
+  cursor: pointer;
+}
+
+.acc-shell__icon-btn:hover {
+  background-color: var(--acc-color-bg, #f8fafc);
+  color: var(--acc-color-text-main, #0f172a);
+}
+
+.acc-shell__icon-btn:focus-visible {
+  outline: 2px solid var(--acc-color-primary, #1e40af);
+}
+
+.acc-shell__user {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.acc-shell__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background-color: var(--acc-color-primary-light, #eff6ff);
+  color: var(--acc-color-primary, #1e40af);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.acc-shell__user-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.acc-shell__user-name {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--acc-color-text-main, #0f172a);
+}
+
+.acc-shell__user-detail {
+  font-size: 0.75rem;
+  color: var(--acc-color-text-muted, #64748b);
+}
+
+.acc-shell__toggle-mobile {
+  display: none;
+}
+
+.acc-shell__backdrop {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .acc-shell__aside {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 16rem;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease-in-out;
+    z-index: 40;
+  }
+
+  .acc-shell__aside--open {
+    transform: translateX(0);
+  }
+
+  .acc-shell__backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background-color: rgb(15 23 42 / 0.45);
+    z-index: 30;
+  }
+
+  .acc-shell__toggle-mobile {
+    display: inline-flex;
+  }
+
+  .acc-shell__toggle-desktop,
+  .acc-shell__user-info {
+    display: none;
+  }
+
+  .acc-shell__topbar {
+    padding: 0 1rem;
+  }
+}

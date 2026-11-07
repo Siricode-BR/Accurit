@@ -1,0 +1,63 @@
+:host {
+  display: block;
+}
+
+.acc-stat {
+  height: 100%;
+  padding: 1.25rem 1.5rem;
+  background-color: var(--acc-color-surface, #ffffff);
+  border: 1px solid var(--acc-color-border, #e2e8f0);
+  border-left-width: 4px;
+  border-radius: var(--acc-radius-lg, 12px);
+  box-shadow: var(--acc-shadow-sm, 0 1px 2px 0 rgb(0 0 0 / 0.05));
+}
+
+.acc-stat--default { border-left-color: var(--acc-color-primary, #1e40af); }
+.acc-stat--success { border-left-color: var(--acc-color-success, #15803d); }
+.acc-stat--warning { border-left-color: var(--acc-color-warning, #b45309); }
+.acc-stat--info { border-left-color: var(--acc-color-info, #0369a1); }
+.acc-stat--danger { border-left-color: var(--acc-color-danger, #b91c1c); }
+
+.acc-stat__label {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--acc-color-text-muted, #64748b);
+}
+
+.acc-stat__value {
+  margin: 0.375rem 0 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--acc-color-text-main, #0f172a);
+}
+
+.acc-stat__hint {
+  margin: 0.375rem 0 0;
+  font-size: 0.75rem;
+  color: var(--acc-color-text-muted, #64748b);
+}
+
+.acc-stat__skeleton {
+  display: block;
+  width: 4rem;
+  height: 1.75rem;
+  margin-top: 0.5rem;
+  border-radius: var(--acc-radius-sm, 4px);
+  background-color: var(--acc-color-border, #e2e8f0);
+  animation: acc-stat-pulse 1.2s ease-in-out infinite;
+}
+
+.acc-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@keyframes acc-stat-pulse {
+  50% { opacity: 0.5; }
+}

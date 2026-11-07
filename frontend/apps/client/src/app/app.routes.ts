@@ -4,15 +4,22 @@ import { operadorGuard } from './core/auth/operador.guards';
 
 export const routes: Routes = [
   {
+    // Usuário logado cai direto no dashboard; sem sessão o authGuard envia ao login.
     path: '',
     pathMatch: 'full',
-    redirectTo: 'clientes',
+    redirectTo: 'dashboard',
   },
   {
     path: 'login',
     canActivate: [publicGuard],
     loadComponent: () =>
       import('./features/auth/login.component').then((m) => m.LoginComponent),
+  },
+  {
+    path: 'dashboard',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/dashboard/dashboard.page').then((m) => m.DashboardPage),
   },
   {
     path: 'clientes',
@@ -38,6 +45,7 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/clientes/cliente-editar.page').then((m) => m.ClienteEditarPage),
   },
+  // Consultas vinculadas a um cliente cadastrado (documento bloqueado). Exigem ?clienteId=.
   {
     path: 'divida-ativa',
     canActivate: [authGuard],
@@ -50,4 +58,20 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/integra-contador/consulta.page').then((m) => m.IntegraContadorConsultaPage),
   },
+  // Consultas avulsas para contribuintes não cadastrados (documento livre).
+  {
+    path: 'consultas/divida-ativa',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/divida-ativa/consulta-avulsa.page').then((m) => m.DividaAtivaAvulsaPage),
+  },
+  {
+    path: 'consultas/integra-contador',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/integra-contador/consulta-avulsa.page').then(
+        (m) => m.IntegraContadorAvulsaPage,
+      ),
+  },
+  { path: '**', redirectTo: 'dashboard' },
 ];

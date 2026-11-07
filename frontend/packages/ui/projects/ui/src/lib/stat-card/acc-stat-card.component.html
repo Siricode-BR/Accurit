@@ -1,0 +1,12 @@
+<div class="acc-stat" [class]="'acc-stat acc-stat--' + tone()">
+  <p class="acc-stat__label">{{ label() }}</p>
+  @if (loading()) {
+    <span class="acc-stat__skeleton" aria-hidden="true"></span>
+    <span class="acc-sr-only" role="status">Carregando…</span>
+  } @else {
+    <p class="acc-stat__value">{{ value() }}</p>
+  }
+  @if (hint()) {
+    <p class="acc-stat__hint">{{ hint() }}</p>
+  }
+</div>
