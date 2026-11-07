@@ -5,6 +5,7 @@ import {
   ListagemClientesDto,
   FiltroClientes,
   CreateClienteRequestDto,
+  UpdateClienteRequestDto,
 } from '@accurit/core';
 import { sanitizeDocument } from '@accurit/shared';
 
@@ -106,6 +107,67 @@ export class ClienteService {
       const matchNome = c.nomeRazaoSocial.toLowerCase().includes(termoStr);
       const matchFantasia = c.nomeFantasia?.toLowerCase().includes(termoStr) ?? false;
       return matchDoc || matchNome || matchFantasia;
+    });
+  }
+
+  obter(id: string): Promise<ClienteDto> {
+    return new Promise((resolve, reject) => {
+      this.http.get<ClienteDto>(`${this.baseUrl}/${id}`).subscribe({
+        next: (cliente) => resolve(cliente),
+        error: (err) =>
+          reject(err.error?.message ?? err.message ?? 'Falha ao obter detalhes do cliente.'),
+      });
+    });
+  }
+
+  definirErro(mensagem: string): void {
+    this.#state.update((s) => ({ ...s, erro: mensagem }));
+  }
+
+  atualizar(id: string, payload: UpdateClienteRequestDto): Promise<ClienteDto> {
+    return new Promise((resolve, reject) => {
+      this.http.put<ClienteDto>(`${this.baseUrl}/${id}`, payload).subscribe({
+        next: (atualizado) => {
+          this.#state.update((s) => ({
+            ...s,
+            itens: s.itens.map((c) => (c.id === id ? atualizado : c)),
+            carregando: false,
+          }));
+          resolve(atualizado);
+        },
+        error: (err) => {
+          this.#state.update((s) => ({
+            ...s,
+            carregando: false,
+            erro: err.error?.message ?? err.message ?? 'Falha ao atualizar cliente.',
+          }));
+          reject(err);
+        },
+      });
+    });
+  }
+
+  excluir(id: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.http.delete(`${this.baseUrl}/${id}`).subscribe({
+        next: () => {
+          this.#state.update((s) => ({
+            ...s,
+            itens: s.itens.filter((c) => c.id !== id),
+            total: Math.max(0, s.total - 1),
+            carregando: false,
+          }));
+          resolve();
+        },
+        error: (err) => {
+          this.#state.update((s) => ({
+            ...s,
+            carregando: false,
+            erro: err.error?.message ?? err.message ?? 'Falha ao excluir cliente.',
+          }));
+          reject(err);
+        },
+      });
     });
   }
 }

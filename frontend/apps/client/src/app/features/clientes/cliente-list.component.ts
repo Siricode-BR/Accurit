@@ -182,7 +182,14 @@ import { ClienteDto, FiltroClientes } from '@accurit/core';
                     </td>
                     <td>
                       <div class="acoes-cliente">
-                        <button acc-button variant="ghost" size="sm">Detalhes</button>
+                        <button
+                          acc-button
+                          variant="ghost"
+                          size="sm"
+                          (click)="abrirDetalhes(cliente)"
+                        >
+                          Detalhes
+                        </button>
                         @if (procuracaoValidando().has(cliente.id)) {
                           <acc-spinner size="sm"></acc-spinner>
                         } @else {
@@ -475,6 +482,10 @@ export class ClienteListComponent implements OnInit {
 
   abrirModalNovo(): void {
     this.router.navigate(['/clientes/novo']);
+  }
+
+  abrirDetalhes(cliente: ClienteDto): void {
+    this.router.navigate(['/clientes', cliente.id]);
   }
 
   protected sair(): void {
