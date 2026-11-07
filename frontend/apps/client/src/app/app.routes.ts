@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard, publicGuard } from './core/auth/auth.guards';
+import { operadorGuard } from './core/auth/operador.guards';
 
 export const routes: Routes = [
   {
@@ -30,5 +31,17 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadComponent: () =>
       import('./features/clientes/cliente-detalhes.page').then((m) => m.ClienteDetalhesPage),
+  },
+  {
+    path: 'clientes/:id/editar',
+    canActivate: [authGuard, operadorGuard],
+    loadComponent: () =>
+      import('./features/clientes/cliente-editar.page').then((m) => m.ClienteEditarPage),
+  },
+  {
+    path: 'divida-ativa',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/divida-ativa/consulta.page').then((m) => m.DividaAtivaConsultaPage),
   },
 ];
