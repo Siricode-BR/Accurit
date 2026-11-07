@@ -94,40 +94,26 @@ interface ConsultaState {
           <div class="field">
             <label for="verbo" class="label">Verbo</label>
             <select id="verbo"
-<<<<<<< HEAD
               [ngModel]="verboSelecionado"
               (ngModelChange)="verboSelecionado = $event"
-=======
-              [ngModel]="verboSelecionado()"
-              (ngModelChange)="verboSelecionado.set($event)"
->>>>>>> a288bb5dc8caf2e54992be2fff0fca6fb2a5f137
               (change)="aoMudarVerbo($event)"
               class="input input--select"
             >
-              @for (v of verbos; track v.valor) {
-                <option [value]="v.valor">{{ v.label }}</option>
-              }
+              <option *ngFor="let v of verbos" [value]="v.valor">{{ v.label }}</option>
             </select>
           </div>
 
           <div class="field">
             <label for="idSistema" class="label">idSistema</label>
             <select id="idSistema"
-<<<<<<< HEAD
               [ngModel]="idSistemaSelecionado"
               (ngModelChange)="idSistemaSelecionado = $event"
-=======
-              [ngModel]="idSistemaSelecionado()"
-              (ngModelChange)="idSistemaSelecionado.set($event)"
->>>>>>> a288bb5dc8caf2e54992be2fff0fca6fb2a5f137
               (change)="aoMudarSistema($event)"
               class="input input--select"
               [disabled]="sistemasDisponiveis().length === 0"
             >
               <option value="">Selecione um sistema</option>
-              @for (s of sistemasDisponiveis(); track s) {
-                <option [value]="s">{{ s }}</option>
-              }
+              <option *ngFor="let s of sistemasDisponiveis()" [value]="s">{{ s }}</option>
             </select>
             @if (sistemasDisponiveis().length === 0 && verboSelecionado) {
               <p class="campo-ajuda">Nenhum sistema disponível para este verbo.</p>
@@ -137,21 +123,14 @@ interface ConsultaState {
           <div class="field">
             <label for="idServico" class="label">idServiço</label>
             <select id="idServico"
-<<<<<<< HEAD
               [ngModel]="idServicoSelecionado"
               (ngModelChange)="idServicoSelecionado = $event"
-=======
-              [ngModel]="idServicoSelecionado()"
-              (ngModelChange)="idServicoSelecionado.set($event)"
->>>>>>> a288bb5dc8caf2e54992be2fff0fca6fb2a5f137
               (change)="aoMudarServico($event)"
               class="input input--select"
               [disabled]="servicosDisponiveis().length === 0"
             >
               <option value="">Selecione um serviço</option>
-              @for (s of servicosDisponiveis(); track s) {
-                <option [value]="s">{{ s }}</option>
-              }
+              <option *ngFor="let s of servicosDisponiveis()" [value]="s">{{ s }}</option>
             </select>
             @if (servicosDisponiveis().length === 0 && idSistemaSelecionado) {
               <p class="campo-ajuda">Nenhum serviço disponível para este sistema.</p>
@@ -161,20 +140,13 @@ interface ConsultaState {
           <div class="field">
             <label for="versaoSistema" class="label">versão do sistema</label>
             <select id="versaoSistema"
-<<<<<<< HEAD
               [ngModel]="versaoSistemaSelecionada"
               (ngModelChange)="versaoSistemaSelecionada = $event"
-=======
-              [ngModel]="versaoSistemaSelecionada()"
-              (ngModelChange)="versaoSistemaSelecionada.set($event)"
->>>>>>> a288bb5dc8caf2e54992be2fff0fca6fb2a5f137
               class="input input--select"
               [disabled]="versoesDisponiveis().length === 0"
             >
               <option value="">Selecione uma versão</option>
-              @for (v of versoesDisponiveis(); track v) {
-                <option [value]="v">{{ v }}</option>
-              }
+              <option *ngFor="let v of versoesDisponiveis()" [value]="v">{{ v }}</option>
             </select>
             @if (versoesDisponiveis().length === 0 && idServicoSelecionado) {
               <p class="campo-ajuda">Este serviço não utiliza versão.</p>
