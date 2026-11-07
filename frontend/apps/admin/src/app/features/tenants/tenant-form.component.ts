@@ -122,14 +122,14 @@ import { AccButtonComponent, AccCardComponent } from '@accurit/ui';
   `,
   styles: `
     .form-layout {
-      min-height: 100dvh;
+      min-height: calc(100dvh - 4rem);
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       gap: 2rem;
       padding: 1.5rem;
-      background-color: var(--acc-color-secondary);
+      background-color: var(--acc-color-bg);
     }
 
     .form-brand {
@@ -139,13 +139,13 @@ import { AccButtonComponent, AccCardComponent } from '@accurit/ui';
     .brand-name {
       font-size: 2rem;
       font-weight: 800;
-      color: #ffffff;
+      color: var(--acc-color-primary);
       letter-spacing: -0.04em;
     }
 
     .brand-tagline {
       margin: 0.25rem 0 0;
-      color: rgba(255, 255, 255, 0.5);
+      color: var(--acc-color-text-muted);
       font-size: 0.875rem;
     }
 
@@ -195,8 +195,8 @@ import { AccButtonComponent, AccCardComponent } from '@accurit/ui';
     }
 
     .input:focus {
-      border-color: var(--acc-color-secondary);
-      box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.1);
+      border-color: var(--acc-color-primary);
+      box-shadow: 0 0 0 3px rgb(30 64 175 / 0.14);
     }
 
     .input--error {

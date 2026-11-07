@@ -1,0 +1,101 @@
+<div class="page-container">
+  <acc-page-header [title]="saudacao()" [subtitle]="subtitulo()">
+    <a acc-cta icon="plus" routerLink="/tenants/novo">Novo escritório</a>
+  </acc-page-header>
+
+  <section class="indicadores" aria-label="Indicadores">
+    <acc-stat-card
+      label="Escritórios cadastrados"
+      [value]="total()"
+      [loading]="carregando() && total() === 0"
+      hint="Tenants ativos na plataforma"
+    />
+    <acc-stat-card
+      label="Em produção"
+      tone="success"
+      [value]="totalProducao()"
+      [loading]="carregando() && total() === 0"
+      hint="Consultando o SERPRO real"
+    />
+    <acc-stat-card
+      label="Em modo Trial"
+      tone="warning"
+      [value]="totalTrial()"
+      [loading]="carregando() && total() === 0"
+      hint="Ambiente de avaliação SERPRO"
+    />
+  </section>
+
+  <div class="duas-colunas">
+    <section class="bloco" aria-labelledby="titulo-distribuicao">
+      <h2 id="titulo-distribuicao" class="bloco-titulo">Ambiente SERPRO</h2>
+      <div class="painel">
+        @if (carregando() && total() === 0) {
+          <acc-skeleton />
+        } @else if (total() === 0) {
+          <p class="vazio">Nenhum escritório para distribuir ainda.</p>
+        } @else {
+          <div
+            class="barra"
+            role="img"
+            [attr.aria-label]="percentualProducao() + '% em produção e ' + (100 - percentualProducao()) + '% em trial'"
+          >
+            <span class="barra__producao" [style.width.%]="percentualProducao()"></span>
+          </div>
+          <ul class="legenda">
+            <li><span class="ponto ponto--producao"></span>Produção <strong>{{ totalProducao() }}</strong></li>
+            <li><span class="ponto ponto--trial"></span>Trial <strong>{{ totalTrial() }}</strong></li>
+          </ul>
+        }
+      </div>
+    </section>
+
+    <section class="bloco" aria-labelledby="titulo-acoes">
+      <h2 id="titulo-acoes" class="bloco-titulo">Ações rápidas</h2>
+      <div class="acoes">
+        @for (acao of acoes; track acao.id) {
+          <a class="acao" [routerLink]="acao.rota">
+            <acc-icon [name]="acao.icone" />
+            <span class="acao-textos">
+              <span class="acao-titulo">{{ acao.titulo }}</span>
+              <span class="acao-descricao">{{ acao.descricao }}</span>
+            </span>
+          </a>
+        }
+      </div>
+    </section>
+  </div>
+
+  <section class="bloco" aria-labelledby="titulo-recentes">
+    <h2 id="titulo-recentes" class="bloco-titulo">Atualizados recentemente</h2>
+
+    @if (carregando() && total() === 0) {
+      <acc-skeleton />
+    } @else if (erro(); as mensagem) {
+      <div class="alert-error" role="alert">
+        <span>{{ mensagem }}</span>
+        <button acc-button variant="outline" size="sm" (click)="recarregar()">Tentar novamente</button>
+      </div>
+    } @else if (recentes().length === 0) {
+      <acc-empty-state
+        title="Nenhum escritório cadastrado"
+        descricao="Cadastre o primeiro escritório para começar a operar a plataforma."
+      >
+        <a acc-button variant="primary" routerLink="/tenants/novo">Cadastrar escritório</a>
+      </acc-empty-state>
+    } @else {
+      <ul class="recentes">
+        @for (t of recentes(); track t.id) {
+          <li class="recente">
+            <span class="recente-nome">{{ t.nome }}</span>
+            <span class="recente-slug">{{ t.slug }}</span>
+            <span class="recente-data">{{ formatarData(t.atualizadoEm) }}</span>
+            <acc-badge [status]="t.modoTrialSerpro ? 'warning' : 'success'">
+              {{ t.modoTrialSerpro ? 'Trial' : 'Produção' }}
+            </acc-badge>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+</div>

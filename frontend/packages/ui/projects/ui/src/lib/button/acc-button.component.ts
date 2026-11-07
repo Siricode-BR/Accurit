@@ -44,55 +44,55 @@ export type ButtonSize = 'sm' | 'md' | 'lg';
     }
 
     /* Sizes */
-    .acc-btn--sm {
+    :host(.acc-btn--sm) {
       padding: 0.25rem 0.625rem;
       font-size: 0.8125rem;
       line-height: 1.25rem;
     }
-    .acc-btn--md {
+    :host(.acc-btn--md) {
       padding: 0.5rem 1rem;
       font-size: 0.875rem;
       line-height: 1.25rem;
     }
-    .acc-btn--lg {
+    :host(.acc-btn--lg) {
       padding: 0.625rem 1.25rem;
       font-size: 1rem;
       line-height: 1.5rem;
     }
 
     /* Variants */
-    .acc-btn--primary {
+    :host(.acc-btn--primary) {
       background-color: var(--acc-color-primary, #1e40af);
       color: #ffffff;
     }
-    .acc-btn--primary:hover:not(:disabled) {
+    :host(.acc-btn--primary:hover:not(:disabled)) {
       background-color: var(--acc-color-primary-hover, #1d4ed8);
     }
 
-    .acc-btn--secondary {
+    :host(.acc-btn--secondary) {
       background-color: var(--acc-color-secondary, #0f172a);
       color: #ffffff;
     }
 
-    .acc-btn--danger {
+    :host(.acc-btn--danger) {
       background-color: var(--acc-color-danger, #b91c1c);
       color: #ffffff;
     }
 
-    .acc-btn--outline {
+    :host(.acc-btn--outline) {
       background-color: transparent;
       border-color: var(--acc-color-border, #e2e8f0);
       color: var(--acc-color-text-main, #0f172a);
     }
-    .acc-btn--outline:hover:not(:disabled) {
+    :host(.acc-btn--outline:hover:not(:disabled)) {
       background-color: var(--acc-color-bg, #f8fafc);
     }
 
-    .acc-btn--ghost {
+    :host(.acc-btn--ghost) {
       background-color: transparent;
       color: var(--acc-color-text-muted, #64748b);
     }
-    .acc-btn--ghost:hover:not(:disabled) {
+    :host(.acc-btn--ghost:hover:not(:disabled)) {
       background-color: var(--acc-color-bg, #f8fafc);
       color: var(--acc-color-text-main, #0f172a);
     }

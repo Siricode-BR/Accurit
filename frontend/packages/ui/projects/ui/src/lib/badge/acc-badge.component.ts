@@ -36,27 +36,27 @@ export type BadgeStatus = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
       background-color: currentColor;
     }
 
-    .acc-badge--success {
+    :host(.acc-badge--success) {
       background-color: var(--acc-color-success-bg, #f0fdf4);
       color: var(--acc-color-success, #15803d);
     }
 
-    .acc-badge--warning {
+    :host(.acc-badge--warning) {
       background-color: var(--acc-color-warning-bg, #fffbeb);
       color: var(--acc-color-warning, #b45309);
     }
 
-    .acc-badge--danger {
+    :host(.acc-badge--danger) {
       background-color: var(--acc-color-danger-bg, #fef2f2);
       color: var(--acc-color-danger, #b91c1c);
     }
 
-    .acc-badge--info {
+    :host(.acc-badge--info) {
       background-color: var(--acc-color-info-bg, #f0f9ff);
       color: var(--acc-color-info, #0369a1);
     }
 
-    .acc-badge--neutral {
+    :host(.acc-badge--neutral) {
       background-color: #f1f5f9;
       color: #475569;
     }

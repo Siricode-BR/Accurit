@@ -5,13 +5,19 @@ export const routes: Routes = [
   {
     path: '',
     pathMatch: 'full',
-    redirectTo: 'tenants',
+    redirectTo: 'dashboard',
   },
   {
     path: 'login',
     canActivate: [publicGuard],
     loadComponent: () =>
       import('./features/auth/login.component').then((m) => m.AdminLoginComponent),
+  },
+  {
+    path: 'dashboard',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/dashboard/dashboard.page').then((m) => m.DashboardPage),
   },
   {
     path: 'tenants',
@@ -25,4 +31,5 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/tenants/tenant-form.component').then((m) => m.TenantFormComponent),
   },
+  { path: '**', redirectTo: 'dashboard' },
 ];

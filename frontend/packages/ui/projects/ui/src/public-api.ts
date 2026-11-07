@@ -23,3 +23,6 @@ export * from './lib/app-shell/acc-app-shell.component';
 export * from './lib/stat-card/acc-stat-card.types';
 export * from './lib/stat-card/acc-stat-card.component';
 export * from './lib/page-header/acc-page-header.component';
+export * from './lib/search-field/acc-search-field.component';
+export * from './lib/filter-chips/acc-filter-chips.component';
+export * from './lib/cta-button/acc-cta-button.component';

@@ -46,7 +46,7 @@ export class AuthService {
           tenantId: res.usuario.escritorioId ?? undefined,
         };
         this.session.setSession(usuario, res.accessToken);
-        this.router.navigate(['/tenants']);
+        this.router.navigate(['/dashboard']);
       },
       error: (err: { error?: { message?: string }; message?: string }) => {
         this.#status.set('error');

@@ -9,4 +9,9 @@ export type AccIconName =
   | 'logout'
   | 'lock'
   | 'search'
-  | 'user-plus';
+  | 'user-plus'
+  | 'plus'
+  | 'refresh'
+  | 'building'
+  | 'beaker'
+  | 'shield-check';

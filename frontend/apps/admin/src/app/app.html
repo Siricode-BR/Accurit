@@ -1,16 +1,16 @@
-<div class="app-layout">
-  <nav class="app-navbar">
-    <div class="navbar-brand">
-      <span class="brand-badge">Accurit</span>
-      <span class="brand-divider">/</span>
-      <span class="brand-portal">Backoffice Admin SaaS</span>
-    </div>
-    <div class="navbar-actions">
-      <span class="text-sm text-muted">Gestão Global Multi-tenant</span>
-    </div>
-  </nav>
-
-  <main class="app-main">
+@if (autenticado()) {
+  <acc-app-shell
+    brand="Accurit"
+    portal="Backoffice SaaS"
+    [groups]="navegacao"
+    [usuario]="usuario()"
+    (sair)="sair()"
+  >
+    <span acc-shell-topbar class="escopo">Gestão global multi-tenant</span>
+    <router-outlet />
+  </acc-app-shell>
+} @else {
+  <main class="app-publico">
     <router-outlet />
   </main>
-</div>
+}

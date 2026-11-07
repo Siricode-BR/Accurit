@@ -9,15 +9,21 @@ import {
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { TenantService } from '../../data/tenant.service';
-import { AuthService } from '../../core/auth/auth.service';
 import {
   AccButtonComponent,
   AccBadgeComponent,
   AccCardComponent,
+  AccCtaButtonComponent,
+  AccFilterChipsComponent,
+  AccFilterOption,
+  AccIconComponent,
+  AccSearchFieldComponent,
   AccSpinnerComponent,
 } from '@accurit/ui';
 import { formatPtBrDateTime } from '@accurit/shared';
 import { TenantDto } from '@accurit/core';
+
+type FiltroAmbiente = 'todos' | 'producao' | 'trial';
 
 @Component({
   selector: 'app-tenant-list',
@@ -27,254 +33,41 @@ import { TenantDto } from '@accurit/core';
     AccButtonComponent,
     AccBadgeComponent,
     AccCardComponent,
+    AccCtaButtonComponent,
+    AccFilterChipsComponent,
+    AccIconComponent,
+    AccSearchFieldComponent,
     AccSpinnerComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <div class="tenants-container">
-      <header class="tenants-header">
-        <div>
-          <h1 class="page-title">Gestão de Escritórios (Tenants)</h1>
-          <p class="page-subtitle">
-            Administração SaaS: {{ tenantService.total() }} escritórios cadastrados
-          </p>
-        </div>
-        <button acc-button variant="primary" size="md" (click)="novoTenant()">
-          + Novo Escritório
-        </button>
-        <button acc-button variant="outline" size="md" (click)="sair()" class="btn-sair">
-          Sair
-        </button>
-      </header>
-
-      <!-- Métricas SaaS -->
-      <section class="metrics-grid">
-        <acc-card>
-          <div class="metric-card">
-            <span class="metric-label">Escritórios em Produção</span>
-            <span class="metric-value">{{ tenantService.totalProducao() }}</span>
-          </div>
-        </acc-card>
-        <acc-card>
-          <div class="metric-card">
-            <span class="metric-label">Escritórios em Modo Trial</span>
-            <span class="metric-value text-amber">{{ tenantService.totalTrial() }}</span>
-          </div>
-        </acc-card>
-      </section>
-
-      <!-- Lista / Tabela -->
-      @if (tenantService.carregando() && tenantService.tenants().length === 0) {
-        <div class="loading-state">
-          <acc-spinner size="lg"></acc-spinner>
-          <p>Carregando escritórios...</p>
-        </div>
-      } @else if (tenantService.erro()) {
-        <div class="alert-error">
-          <p><strong>Erro:</strong> {{ tenantService.erro() }}</p>
-          <button acc-button variant="outline" size="sm" (click)="recarregar()">Tentar novamente</button>
-        </div>
-      } @else {
-        <acc-card>
-          <div class="table-responsive">
-            <table class="acc-table">
-              <thead>
-                <tr>
-                  <th>Nome do Escritório</th>
-                  <th>Slug / Subdomínio</th>
-                  <th>Ambiente SERPRO</th>
-                  <th>Última Atualização</th>
-                  <th>Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (tenant of tenantService.tenants(); track tenant.id) {
-                  <tr>
-                    <td>
-                      <strong>{{ tenant.nome }}</strong>
-                    </td>
-                    <td class="font-mono text-muted">
-                      {{ tenant.slug }}
-                    </td>
-                    <td>
-                      <acc-badge [status]="tenant.modoTrialSerpro ? 'warning' : 'success'">
-                        {{ tenant.modoTrialSerpro ? 'Trial SERPRO' : 'Produção' }}
-                      </acc-badge>
-                    </td>
-                    <td>
-                      {{ formatarData(tenant.atualizadoEm) }}
-                    </td>
-                    <td>
-                      <div class="action-buttons">
-                        <button
-                          acc-button
-                          variant="outline"
-                          size="sm"
-                          (click)="alternarAmbiente(tenant)"
-                        >
-                          {{ tenant.modoTrialSerpro ? 'Ativar Produção' : 'Mudar para Trial' }}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                } @empty {
-                  <tr>
-                    <td colspan="5" class="empty-message">
-                      Nenhum escritório cadastrado.
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        </acc-card>
-      }
-    </div>
-  `,
-  styles: `
-    .tenants-container {
-      display: flex;
-      flex-direction: column;
-      gap: 1.5rem;
-      padding: 1.5rem;
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-
-    .tenants-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .page-title {
-      font-size: 1.5rem;
-      font-weight: 700;
-      color: var(--acc-color-text-main);
-      margin: 0 0 0.25rem 0;
-    }
-
-    .page-subtitle {
-      color: var(--acc-color-text-muted);
-      margin: 0;
-      font-size: 0.875rem;
-    }
-
-    .metrics-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 1rem;
-    }
-
-    .metric-card {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-
-    .metric-label {
-      font-size: 0.8125rem;
-      color: var(--acc-color-text-muted);
-    }
-
-    .metric-value {
-      font-size: 1.75rem;
-      font-weight: 700;
-      color: var(--acc-color-success);
-    }
-
-    .metric-value.text-amber {
-      color: var(--acc-color-warning);
-    }
-
-    .table-responsive {
-      overflow-x: auto;
-    }
-
-    .acc-table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-      font-size: 0.875rem;
-    }
-
-    .acc-table th {
-      padding: 0.75rem 1rem;
-      background-color: var(--acc-color-bg);
-      border-bottom: 1px solid var(--acc-color-border);
-      color: var(--acc-color-text-muted);
-      font-weight: 600;
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .acc-table td {
-      padding: 1rem;
-      border-bottom: 1px solid var(--acc-color-border);
-      vertical-align: middle;
-    }
-
-    .action-buttons {
-      display: flex;
-      gap: 0.5rem;
-    }
-
-    .font-mono {
-      font-family: monospace;
-    }
-
-    .text-muted {
-      color: var(--acc-color-text-muted);
-    }
-
-    .loading-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 3rem;
-      gap: 1rem;
-      color: var(--acc-color-text-muted);
-    }
-
-    .alert-error {
-      padding: 1rem;
-      border-radius: var(--acc-radius-md);
-      background-color: var(--acc-color-danger-bg);
-      color: var(--acc-color-danger);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .empty-message {
-      text-align: center;
-      padding: 3rem 1rem !important;
-      color: var(--acc-color-text-muted);
-    }
-
-    .btn-sair {
-      color: var(--acc-color-danger);
-      border-color: var(--acc-color-danger);
-    }
-
-    .btn-sair:hover {
-      background-color: var(--acc-color-danger-bg);
-    }
-  `,
+  templateUrl: './tenant-list.component.html',
+  styleUrl: './tenant-list.component.css',
 })
 export class TenantListComponent implements OnInit {
   protected readonly tenantService = inject(TenantService);
   protected readonly router = inject(Router);
-  protected readonly auth = inject(AuthService);
+
+  protected readonly opcoesFiltro: readonly AccFilterOption<FiltroAmbiente>[] = [
+    { value: 'todos', label: 'Todos' },
+    { value: 'producao', label: 'Produção' },
+    { value: 'trial', label: 'Trial SERPRO' },
+  ];
+
+  protected readonly termoBusca = signal('');
+  protected readonly filtroAtivo = signal<FiltroAmbiente>('todos');
+
+  protected readonly tenantsExibidos = computed(() => {
+    const termo = this.termoBusca().trim().toLowerCase();
+    const filtro = this.filtroAtivo();
+    return this.tenantService.tenants().filter((t) => {
+      if (filtro === 'trial' && !t.modoTrialSerpro) return false;
+      if (filtro === 'producao' && t.modoTrialSerpro) return false;
+      return !termo || t.nome.toLowerCase().includes(termo) || t.slug.toLowerCase().includes(termo);
+    });
+  });
 
   protected novoTenant(): void {
     this.router.navigate(['/tenants/novo']);
-  }
-
-  protected sair(): void {
-    this.auth.logout();
   }
 
   ngOnInit(): void {

@@ -1,0 +1,124 @@
+<div class="tenants-container">
+  <header class="tenants-header">
+    <div>
+      <h1 class="page-title">Gestão de Escritórios (Tenants)</h1>
+      <p class="page-subtitle">
+        Administração SaaS: {{ tenantService.total() }} escritórios cadastrados
+      </p>
+    </div>
+    <button type="button" acc-cta icon="plus" (click)="novoTenant()">Novo escritório</button>
+  </header>
+
+  <!-- Métricas SaaS -->
+  <section class="metrics-grid">
+    <acc-card>
+      <div class="metric-card">
+        <span class="metric-label">Escritórios em Produção</span>
+        <span class="metric-value">{{ tenantService.totalProducao() }}</span>
+      </div>
+    </acc-card>
+    <acc-card>
+      <div class="metric-card">
+        <span class="metric-label">Escritórios em Modo Trial</span>
+        <span class="metric-value text-amber">{{ tenantService.totalTrial() }}</span>
+      </div>
+    </acc-card>
+  </section>
+
+  <!-- Busca e filtros -->
+  <section class="filtros" aria-label="Busca e filtros">
+    <div class="filtros__linha">
+      <acc-search-field
+        class="filtros__busca"
+        placeholder="Buscar por nome ou slug do escritório"
+        ariaLabel="Buscar escritórios"
+        [value]="termoBusca()"
+        (valueChange)="termoBusca.set($event)"
+      />
+      <button
+        type="button"
+        class="btn-recarregar"
+        title="Recarregar lista"
+        aria-label="Recarregar lista"
+        [disabled]="tenantService.carregando()"
+        (click)="recarregar()"
+      >
+        <span class="btn-recarregar__icone" [class.btn-recarregar__icone--girando]="tenantService.carregando()">
+          <acc-icon name="refresh" />
+        </span>
+      </button>
+    </div>
+
+    <acc-filter-chips
+      ariaLabel="Filtrar por ambiente SERPRO"
+      [options]="opcoesFiltro"
+      [value]="filtroAtivo()"
+      (valueChange)="filtroAtivo.set($event)"
+    />
+
+    <p class="filtros__resumo" aria-live="polite">
+      Exibindo {{ tenantsExibidos().length }} de {{ tenantService.tenants().length }} escritórios
+      @if (termoBusca().trim()) {
+        para “{{ termoBusca().trim() }}”
+      }
+    </p>
+  </section>
+
+  <!-- Lista / Tabela -->
+  @if (tenantService.carregando() && tenantService.tenants().length === 0) {
+    <div class="loading-state">
+      <acc-spinner size="lg"></acc-spinner>
+      <p>Carregando escritórios...</p>
+    </div>
+  } @else if (tenantService.erro()) {
+    <div class="alert-error">
+      <p><strong>Erro:</strong> {{ tenantService.erro() }}</p>
+      <button acc-button variant="outline" size="sm" (click)="recarregar()">Tentar novamente</button>
+    </div>
+  } @else {
+    <acc-card>
+      <div class="table-responsive">
+        <table class="acc-table">
+          <thead>
+            <tr>
+              <th>Nome do Escritório</th>
+              <th>Slug / Subdomínio</th>
+              <th>Ambiente SERPRO</th>
+              <th>Última Atualização</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (tenant of tenantsExibidos(); track tenant.id) {
+              <tr>
+                <td>
+                  <strong>{{ tenant.nome }}</strong>
+                </td>
+                <td class="font-mono text-muted">{{ tenant.slug }}</td>
+                <td>
+                  <acc-badge [status]="tenant.modoTrialSerpro ? 'warning' : 'success'">
+                    {{ tenant.modoTrialSerpro ? 'Trial SERPRO' : 'Produção' }}
+                  </acc-badge>
+                </td>
+                <td>{{ formatarData(tenant.atualizadoEm) }}</td>
+                <td>
+                  <div class="action-buttons">
+                    <button acc-button variant="outline" size="sm" (click)="alternarAmbiente(tenant)">
+                      {{ tenant.modoTrialSerpro ? 'Ativar Produção' : 'Mudar para Trial' }}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="5" class="empty-message">
+                  Nenhum escritório encontrado para os filtros aplicados.
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </acc-card>
+  }
+</div>

@@ -12,13 +12,16 @@ import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { ClienteService } from '../../data/cliente.service';
 import { ProcuracaoService } from '../../data/procuracao.service';
-import { AuthService } from '../../core/auth/auth.service';
 import {
   AccButtonComponent,
   AccBadgeComponent,
   AccCardComponent,
   AccSpinnerComponent,
-  AccDocumentMaskDirective,
+  AccCtaButtonComponent,
+  AccIconComponent,
+  AccSearchFieldComponent,
+  AccFilterChipsComponent,
+  AccFilterOption,
 } from '@accurit/ui';
 import { isValidDocument, formatDocument } from '@accurit/shared';
 import { ClienteDto, FiltroClientes } from '@accurit/core';
@@ -32,7 +35,10 @@ import { ClienteDto, FiltroClientes } from '@accurit/core';
     AccBadgeComponent,
     AccCardComponent,
     AccSpinnerComponent,
-    AccDocumentMaskDirective,
+    AccCtaButtonComponent,
+    AccIconComponent,
+    AccSearchFieldComponent,
+    AccFilterChipsComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './cliente-list.component.html',
@@ -42,8 +48,16 @@ export class ClienteListComponent implements OnInit {
   protected readonly clienteService = inject(ClienteService);
   protected readonly procuracaoService = inject(ProcuracaoService);
   protected readonly router = inject(Router);
-  protected readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
+
+  protected readonly opcoesFiltro: readonly AccFilterOption<FiltroClientes>[] = [
+    { value: 'todos', label: 'Todos' },
+    { value: 'cpf', label: 'Pessoa Física' },
+    { value: 'cnpj_mei', label: 'MEI' },
+    { value: 'cnpj_simples', label: 'Simples Nacional' },
+    { value: 'cnpj_presumido', label: 'Lucro Presumido' },
+    { value: 'cnpj_real', label: 'Lucro Real' },
+  ];
 
   readonly termoBusca = signal<string>('');
   readonly filtroAtivo = signal<FiltroClientes>('todos');
@@ -76,11 +90,6 @@ export class ClienteListComponent implements OnInit {
     this.clienteService.listar();
   }
 
-  onSearchInput(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.termoBusca.set(target.value);
-  }
-
   aplicarFiltro(filtro: FiltroClientes): void {
     this.filtroAtivo.set(filtro);
     this.clienteService.listar(filtro);
@@ -100,10 +109,6 @@ export class ClienteListComponent implements OnInit {
 
   abrirDetalhes(cliente: ClienteDto): void {
     this.router.navigate(['/clientes', cliente.id]);
-  }
-
-  protected sair(): void {
-    this.auth.logout();
   }
 
   // Status exibido no acc-badge por cliente (ausência = Pendente).

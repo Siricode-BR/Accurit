@@ -19,6 +19,6 @@ export const publicGuard: CanActivateFn = () => {
 
   if (!session.isAuthenticated()) return true;
 
-  return router.createUrlTree(['/tenants']);
+  return router.createUrlTree(['/dashboard']);
 };
 

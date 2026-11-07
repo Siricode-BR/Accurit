@@ -6,12 +6,7 @@
         Base cadastral do escritório contábil: {{ clienteService.total() }} clientes registrados
       </p>
     </div>
-    <button acc-button variant="primary" size="md" (click)="abrirModalNovo()">
-      + Novo Cliente
-    </button>
-    <button acc-button variant="outline" size="md" (click)="sair()" class="btn-sair">
-      Sair
-    </button>
+    <button type="button" acc-cta icon="user-plus" (click)="abrirModalNovo()">Novo cliente</button>
   </header>
 
   <!-- Cards de Resumo -->
@@ -31,59 +26,49 @@
   </section>
 
   <!-- Barra de Filtros e Busca -->
-  <acc-card>
-    <div class="filter-bar">
-      <div class="search-input-wrapper">
-        <input
-          type="text"
-          accDocMask
-          class="search-input"
-          placeholder="Buscar por Razão Social ou CPF/CNPJ..."
-          [value]="termoBusca()"
-          (input)="onSearchInput($event)"
-        />
-        @if (validacaoDocumentoAviso()) {
-          <small class="doc-warning">{{ validacaoDocumentoAviso() }}</small>
-        }
-      </div>
-
-      <div class="filter-actions">
-        <button
-          acc-button
-          [variant]="filtroAtivo() === 'todos' ? 'primary' : 'outline'"
-          size="sm"
-          (click)="aplicarFiltro('todos')"
-        >
-          Todos
-        </button>
-        <button
-          acc-button
-          [variant]="filtroAtivo() === 'cpf' ? 'primary' : 'outline'"
-          size="sm"
-          (click)="aplicarFiltro('cpf')"
-        >
-          CPF
-        </button>
-        <button
-          acc-button
-          [variant]="filtroAtivo() === 'cnpj_simples' ? 'primary' : 'outline'"
-          size="sm"
-          (click)="aplicarFiltro('cnpj_simples')"
-        >
-          Simples Nacional
-        </button>
-        <button
-          acc-button
-          variant="outline"
-          size="sm"
-          [loading]="clienteService.carregando()"
-          (click)="recarregar()"
-        >
-          Recarregar
-        </button>
-      </div>
+  <section class="filtros" aria-label="Busca e filtros">
+    <div class="filtros__linha">
+      <acc-search-field
+        class="filtros__busca"
+        placeholder="Buscar por nome, razão social ou CPF/CNPJ"
+        ariaLabel="Buscar clientes"
+        [value]="termoBusca()"
+        [documentMask]="true"
+        [invalid]="!!validacaoDocumentoAviso()"
+        (valueChange)="termoBusca.set($event)"
+      />
+      <button
+        type="button"
+        class="btn-recarregar"
+        title="Recarregar lista"
+        aria-label="Recarregar lista"
+        [disabled]="clienteService.carregando()"
+        (click)="recarregar()"
+      >
+        <span class="btn-recarregar__icone" [class.btn-recarregar__icone--girando]="clienteService.carregando()">
+          <acc-icon name="refresh" />
+        </span>
+      </button>
     </div>
-  </acc-card>
+
+    <acc-filter-chips
+      ariaLabel="Filtrar por tipo e regime"
+      [options]="opcoesFiltro"
+      [value]="filtroAtivo()"
+      (valueChange)="aplicarFiltro($event)"
+    />
+
+    @if (validacaoDocumentoAviso()) {
+      <p class="doc-warning" role="status">{{ validacaoDocumentoAviso() }}</p>
+    }
+
+    <p class="filtros__resumo" aria-live="polite">
+      Exibindo {{ clientesExibidos().length }} de {{ clienteService.total() }} clientes
+      @if (termoBusca().trim()) {
+        para “{{ termoBusca().trim() }}”
+      }
+    </p>
+  </section>
 
   <!-- Conteúdo / Tabela -->
   @if (clienteService.carregando() && clienteService.clientes().length === 0) {

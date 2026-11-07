@@ -44,7 +44,7 @@ export class TenantService {
     () => this.#state().itens.filter((t) => !t.modoTrialSerpro).length
   );
 
-  listar(pagina = 1, tamanho = 20): void {
+  listar(pagina = 1, tamanho = 100): void {
     this.#state.update((s) => ({ ...s, carregando: true, erro: null }));
 
     const params = new HttpParams()
