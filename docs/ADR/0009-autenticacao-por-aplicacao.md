@@ -78,7 +78,7 @@ API de navegações.
   inexistente; sem enumeração de e-mail/escritório).
 - Lockout após 5 falhas consecutivas por 900 s (`AUTH_MAX_FAILED_ATTEMPTS`, `AUTH_LOCKOUT_SECS`),
   com auditoria dos motivos `USUARIO_INEXISTENTE`, `USUARIO_INATIVO` e `USUARIO_BLOQUEADO`.
-- Rate limit de login no backend e no proxy: 10 r/m com burst 5, chave `IP|rota|slug`.
+- Rate limit de login no backend e no proxy: 10 r/m com burst 5, chave `IP|rota|e-mail` (revisado pelo [ADR-0011](0011-login-por-email-unico.md); antes era `IP|rota|slug`).
 - `ativo = FALSE` invalida refresh imediatamente; a auditoria registra `AUTH_LOGIN_SUCESSO`,
   `AUTH_LOGIN_FALHA`, `AUTH_LOGOUT` e `AUTH_REFRESH_REUSO` sem senha nem token.
 

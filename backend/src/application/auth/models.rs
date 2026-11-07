@@ -68,7 +68,6 @@ pub struct SessaoAdminEmitida {
 
 #[derive(Debug, Clone)]
 pub struct LoginCommand {
-    pub escritorio: String,
     pub email: String,
     pub senha: String,
     pub audiencia: Audiencia,
@@ -123,10 +122,6 @@ pub struct UsuarioAtualCommand {
 #[derive(Debug, Clone, Copy)]
 pub struct AdministradorAtualCommand {
     pub administrador_id: Uuid,
-}
-
-pub(crate) fn normalizar_slug(valor: &str) -> String {
-    valor.trim().to_ascii_lowercase()
 }
 
 pub(crate) fn normalizar_email(valor: &str) -> String {

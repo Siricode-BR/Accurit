@@ -214,7 +214,6 @@ async fn entrar_portal(app: &Router, slug: &str, papel: &str) -> Value {
             Method::POST,
             "/api/v1/auth/client/login",
             Some(json!({
-                "escritorio": slug,
                 "email": format!("{papel}@{slug}.test"),
                 "senha": SENHA,
             })),
@@ -954,7 +953,6 @@ async fn gestor_provisiona_tenant_e_titular_faz_login() {
             Method::POST,
             "/api/v1/auth/client/login",
             Some(json!({
-                "escritorio": "novo-tenant",
                 "email": "titular@novo-tenant.test",
                 "senha": "senha-titular-9",
             })),
@@ -985,7 +983,7 @@ async fn gestor_provisiona_tenant_e_titular_faz_login() {
     let corpo = corpo_json(duplicado).await;
     assert_eq!(
         corpo["error"]["message"],
-        "Usuário com este e-mail já existe neste escritório"
+        "Já existe um usuário com este e-mail"
     );
 
     assert_eq!(
@@ -995,6 +993,40 @@ async fn gestor_provisiona_tenant_e_titular_faz_login() {
     assert_eq!(
         contar(&ambiente.banco, "SELECT COUNT(*) AS total FROM usuarios"),
         1
+    );
+}
+
+#[tokio::test]
+async fn provisionamento_rejeita_email_ja_usado_em_outro_escritorio_sem_criar_tenant() {
+    let ambiente = ambiente(&[]);
+    semear_gestor(&ambiente.banco, true);
+    semear_usuario(&ambiente.banco, "alfa", "OPERADOR", true, &cpf_com_dv(8));
+    let token_gestor = token_de(&entrar_gestor(&ambiente.app).await);
+
+    let resposta = enviar(
+        &ambiente.app,
+        pedido(
+            Method::POST,
+            "/api/v1/admin/escritorios",
+            Some(corpo_provisionamento(
+                "outro-tenant",
+                "Operador@Alfa.Test",
+                "98765432100",
+                "senha-titular-9",
+            )),
+            Some(&token_gestor),
+        ),
+    )
+    .await;
+    assert_eq!(resposta.status(), StatusCode::CONFLICT);
+
+    assert_eq!(
+        contar(
+            &ambiente.banco,
+            "SELECT COUNT(*) AS total FROM escritorios WHERE slug = 'outro-tenant'"
+        ),
+        0,
+        "não deve sobrar escritório órfão quando o e-mail já existe"
     );
 }
 

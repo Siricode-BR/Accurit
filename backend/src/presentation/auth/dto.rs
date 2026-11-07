@@ -3,11 +3,10 @@ use uuid::Uuid;
 
 use crate::application::auth::{AdministradorPublico, UsuarioPublico};
 
-/// Login da plataforma do escritório: o slug seleciona o tenant.
+/// Login da plataforma do escritório: o e-mail (único na plataforma) identifica o tenant.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginRequest {
-    pub escritorio: String,
     pub email: String,
     pub senha: String,
 }

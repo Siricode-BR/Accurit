@@ -10,6 +10,11 @@ use crate::application::admin::{
 use crate::infrastructure::persistence::pool::DbPool;
 use crate::infrastructure::persistence::schema::{auditoria_eventos, escritorios, usuarios};
 
+diesel::define_sql_function! {
+    /// `lower(text)` do PostgreSQL — o e-mail é único sem diferenciar maiúsculas.
+    fn lower(valor: diesel::sql_types::Text) -> diesel::sql_types::Text;
+}
+
 #[derive(Clone)]
 pub struct AdminRepositorioDiesel {
     pool: DbPool,
@@ -163,17 +168,12 @@ impl UsuarioAdminRepositorio for AdminRepositorioDiesel {
             })
     }
 
-    fn buscar_por_escritorio_e_email(
-        &self,
-        escritorio_id_alvo: Uuid,
-        email_alvo: &str,
-    ) -> Result<Option<Uuid>, RepositorioError> {
+    fn buscar_por_email(&self, email_alvo: &str) -> Result<Option<Uuid>, RepositorioError> {
         use self::usuarios::dsl::*;
 
         let mut conexao = self.conexao()?;
         usuarios
-            .filter(escritorio_id.eq(escritorio_id_alvo))
-            .filter(email.eq(email_alvo))
+            .filter(lower(email).eq(email_alvo.to_ascii_lowercase()))
             .select(id)
             .first(&mut conexao)
             .optional()

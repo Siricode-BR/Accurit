@@ -83,11 +83,8 @@ impl Paginacao {
 pub trait UsuarioAdminRepositorio: Send + Sync {
     fn criar(&self, usuario: &UsuarioNovo) -> Result<Uuid, RepositorioError>;
 
-    fn buscar_por_escritorio_e_email(
-        &self,
-        escritorio_id: Uuid,
-        email: &str,
-    ) -> Result<Option<Uuid>, RepositorioError>;
+    /// E-mail é único na plataforma inteira (sem diferenciar maiúsculas).
+    fn buscar_por_email(&self, email: &str) -> Result<Option<Uuid>, RepositorioError>;
 }
 
 pub trait AuditoriaAdminRepositorio: Send + Sync {

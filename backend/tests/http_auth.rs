@@ -180,7 +180,6 @@ fn login_portal(email: &str, senha: &str) -> Request<Body> {
         Method::POST,
         "/api/v1/auth/client/login",
         Some(json!({
-            "escritorio": SLUG,
             "email": email,
             "senha": senha,
         })),
@@ -533,7 +532,7 @@ async fn portal_aceita_titular_e_operador_backoffice_rejeita() {
 }
 
 #[tokio::test]
-async fn login_escritorio_inexistente_protege_sem_auditoria() {
+async fn login_com_email_inexistente_protege_sem_auditoria() {
     let ambiente = ambiente(&[]);
     semear_portal(&ambiente.banco, "CLIENTE", true);
 
@@ -541,8 +540,7 @@ async fn login_escritorio_inexistente_protege_sem_auditoria() {
         Method::POST,
         "/api/v1/auth/client/login",
         Some(json!({
-            "escritorio": "escritorio-inexistente",
-            "email": "cliente@alfa.test",
+            "email": "ninguem@alfa.test",
             "senha": SENHA,
         })),
         &[],
@@ -557,4 +555,27 @@ async fn login_escritorio_inexistente_protege_sem_auditoria() {
         ),
         0
     );
+}
+
+#[tokio::test]
+async fn login_do_portal_identifica_o_escritorio_apenas_pelo_email() {
+    let ambiente = ambiente(&[]);
+    semear_portal(&ambiente.banco, "CLIENTE", true);
+
+    // E-mail em caixa diferente e campo legado `escritorio` (ignorado) continuam funcionando.
+    let resposta = pedido(
+        Method::POST,
+        "/api/v1/auth/client/login",
+        Some(json!({
+            "escritorio": "slug-qualquer",
+            "email": "  Cliente@Alfa.Test ",
+            "senha": SENHA,
+        })),
+        &[],
+    );
+    let resposta = enviar(&ambiente.app, resposta).await;
+    assert_eq!(resposta.status(), StatusCode::OK);
+    let corpo = corpo_json(resposta).await;
+    assert_eq!(corpo["usuario"]["email"], "cliente@alfa.test");
+    assert!(corpo["usuario"]["escritorioId"].is_string());
 }

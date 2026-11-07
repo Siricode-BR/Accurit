@@ -52,11 +52,11 @@ pub async fn middleware(
         .await
         .unwrap_or_default();
 
-    let slug = serde_json::from_slice::<Value>(&bytes)
+    let email = serde_json::from_slice::<Value>(&bytes)
         .ok()
         .and_then(|valor| {
             valor
-                .get("escritorio")
+                .get("email")
                 .and_then(Value::as_str)
                 .map(str::to_owned)
         })
@@ -64,7 +64,7 @@ pub async fn middleware(
 
     let ip = ip_da_requisicao(&partes.headers);
     let caminho = partes.uri.path().to_owned();
-    let chave = format!("{ip}|{caminho}|{}", slug.to_ascii_lowercase());
+    let chave = format!("{ip}|{caminho}|{}", email.trim().to_ascii_lowercase());
 
     let request_id = partes
         .extensions

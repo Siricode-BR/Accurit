@@ -10,7 +10,7 @@ use crate::application::auth::{
     SessaoAdminRepositorio, SessaoRepositorio, UsuarioRepositorio,
 };
 use crate::domain::auth::{
-    Administrador, Audiencia, Escritorio, Papel, Sessao, SessaoAdmin, SessaoAdminComAdministrador,
+    Administrador, Audiencia, Papel, Sessao, SessaoAdmin, SessaoAdminComAdministrador,
     SessaoComUsuario, Usuario,
 };
 use crate::infrastructure::persistence::pool::DbPool;
@@ -33,14 +33,6 @@ impl RepositorioDiesel {
     > {
         self.pool.get().map_err(|_| RepositorioError::Indisponivel)
     }
-}
-
-#[derive(QueryableByName)]
-struct EscritorioRow {
-    #[diesel(sql_type = SqlUuid)]
-    id: Uuid,
-    #[diesel(sql_type = Text)]
-    slug: String,
 }
 
 #[derive(QueryableByName)]
@@ -111,37 +103,12 @@ fn para_usuario(row: UsuarioRow) -> Result<Usuario, RepositorioError> {
 }
 
 impl UsuarioRepositorio for RepositorioDiesel {
-    fn buscar_escritorio_por_slug(
-        &self,
-        slug: &str,
-    ) -> Result<Option<Escritorio>, RepositorioError> {
-        let mut conexao = self.conexao()?;
-        let resultado = diesel::sql_query("SELECT id, slug FROM escritorios WHERE slug = $1")
-            .bind::<Text, _>(slug)
-            .get_result::<EscritorioRow>(&mut conexao)
-            .optional_result();
-
-        match resultado {
-            Ok(Some(row)) => Ok(Some(Escritorio {
-                id: row.id,
-                slug: row.slug,
-            })),
-            Ok(None) => Ok(None),
-            Err(_) => Err(RepositorioError::Dados),
-        }
-    }
-
-    fn buscar_por_escritorio_e_email(
-        &self,
-        escritorio_id: Uuid,
-        email: &str,
-    ) -> Result<Option<Usuario>, RepositorioError> {
+    fn buscar_por_email(&self, email: &str) -> Result<Option<Usuario>, RepositorioError> {
         let mut conexao = self.conexao()?;
         let resultado = diesel::sql_query(
             "SELECT id, escritorio_id, email, senha_hash, papel, ativo, bloqueado_ate \
-             FROM usuarios WHERE escritorio_id = $1 AND lower(email) = lower($2)",
+             FROM usuarios WHERE lower(email) = lower($1)",
         )
-        .bind::<SqlUuid, _>(escritorio_id)
         .bind::<Text, _>(email)
         .get_result::<UsuarioRow>(&mut conexao)
         .optional_result();

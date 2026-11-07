@@ -378,9 +378,8 @@ fn bootstrap_tenant(
     };
 
     let existente = diesel::sql_query(
-        "SELECT id FROM usuarios WHERE escritorio_id = $1 AND lower(email) = lower($2)",
+        "SELECT id FROM usuarios WHERE lower(email) = lower($1)",
     )
-    .bind::<SqlUuid, _>(escritorio_id)
     .bind::<Text, _>(&opcoes.email)
     .get_result::<IdRow>(&mut conexao);
 

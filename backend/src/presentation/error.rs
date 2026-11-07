@@ -235,7 +235,7 @@ impl From<ProvisionarError> for ApiError {
                     Self::conflito("Escritório com este slug já existe")
                 }
                 crate::application::admin::RepositorioError::UsuarioExistente => {
-                    Self::conflito("Usuário com este e-mail já existe neste escritório")
+                    Self::conflito("Já existe um usuário com este e-mail")
                 }
             },
             ProvisionarError::Validacao(msg) => Self::validacao(msg),

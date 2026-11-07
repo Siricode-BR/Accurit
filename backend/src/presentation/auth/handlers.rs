@@ -75,7 +75,6 @@ async fn login(
     };
 
     let comando = LoginCommand {
-        escritorio: corpo.escritorio,
         email: corpo.email,
         senha: corpo.senha,
         audiencia,

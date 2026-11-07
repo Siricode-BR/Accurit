@@ -374,7 +374,7 @@ fn codigo_de_erro(corpo: &Value) -> String {
         .to_owned()
 }
 
-async fn entrar_portal(app: &Router, escritorio: &str, email: &str) -> String {
+async fn entrar_portal(app: &Router, email: &str) -> String {
     let resposta = enviar(
         app,
         Request::builder()
@@ -383,7 +383,7 @@ async fn entrar_portal(app: &Router, escritorio: &str, email: &str) -> String {
             .header(header::CONTENT_TYPE, "application/json")
             .header("x-real-ip", "10.9.0.1")
             .body(Body::from(
-                json!({ "escritorio": escritorio, "email": email, "senha": SENHA_PORTAL })
+                json!({ "email": email, "senha": SENHA_PORTAL })
                     .to_string(),
             ))
             .expect("login válido"),
@@ -521,7 +521,7 @@ async fn devedor_sucesso_com_historico_e_persistencia() {
     let (ambiente, _mock) = ambiente_mock(&[(200, Some(corpo_sucesso_devedor()))]);
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
-    let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
+    let token = entrar_portal(&ambiente.app, "operador@alfa.test").await;
 
     let resposta = consultar_devedor(&ambiente.app, &token, "52998224725", &[]).await;
     assert_eq!(resposta.status(), StatusCode::OK);
@@ -582,7 +582,7 @@ async fn devedor_200_nulo_e_sem_pendencias() {
     let (ambiente, _mock) = ambiente_mock(&[(200, Some(Value::Null))]);
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
-    let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
+    let token = entrar_portal(&ambiente.app, "operador@alfa.test").await;
 
     let resposta = consultar_devedor(&ambiente.app, &token, "52998224725", &[]).await;
     assert_eq!(resposta.status(), StatusCode::OK);
@@ -596,7 +596,7 @@ async fn devedor_404_e_estado_historico() {
     let (ambiente, _mock) = ambiente_mock(&[(404, None)]);
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
-    let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
+    let token = entrar_portal(&ambiente.app, "operador@alfa.test").await;
 
     let resposta = consultar_devedor(&ambiente.app, &token, "52998224725", &[]).await;
     assert_eq!(resposta.status(), StatusCode::NOT_FOUND);
@@ -613,7 +613,7 @@ async fn devedor_429_respeita_retry_after() {
     let (ambiente, mock) = ambiente_mock(&[(429, None), (429, None), (429, None)]);
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
-    let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
+    let token = entrar_portal(&ambiente.app, "operador@alfa.test").await;
 
     let resposta = consultar_devedor(&ambiente.app, &token, "52998224725", &[]).await;
     assert_eq!(resposta.status(), StatusCode::TOO_MANY_REQUESTS);
@@ -633,7 +633,7 @@ async fn devedor_401_sem_renovacao_em_trial_ignora_upstream() {
     let (ambiente, _mock) = ambiente_mock(&[(401, None)]);
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
-    let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
+    let token = entrar_portal(&ambiente.app, "operador@alfa.test").await;
 
     let resposta = consultar_devedor(&ambiente.app, &token, "52998224725", &[]).await;
     assert_eq!(resposta.status(), StatusCode::BAD_GATEWAY);
@@ -646,7 +646,7 @@ async fn devedor_5xx_e_indisponivel() {
     let (ambiente, _mock) = ambiente_mock(&[(500, None), (500, None), (500, None)]);
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
-    let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
+    let token = entrar_portal(&ambiente.app, "operador@alfa.test").await;
 
     let resposta = consultar_devedor(&ambiente.app, &token, "52998224725", &[]).await;
     assert_eq!(resposta.status(), StatusCode::SERVICE_UNAVAILABLE);
@@ -659,7 +659,7 @@ async fn devedor_504_e_indeterminado() {
     let (ambiente, _mock) = ambiente_mock(&[(504, None)]);
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
-    let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
+    let token = entrar_portal(&ambiente.app, "operador@alfa.test").await;
 
     let resposta = consultar_devedor(&ambiente.app, &token, "52998224725", &[]).await;
     assert_eq!(resposta.status(), StatusCode::GATEWAY_TIMEOUT);
@@ -676,7 +676,7 @@ async fn devedor_200_fora_de_contrato_e_502() {
     let (ambiente, _mock) = ambiente_mock(&[(200, Some(json!([1])))]);
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
-    let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
+    let token = entrar_portal(&ambiente.app, "operador@alfa.test").await;
 
     let resposta = consultar_devedor(&ambiente.app, &token, "52998224725", &[]).await;
     assert_eq!(resposta.status(), StatusCode::BAD_GATEWAY);
@@ -689,7 +689,7 @@ async fn parametro_invalido_nao_bate_no_serpro() {
     let (ambiente, _mock) = ambiente_mock(&[]);
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
-    let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
+    let token = entrar_portal(&ambiente.app, "operador@alfa.test").await;
 
     let resposta = consultar_devedor(&ambiente.app, &token, "abc", &[]).await;
     assert_eq!(resposta.status(), StatusCode::BAD_REQUEST);
@@ -711,7 +711,7 @@ async fn inscricao_sucesso_com_detalhe_completo() {
     let (ambiente, _mock) = ambiente_mock(&[(200, Some(corpo_sucesso_inscricao()))]);
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
-    let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
+    let token = entrar_portal(&ambiente.app, "operador@alfa.test").await;
 
     let resposta = consultar_inscricao(&ambiente.app, &token, "9061700096419").await;
     assert_eq!(resposta.status(), StatusCode::OK);
@@ -738,7 +738,7 @@ async fn inscricao_200_array_vazio_e_resposta_invalida() {
     let (ambiente, _mock) = ambiente_mock(&[(200, Some(json!([])))]);
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
-    let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
+    let token = entrar_portal(&ambiente.app, "operador@alfa.test").await;
 
     let resposta = consultar_inscricao(&ambiente.app, &token, "9061700096419").await;
     assert_eq!(resposta.status(), StatusCode::BAD_GATEWAY);
@@ -751,7 +751,7 @@ async fn header_operador_usa_cpf_do_operador_e_ignora_spoof() {
     let (ambiente, _mock) = ambiente_mock(&[(200, Some(corpo_sucesso_devedor()))]);
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
-    let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
+    let token = entrar_portal(&ambiente.app, "operador@alfa.test").await;
 
     let resposta = consultar_devedor(
         &ambiente.app,
@@ -777,7 +777,7 @@ async fn historico_isola_por_escritorio() {
     let _escritorio_a = semear_escritorio(&ambiente.banco, "alfa");
     let escritorio_b = semear_escritorio(&ambiente.banco, "bravo");
     semear_operador(&ambiente.banco, escritorio_b, "operador@bravo.test");
-    let token_b = entrar_portal(&ambiente.app, "bravo", "operador@bravo.test").await;
+    let token_b = entrar_portal(&ambiente.app, "operador@bravo.test").await;
 
     let resposta = consultar_devedor(&ambiente.app, &token_b, "52998224725", &[]).await;
     assert_eq!(resposta.status(), StatusCode::OK);
@@ -807,7 +807,7 @@ async fn producao_divida_ativa_e_bloqueada() {
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
     apontar_producao(&ambiente.banco, escritorio);
-    let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
+    let token = entrar_portal(&ambiente.app, "operador@alfa.test").await;
 
     let resposta = consultar_devedor(&ambiente.app, &token, "52998224725", &[]).await;
     assert_eq!(resposta.status(), StatusCode::SERVICE_UNAVAILABLE);
@@ -845,7 +845,7 @@ async fn limite_local_por_escritorio_e_429() {
     });
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
-    let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
+    let token = entrar_portal(&ambiente.app, "operador@alfa.test").await;
 
     let primeira = consultar_devedor(&ambiente.app, &token, "52998224725", &[]).await;
     assert_eq!(primeira.status(), StatusCode::OK);
@@ -875,7 +875,7 @@ async fn flag_fallback_on_nao_cria_segunda_tentativa_sem_codigo() {
     // sem semente de catálogo: nenhum código de contribuinte disponível
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
-    let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
+    let token = entrar_portal(&ambiente.app, "operador@alfa.test").await;
 
     let resposta = consultar_devedor(&ambiente.app, &token, "52998224725", &[]).await;
     assert_eq!(resposta.status(), StatusCode::NOT_FOUND);
@@ -904,7 +904,7 @@ async fn integra_contador_consulta_pelo_envelope_comum_e_contexto_do_tenant() {
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
     semear_cliente_para_integracao(&ambiente.banco, escritorio);
-    let token = entrar_portal(&ambiente.app, "alfa", "operador@alfa.test").await;
+    let token = entrar_portal(&ambiente.app, "operador@alfa.test").await;
 
     let requisicao = Request::builder()
         .method(Method::POST)

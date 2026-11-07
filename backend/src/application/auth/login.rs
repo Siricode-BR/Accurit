@@ -8,7 +8,7 @@ use crate::domain::auth::Sessao;
 
 use super::error::AuthError;
 use super::models::{
-    LoginCommand, PoliticaAuth, SessaoEmitida, UsuarioPublico, normalizar_email, normalizar_slug,
+    LoginCommand, PoliticaAuth, SessaoEmitida, UsuarioPublico, normalizar_email,
     truncar_user_agent,
 };
 use super::ports::{
@@ -50,35 +50,27 @@ impl LoginUsuario {
 
     pub fn executar(&self, comando: LoginCommand) -> Result<SessaoEmitida, AuthError> {
         let agora = Utc::now();
-        let slug = normalizar_slug(&comando.escritorio);
         let email = normalizar_email(&comando.email);
 
-        let Some(escritorio) = self.usuarios.buscar_escritorio_por_slug(&slug)? else {
+        let Some(usuario) = self.usuarios.buscar_por_email(&email)? else {
+            // Executa o hash mesmo sem usuário para igualar o tempo de resposta e não
+            // revelar se o e-mail existe. Sem auditoria: não há tenant para atribuir o
+            // evento e tentativas anônimas poderiam inflar a tabela.
             let _ = self
                 .senha
                 .verificar(&comando.senha, self.senha.hash_ficticio());
             tracing::warn!(
                 audiencia = %comando.audiencia,
-                "tentativa de login para escritório inexistente"
+                "tentativa de login com e-mail inexistente"
             );
             return Err(AuthError::CredenciaisInvalidas);
         };
-
-        let Some(usuario) = self
-            .usuarios
-            .buscar_por_escritorio_e_email(escritorio.id, &email)?
-        else {
-            let _ = self
-                .senha
-                .verificar(&comando.senha, self.senha.hash_ficticio());
-            self.auditar_falha(escritorio.id, None, &email, &comando, "USUARIO_INEXISTENTE");
-            return Err(AuthError::CredenciaisInvalidas);
-        };
+        let escritorio_id = usuario.escritorio_id;
 
         if !usuario.ativo {
             let _ = self.senha.verificar(&comando.senha, &usuario.senha_hash);
             self.auditar_falha(
-                escritorio.id,
+                escritorio_id,
                 Some(usuario.id),
                 &email,
                 &comando,
@@ -90,7 +82,7 @@ impl LoginUsuario {
         if usuario.esta_bloqueado(agora) {
             let _ = self.senha.verificar(&comando.senha, &usuario.senha_hash);
             self.auditar_falha(
-                escritorio.id,
+                escritorio_id,
                 Some(usuario.id),
                 &email,
                 &comando,
@@ -106,7 +98,7 @@ impl LoginUsuario {
                 self.politica.lockout_secs,
             )?;
             self.auditar_falha(
-                escritorio.id,
+                escritorio_id,
                 Some(usuario.id),
                 &email,
                 &comando,
@@ -117,7 +109,7 @@ impl LoginUsuario {
 
         if !comando.audiencia.aceita(usuario.papel) {
             self.auditar_falha(
-                escritorio.id,
+                escritorio_id,
                 Some(usuario.id),
                 &email,
                 &comando,
@@ -136,7 +128,7 @@ impl LoginUsuario {
 
         let sessao = Sessao {
             id: Uuid::now_v7(),
-            escritorio_id: escritorio.id,
+            escritorio_id: escritorio_id,
             usuario_id: usuario.id,
             audiencia: comando.audiencia,
             familia_id: Uuid::now_v7(),
@@ -150,7 +142,7 @@ impl LoginUsuario {
         self.sessoes.criar(&sessao)?;
 
         if let Err(erro) = self.auditoria.registrar(&EventoAuditoria {
-            escritorio_id: Some(escritorio.id),
+            escritorio_id: Some(escritorio_id),
             usuario_id: Some(usuario.id),
             acao: "AUTH_LOGIN_SUCESSO",
             entidade: "sessoes",

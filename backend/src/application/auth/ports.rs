@@ -5,7 +5,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::domain::auth::{
-    Administrador, Audiencia, Escritorio, Papel, Sessao, SessaoAdmin, SessaoAdminComAdministrador,
+    Administrador, Audiencia, Papel, Sessao, SessaoAdmin, SessaoAdminComAdministrador,
     SessaoComUsuario, Usuario,
 };
 
@@ -69,16 +69,9 @@ pub struct EventoAuditoria {
 }
 
 pub trait UsuarioRepositorio: Send + Sync {
-    fn buscar_escritorio_por_slug(
-        &self,
-        slug: &str,
-    ) -> Result<Option<Escritorio>, RepositorioError>;
-
-    fn buscar_por_escritorio_e_email(
-        &self,
-        escritorio_id: Uuid,
-        email: &str,
-    ) -> Result<Option<Usuario>, RepositorioError>;
+    /// Busca o usuário pelo e-mail (único na plataforma, sem diferenciar maiúsculas).
+    /// O escritório do usuário é identificado por `Usuario::escritorio_id`.
+    fn buscar_por_email(&self, email: &str) -> Result<Option<Usuario>, RepositorioError>;
 
     fn buscar_por_id(
         &self,

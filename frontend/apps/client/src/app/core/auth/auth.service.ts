@@ -37,13 +37,11 @@ export class AuthService {
     this.#status.set('loading');
     this.#errorMessage.set(null);
 
-    const { escritorio, ...rest } = credentials;
+    // O escritório é identificado pelo e-mail (único na plataforma); não há slug no login.
+    const { email, senha } = credentials;
 
     this.http
-      .post<LoginClientResposta>(`${this.baseUrl}/client/login`, {
-        ...rest,
-        escritorio,
-      })
+      .post<LoginClientResposta>(`${this.baseUrl}/client/login`, { email, senha })
       .subscribe({
         next: (res) => {
           this.#status.set('idle');

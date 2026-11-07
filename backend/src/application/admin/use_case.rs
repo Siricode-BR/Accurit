@@ -61,6 +61,15 @@ impl ProvisionarTenantUseCase {
         validar_cpf(&comando.cpf_titular)?;
         validar_senha(&comando.senha_titular)?;
 
+        // O e-mail identifica o usuário no login, então precisa ser único na plataforma.
+        // Verifica antes de criar o escritório para não deixar um tenant órfão.
+        let email_titular = comando.email_titular.trim().to_ascii_lowercase();
+        if self.usuario_repo.buscar_por_email(&email_titular)?.is_some() {
+            return Err(ProvisionarError::Repositorio(
+                RepositorioError::UsuarioExistente,
+            ));
+        }
+
         let escritorio_id = if let Some(id) = self.escritorio_repo.buscar_por_slug(&comando.slug)? {
             id
         } else {
@@ -70,16 +79,6 @@ impl ProvisionarTenantUseCase {
             };
             self.escritorio_repo.criar(&escritorio)?
         };
-
-        if self
-            .usuario_repo
-            .buscar_por_escritorio_e_email(escritorio_id, &comando.email_titular)?
-            .is_some()
-        {
-            return Err(ProvisionarError::Repositorio(
-                RepositorioError::UsuarioExistente,
-            ));
-        }
 
         let senha_hash = self
             .argon2
@@ -94,7 +93,7 @@ impl ProvisionarTenantUseCase {
 
         let titular_id = self.usuario_repo.criar(&UsuarioNovo {
             escritorio_id,
-            email: comando.email_titular.trim().to_ascii_lowercase(),
+            email: email_titular,
             cpf: cpf_normalizado,
             senha_hash,
             papel: Papel::Cliente,

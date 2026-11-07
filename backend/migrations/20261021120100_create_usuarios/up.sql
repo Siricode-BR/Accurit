@@ -11,7 +11,9 @@ CREATE TABLE usuarios (
     bloqueado_ate TIMESTAMPTZ,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CHECK (cpf ~ '^[0-9]{11}$'),
-    UNIQUE (escritorio_id, email),
     UNIQUE (escritorio_id, cpf)
 );
+-- E-mail único em toda a plataforma (case-insensitive): o login identifica o escritório
+-- pelo usuário, sem precisar do slug.
+CREATE UNIQUE INDEX uq_usuarios_email ON usuarios (lower(email));
 CREATE INDEX idx_usuarios_escritorio ON usuarios(escritorio_id);

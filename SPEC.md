@@ -869,9 +869,10 @@ CREATE TABLE usuarios (
     bloqueado_ate TIMESTAMPTZ,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CHECK (cpf ~ '^[0-9]{11}$'),
-    UNIQUE (escritorio_id, email),
     UNIQUE (escritorio_id, cpf)
 );
+-- E-mail único na plataforma (ADR-0011): o login identifica o escritório pelo usuário.
+CREATE UNIQUE INDEX uq_usuarios_email ON usuarios (lower(email));
 CREATE INDEX idx_usuarios_escritorio ON usuarios(escritorio_id);
 ```
 
@@ -1180,7 +1181,7 @@ e a revogação da família operam de forma idêntica a `sessoes`, com os evento
 | `PATCH` | `/api/v1/admin/escritorios/{id}/serpro/trial` | Alternância do modo Trial pelo gestor de tenants — corpo `{ modoTrialSerpro, versao }` (concorrência otimista; `409` em divergência; credencial/certificado ausentes → `400`) |
 | `GET` | `/api/v1/health` | Health check |
 
-Autenticação (Fase 2A, [ADR-0009](docs/ADR/0009-autenticacao-por-aplicacao.md), revisada por [ADR-0010](docs/ADR/0010-revisao-atores-papeis-e-provisionamento.md)): o login da plataforma do escritório recebe `{ escritorio, email, senha }` e o do backoffice `{ email, senha }`; ambos respondem `{ accessToken, expiresIn, usuario }` com `Set-Cookie` do refresh (`usuario.escritorioId` vem `null` no backoffice). `/me` exige `Authorization: Bearer` com a claim `aud` da audiência e o papel correspondente (`ADMIN` no backoffice, `CLIENTE`/`OPERADOR` na plataforma do escritório). `refresh` e `logout` usam somente o cookie `HttpOnly` (`SameSite=Strict`, `Path=/api/v1/auth/{admin|client}`) com `Content-Type: application/json` e `X-Requested-With: accurit`; a rotação invalida o token anterior e o reuso revoga a família. Credencial inválida responde sempre `401 AUTH_INVALID_CREDENTIALS` (sem enumeração), com lockout após 5 falhas por 900 s e rate limit de 10 r/m (burst 5) por IP+caminho+slug. A auditoria registra `AUTH_LOGIN_SUCESSO`, `AUTH_LOGIN_FALHA`, `AUTH_LOGOUT` e `AUTH_REFRESH_REUSO` — os eventos de sessão do gestor de tenants são gravados com `escritorio_id NULL`.
+Autenticação (Fase 2A, [ADR-0009](docs/ADR/0009-autenticacao-por-aplicacao.md), revisada por [ADR-0010](docs/ADR/0010-revisao-atores-papeis-e-provisionamento.md)): o login da plataforma do escritório recebe `{ email, senha }` (o e-mail é único na plataforma e identifica o escritório — [ADR-0011](docs/ADR/0011-login-por-email-unico.md)) e o do backoffice `{ email, senha }`; ambos respondem `{ accessToken, expiresIn, usuario }` com `Set-Cookie` do refresh (`usuario.escritorioId` vem `null` no backoffice). `/me` exige `Authorization: Bearer` com a claim `aud` da audiência e o papel correspondente (`ADMIN` no backoffice, `CLIENTE`/`OPERADOR` na plataforma do escritório). `refresh` e `logout` usam somente o cookie `HttpOnly` (`SameSite=Strict`, `Path=/api/v1/auth/{admin|client}`) com `Content-Type: application/json` e `X-Requested-With: accurit`; a rotação invalida o token anterior e o reuso revoga a família. Credencial inválida responde sempre `401 AUTH_INVALID_CREDENTIALS` (sem enumeração), com lockout após 5 falhas por 900 s e rate limit de 10 r/m (burst 5) por IP+caminho+e-mail. A auditoria registra `AUTH_LOGIN_SUCESSO`, `AUTH_LOGIN_FALHA`, `AUTH_LOGOUT` e `AUTH_REFRESH_REUSO` — os eventos de sessão do gestor de tenants são gravados com `escritorio_id NULL`.
 
 Todos os endpoints de domínio validam o tenant no repositório e ignoram qualquer `escritorio_id` enviado pelo usuário.
 

@@ -15,22 +15,6 @@
       }
 
       <div class="field">
-        <label for="escritorio" class="label">Escritório (slug)</label>
-        <input
-          id="escritorio"
-          type="text"
-          formControlName="escritorio"
-          autocomplete="off"
-          class="input"
-          [class.input--error]="isFieldInvalid('escritorio')"
-          placeholder="ex: escritorio-silva"
-        />
-        @if (isFieldInvalid('escritorio')) {
-          <span class="field-error">Informe o slug do escritório.</span>
-        }
-      </div>
-
-      <div class="field">
         <label for="email" class="label">E-mail</label>
         <input
           id="email"

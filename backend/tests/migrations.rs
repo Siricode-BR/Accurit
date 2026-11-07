@@ -305,20 +305,30 @@ fn valida_constraints_do_schema() {
         Uuid::now_v7(),
         outro_escritorio,
         "operador@alfa.test",
-        None,
+        Some("12345678901"),
         "CLIENTE",
     )
-    .expect_err("mesmo e-mail em outro escritório ainda exige CPF");
+    .expect_err("e-mail é único na plataforma: o login identifica o escritório por ele");
 
     inserir_usuario(
         &mut conexao,
         Uuid::now_v7(),
         outro_escritorio,
-        "operador@alfa.test",
+        "OPERADOR@Alfa.Test",
         Some("12345678901"),
         "CLIENTE",
     )
-    .expect("mesmo e-mail em outro escritório deve ser permitido");
+    .expect_err("unicidade do e-mail não diferencia maiúsculas de minúsculas");
+
+    inserir_usuario(
+        &mut conexao,
+        Uuid::now_v7(),
+        outro_escritorio,
+        "operador@gama.test",
+        Some("12345678901"),
+        "CLIENTE",
+    )
+    .expect("o CPF continua único apenas dentro do escritório");
 
     assert!(
         inserir_usuario(

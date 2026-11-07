@@ -264,7 +264,6 @@ async fn entrar_portal(app: &Router, slug: &str, papel: &str) -> Value {
             Method::POST,
             "/api/v1/auth/client/login",
             Some(json!({
-                "escritorio": slug,
                 "email": format!("{papel}@{slug}.test"),
                 "senha": SENHA,
             })),
