@@ -19,6 +19,29 @@ import { AccButtonComponent, AccCardComponent, AccEmptyStateComponent } from '@a
 
 export type VerboIntegraContador = 'Consultar' | 'Declarar' | 'Emitir' | 'Apoiar' | 'Monitorar';
 
+interface ServicoCatalogo {
+  idSistema: string;
+  idServico: string;
+  versaoSistema: string | null;
+  verbo: VerboIntegraContador;
+}
+
+/**
+ * Catálogo de referência do Integra Contador (espelha o backend
+ * `domain/integra_contador/servicos.rs:catalogo_de_referencia`).
+ * Estrutura hierárquica: verbo → sistema → serviço → versão.
+ */
+const CATALOGO: ServicoCatalogo[] = [
+  { idSistema: 'SICALC', idServico: 'CONSULTAAPOIORECEITAS52', versaoSistema: null, verbo: 'Apoiar' },
+  { idSistema: 'PROCURACOES', idServico: 'OBTERPROCURACAO41', versaoSistema: '1', verbo: 'Consultar' },
+  { idSistema: 'SITFIS', idServico: 'RELATORIOSITFIS92', versaoSistema: null, verbo: 'Emitir' },
+  { idSistema: 'PGDASD', idServico: 'CONSDECLARACAO13', versaoSistema: null, verbo: 'Consultar' },
+  { idSistema: 'PGDASD', idServico: 'TRANSDECLARACAO11', versaoSistema: null, verbo: 'Declarar' },
+  { idSistema: 'DCTFWEB', idServico: 'GERARGUIA31', versaoSistema: null, verbo: 'Emitir' },
+  { idSistema: 'CAIXAPOSTAL', idServico: 'INNOVAMSG63', versaoSistema: null, verbo: 'Monitorar' },
+  { idSistema: 'AUTENTICAPROCURADOR', idServico: 'ENVIOXMLASSINADO81', versaoSistema: '1.0', verbo: 'Apoiar' },
+];
+
 const VERBOS: { valor: VerboIntegraContador; label: string }[] = [
   { valor: 'Consultar', label: 'Consultar' },
   { valor: 'Declarar', label: 'Declarar' },
@@ -72,12 +95,66 @@ interface ConsultaState {
             <label for="verbo" class="label">Verbo</label>
             <select id="verbo"
               [(ngModel)]="verboSelecionado"
+              (change)="aoMudarVerbo($event)"
               class="input input--select"
             >
               @for (v of verbos; track v.valor) {
                 <option [value]="v.valor">{{ v.label }}</option>
               }
             </select>
+          </div>
+
+          <div class="field">
+            <label for="idSistema" class="label">idSistema</label>
+            <select id="idSistema"
+              [(ngModel)]="idSistemaSelecionado"
+              (change)="aoMudarSistema($event)"
+              class="input input--select"
+              [disabled]="sistemasDisponiveis().length === 0"
+            >
+              <option value="">Selecione um sistema</option>
+              @for (s of sistemasDisponiveis(); track s) {
+                <option [value]="s">{{ s }}</option>
+              }
+            </select>
+            @if (sistemasDisponiveis().length === 0 && verboSelecionado()) {
+              <p class="campo-ajuda">Nenhum sistema disponível para este verbo.</p>
+            }
+          </div>
+
+          <div class="field">
+            <label for="idServico" class="label">idServiço</label>
+            <select id="idServico"
+              [(ngModel)]="idServicoSelecionado"
+              (change)="aoMudarServico($event)"
+              class="input input--select"
+              [disabled]="servicosDisponiveis().length === 0"
+            >
+              <option value="">Selecione um serviço</option>
+              @for (s of servicosDisponiveis(); track s) {
+                <option [value]="s">{{ s }}</option>
+              }
+            </select>
+            @if (servicosDisponiveis().length === 0 && idSistemaSelecionado()) {
+              <p class="campo-ajuda">Nenhum serviço disponível para este sistema.</p>
+            }
+          </div>
+
+          <div class="field">
+            <label for="versaoSistema" class="label">versão do sistema</label>
+            <select id="versaoSistema"
+              [(ngModel)]="versaoSistemaSelecionada"
+              class="input input--select"
+              [disabled]="versoesDisponiveis().length === 0"
+            >
+              <option value="">Selecione uma versão</option>
+              @for (v of versoesDisponiveis(); track v) {
+                <option [value]="v">{{ v }}</option>
+              }
+            </select>
+            @if (versoesDisponiveis().length === 0 && idServicoSelecionado()) {
+              <p class="campo-ajuda">Este serviço não utiliza versão.</p>
+            }
           </div>
 
           <div class="field">
@@ -89,42 +166,6 @@ interface ConsultaState {
               (input)="atualizarDocumento($event)"
               class="input"
               placeholder="000.000.000-00 ou 00.000.000/0000-00"
-            />
-          </div>
-
-          <div class="field">
-            <label for="idSistema" class="label">idSistema</label>
-            <input
-              id="idSistema"
-              type="text"
-              [value]="idSistema()"
-              (input)="atualizarIdSistema($event)"
-              class="input"
-              placeholder="ex: SICALC"
-            />
-          </div>
-
-          <div class="field">
-            <label for="idServico" class="label">idServico</label>
-            <input
-              id="idServico"
-              type="text"
-              [value]="idServico()"
-              (input)="atualizarIdServico($event)"
-              class="input"
-              placeholder="ex: CONSDECLARACAO13"
-            />
-          </div>
-
-          <div class="field">
-            <label for="versaoSistema" class="label">versaoSistema</label>
-            <input
-              id="versaoSistema"
-              type="text"
-              [value]="versaoSistema()"
-              (input)="atualizarVersaoSistema($event)"
-              class="input"
-              placeholder="ex: 1"
             />
           </div>
 
@@ -154,7 +195,12 @@ interface ConsultaState {
             acc-button
             type="submit"
             variant="primary"
-            [disabled]="carregando() || !documento().trim() || !idSistema().trim() || !idServico().trim()"
+            [disabled]="
+              carregando()
+              || !documento().trim()
+              || !idSistemaSelecionado()
+              || !idServicoSelecionado()
+            "
           >
             Executar
           </button>
@@ -342,9 +388,22 @@ interface ConsultaState {
       padding-right: 2.5rem;
     }
 
+    .input--select:disabled {
+      background-color: var(--acc-color-bg-disabled, #e2e8f0);
+      color: var(--acc-color-text-muted);
+      cursor: not-allowed;
+    }
+
     textarea.input {
       min-height: 6rem;
       resize: vertical;
+    }
+
+    .campo-ajuda {
+      margin: 0;
+      font-size: 0.75rem;
+      color: var(--acc-color-text-muted);
+      font-style: italic;
     }
 
     .carregando {
@@ -412,10 +471,10 @@ export class IntegraContadorConsultaPage implements OnInit {
 
   protected readonly cliente = signal<ClienteDto | null>(null);
   protected readonly verboSelecionado = signal<VerboIntegraContador>('Consultar');
+  protected readonly idSistemaSelecionado = signal<string>('');
+  protected readonly idServicoSelecionado = signal<string>('');
+  protected readonly versaoSistemaSelecionada = signal<string>('');
   protected readonly documento = signal<string>('');
-  protected readonly idSistema = signal<string>('');
-  protected readonly idServico = signal<string>('');
-  protected readonly versaoSistema = signal<string>('');
   protected readonly dados = signal<string>('');
   protected readonly confirmacaoExplicita = signal<boolean>(false);
 
@@ -425,6 +484,34 @@ export class IntegraContadorConsultaPage implements OnInit {
 
   protected readonly verbos = VERBOS;
   protected readonly ambienteEfetivo = this.serproAmbiente.ambienteEfetivo;
+
+  /** Sistemas disponíveis para o verbo selecionado. */
+  protected readonly sistemasDisponiveis = computed(() => {
+    const verbo = this.verboSelecionado();
+    return [...new Set(CATALOGO.filter((s) => s.verbo === verbo).map((s) => s.idSistema))];
+  });
+
+  /** Serviços disponíveis para o sistema selecionado (filtrado pelo verbo). */
+  protected readonly servicosDisponiveis = computed(() => {
+    const verbo = this.verboSelecionado();
+    const sistema = this.idSistemaSelecionado();
+    if (!sistema) return [];
+    return CATALOGO.filter(
+      (s) => s.verbo === verbo && s.idSistema === sistema,
+    ).map((s) => s.idServico);
+  });
+
+  /** Versões disponíveis para o serviço selecionado (filtrado pelo verbo e sistema). */
+  protected readonly versoesDisponiveis = computed(() => {
+    const verbo = this.verboSelecionado();
+    const sistema = this.idSistemaSelecionado();
+    const servico = this.idServicoSelecionado();
+    if (!servico) return [];
+    const entrada = CATALOGO.find(
+      (s) => s.verbo === verbo && s.idSistema === sistema && s.idServico === servico,
+    );
+    return entrada && entrada.versaoSistema ? [entrada.versaoSistema] : [];
+  });
 
   async ngOnInit(): Promise<void> {
     const clienteId = this.route.snapshot.queryParamMap.get('clienteId');
@@ -454,21 +541,6 @@ export class IntegraContadorConsultaPage implements OnInit {
     this.documento.set(target.value);
   }
 
-  protected atualizarIdSistema(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.idSistema.set(target.value);
-  }
-
-  protected atualizarIdServico(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.idServico.set(target.value);
-  }
-
-  protected atualizarVersaoSistema(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.versaoSistema.set(target.value);
-  }
-
   protected atualizarDados(event: Event): void {
     const target = event.target as HTMLTextAreaElement;
     this.dados.set(target.value);
@@ -477,6 +549,30 @@ export class IntegraContadorConsultaPage implements OnInit {
   protected atualizarConfirmacaoExplicita(event: Event): void {
     const target = event.target as HTMLInputElement;
     this.confirmacaoExplicita.set(target.checked);
+  }
+
+  /** Quando o verbo muda, reseta sistema, serviço e versão. */
+  protected aoMudarVerbo(event: Event): void {
+    const target = event.target as HTMLSelectElement;
+    this.verboSelecionado.set(target.value as VerboIntegraContador);
+    this.idSistemaSelecionado.set('');
+    this.idServicoSelecionado.set('');
+    this.versaoSistemaSelecionada.set('');
+  }
+
+  /** Quando o sistema muda, reseta serviço e versão. */
+  protected aoMudarSistema(event: Event): void {
+    const target = event.target as HTMLSelectElement;
+    this.idSistemaSelecionado.set(target.value);
+    this.idServicoSelecionado.set('');
+    this.versaoSistemaSelecionada.set('');
+  }
+
+  /** Quando o serviço muda, reseta a versão. */
+  protected aoMudarServico(event: Event): void {
+    const target = event.target as HTMLSelectElement;
+    this.idServicoSelecionado.set(target.value);
+    this.versaoSistemaSelecionada.set('');
   }
 
   protected async onSubmit(): Promise<void> {
@@ -490,9 +586,9 @@ export class IntegraContadorConsultaPage implements OnInit {
         documentoContribuinte: doc,
         verbo: this.verboSelecionado(),
         pedidoDados: {
-          idSistema: this.idSistema(),
-          idServico: this.idServico(),
-          versaoSistema: this.versaoSistema(),
+          idSistema: this.idSistemaSelecionado(),
+          idServico: this.idServicoSelecionado(),
+          versaoSistema: this.versaoSistemaSelecionada(),
           dados: this.dados(),
         },
         confirmacaoExplicita: this.confirmacaoExplicita(),
