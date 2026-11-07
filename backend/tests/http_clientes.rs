@@ -418,7 +418,7 @@ async fn validacao_de_criacao_retorna_400_com_envelope() {
         ),
         (
             "pessoa jurídica com CPF",
-            corpo_cliente("Pj", "52998224725", "Acme", None),
+            corpo_cliente("PJ", "52998224725", "Acme", None),
         ),
         (
             "nome vazio",
@@ -456,7 +456,7 @@ async fn atualiza_e_exclui_cliente_com_auditoria() {
             Method::POST,
             "/api/v1/clientes",
             Some(corpo_cliente(
-                "Pj",
+                "PJ",
                 "11444777000161",
                 "Acme Serviços Ltda",
                 Some("SIMPLES_NACIONAL"),
@@ -588,7 +588,7 @@ async fn filtros_paginacao_e_erros_invalidos() {
         ("52998224725", "PF", None),
         ("12345678909", "PF", None),
         ("16899535009", "PF", None),
-        ("11222333000181", "Pj", Some("MEI")),
+        ("11222333000181", "PJ", Some("MEI")),
     ] {
         let resposta = enviar(
             &ambiente.app,
@@ -641,7 +641,7 @@ async fn filtros_paginacao_e_erros_invalidos() {
     .await;
     let corpo = corpo_json(mey).await;
     assert_eq!(corpo["total"], 1);
-    assert_eq!(corpo["itens"][0]["tipo"], "Pj");
+    assert_eq!(corpo["itens"][0]["tipo"], "PJ");
     assert_eq!(corpo["itens"][0]["porteRegime"], "MEI");
 
     let paginada = enviar(
