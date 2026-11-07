@@ -363,7 +363,7 @@ export class ClienteFormComponent {
     }
 
     const payload = {
-      tipo: this.form.get('tipo')?.value === 'PJ' ? 'Pj' : 'Pf',
+      tipo: this.form.get('tipo')?.value === 'PJ' ? 'PJ' : 'PF',
       porteRegime: this.form.get('porteRegime')?.value || undefined,
       cpfCnpj,
       nomeRazaoSocial,

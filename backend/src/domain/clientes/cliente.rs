@@ -6,9 +6,13 @@ use uuid::Uuid;
 
 use super::cpf_cnpj::{CpfCnpj, TipoDocumento};
 
+/// O contrato HTTP usa "PF"/"PJ" (mesma grafia do banco, `@accurit/core`
+/// e da UI). O variant Rust continua `Pf`/`Pj` por convenção de nome.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TipoCliente {
+    #[serde(rename = "PF")]
     Pf,
+    #[serde(rename = "PJ")]
     Pj,
 }
 

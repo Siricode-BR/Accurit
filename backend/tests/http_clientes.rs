@@ -275,7 +275,7 @@ async fn crud_de_clientes_isolado_por_escritorio() {
             Method::POST,
             "/api/v1/clientes",
             Some(corpo_cliente(
-                "Pf",
+                "PF",
                 "529.982.247-25",
                 "Maria da Silva",
                 None,
@@ -296,7 +296,7 @@ async fn crud_de_clientes_isolado_por_escritorio() {
         pedido(
             Method::POST,
             "/api/v1/clientes",
-            Some(corpo_cliente("Pf", "52998224725", "Maria da Silva", None)),
+            Some(corpo_cliente("PF", "52998224725", "Maria da Silva", None)),
             Some(&token_alfa),
         ),
     )
@@ -310,7 +310,7 @@ async fn crud_de_clientes_isolado_por_escritorio() {
         pedido(
             Method::POST,
             "/api/v1/clientes",
-            Some(corpo_cliente("Pf", "12345678909", "Outro Tenant", None)),
+            Some(corpo_cliente("PF", "12345678909", "Outro Tenant", None)),
             Some(&token_beta),
         ),
     )
@@ -341,7 +341,7 @@ async fn crud_de_clientes_isolado_por_escritorio() {
             Method::PUT,
             &format!("/api/v1/clientes/{cliente_id}"),
             Some(corpo_cliente(
-                "Pf",
+                "PF",
                 "52998224725",
                 "Mudanca no Alheio",
                 None,
@@ -402,19 +402,19 @@ async fn validacao_de_criacao_retorna_400_com_envelope() {
     for (descricao, corpo) in [
         (
             "cpf com verificador errado",
-            corpo_cliente("Pf", "52998224724", "Maria da Silva", None),
+            corpo_cliente("PF", "52998224724", "Maria da Silva", None),
         ),
         (
             "cpf com dígitos repetidos",
-            corpo_cliente("Pf", "11111111111", "Maria da Silva", None),
+            corpo_cliente("PF", "11111111111", "Maria da Silva", None),
         ),
         (
             "cpf com tamanho errado",
-            corpo_cliente("Pf", "123456789", "Maria da Silva", None),
+            corpo_cliente("PF", "123456789", "Maria da Silva", None),
         ),
         (
             "pessoa física com porte",
-            corpo_cliente("Pf", "52998224725", "Maria da Silva", Some("MEI")),
+            corpo_cliente("PF", "52998224725", "Maria da Silva", Some("MEI")),
         ),
         (
             "pessoa jurídica com CPF",
@@ -422,7 +422,7 @@ async fn validacao_de_criacao_retorna_400_com_envelope() {
         ),
         (
             "nome vazio",
-            corpo_cliente("Pf", "52998224725", "   ", None),
+            corpo_cliente("PF", "52998224725", "   ", None),
         ),
     ] {
         let resposta = enviar(
@@ -585,9 +585,9 @@ async fn filtros_paginacao_e_erros_invalidos() {
     let token = token_de(&entrar_portal(&ambiente.app, "alfa", "OPERADOR").await);
 
     for (cpf, tipo, porte) in [
-        ("52998224725", "Pf", None),
-        ("12345678909", "Pf", None),
-        ("16899535009", "Pf", None),
+        ("52998224725", "PF", None),
+        ("12345678909", "PF", None),
+        ("16899535009", "PF", None),
         ("11222333000181", "Pj", Some("MEI")),
     ] {
         let resposta = enviar(
@@ -626,7 +626,7 @@ async fn filtros_paginacao_e_erros_invalidos() {
     let corpo = corpo_json(filtrada).await;
     assert_eq!(corpo["total"], 3);
     for item in corpo["itens"].as_array().expect("itens") {
-        assert_eq!(item["tipo"], "Pf");
+        assert_eq!(item["tipo"], "PF");
     }
 
     let mey = enviar(
@@ -702,7 +702,7 @@ async fn papeis_de_clientes_restringem_operacoes() {
         pedido(
             Method::POST,
             "/api/v1/clientes",
-            Some(corpo_cliente("Pf", "52998224725", "Maria da Silva", None)),
+            Some(corpo_cliente("PF", "52998224725", "Maria da Silva", None)),
             Some(&token_cliente),
         ),
     )
@@ -782,7 +782,7 @@ async fn rotas_de_clientes_exigem_token_e_audiencia_client() {
         pedido(
             Method::POST,
             "/api/v1/clientes",
-            Some(corpo_cliente("Pf", "52998224725", "Maria", None)),
+            Some(corpo_cliente("PF", "52998224725", "Maria", None)),
             None,
         ),
         pedido(
@@ -819,7 +819,7 @@ async fn rotas_de_clientes_exigem_token_e_audiencia_client() {
         (
             Method::POST,
             "/api/v1/clientes",
-            Some(corpo_cliente("Pf", "52998224725", "Maria", None)),
+            Some(corpo_cliente("PF", "52998224725", "Maria", None)),
         ),
         (
             Method::GET,
