@@ -7,12 +7,12 @@ use axum::{
 
 use crate::application::clientes::{
     AtualizarClienteUseCase, CriarClienteUseCase, ExcluirClienteUseCase, ListarClientesUseCase,
-    ObterClienteUseCase,
+    ListarConsultasDoClienteUseCase, ObterClienteUseCase, SituacaoFiscalDoClienteUseCase,
 };
 use crate::domain::auth::Audiencia;
 use crate::presentation::auth::{ExigirAudiencia, RequestContext, exigir};
 use crate::presentation::clientes::dto::{
-    AtualizarClienteRequest, CriarClienteRequest, ListarClientesQuery,
+    AtualizarClienteRequest, CriarClienteRequest, ListarClientesQuery, ListarConsultasQuery,
 };
 use crate::presentation::clientes::handlers;
 use crate::presentation::error::ApiError;
@@ -26,14 +26,19 @@ pub struct ClientesRouterState {
     pub listar: Arc<ListarClientesUseCase>,
     pub atualizar: Arc<AtualizarClienteUseCase>,
     pub excluir: Arc<ExcluirClienteUseCase>,
+    pub listar_consultas: Arc<ListarConsultasDoClienteUseCase>,
+    pub situacao_fiscal: Arc<SituacaoFiscalDoClienteUseCase>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn construir_clientes(
     criar: CriarClienteUseCase,
     obter: ObterClienteUseCase,
     listar: ListarClientesUseCase,
     atualizar: AtualizarClienteUseCase,
     excluir: ExcluirClienteUseCase,
+    listar_consultas: ListarConsultasDoClienteUseCase,
+    situacao_fiscal: SituacaoFiscalDoClienteUseCase,
     auth_state: crate::presentation::auth::AuthState,
 ) -> Router {
     let auth = ExigirAudiencia::novo(auth_state.tokens.clone(), Audiencia::Client);
@@ -44,6 +49,8 @@ pub fn construir_clientes(
         listar: Arc::new(listar),
         atualizar: Arc::new(atualizar),
         excluir: Arc::new(excluir),
+        listar_consultas: Arc::new(listar_consultas),
+        situacao_fiscal: Arc::new(situacao_fiscal),
     };
 
     Router::new()
@@ -54,6 +61,8 @@ pub fn construir_clientes(
                 .put(atualizar_cliente)
                 .delete(excluir_cliente),
         )
+        .route("/{id}/consultas", get(listar_consultas_do_cliente))
+        .route("/{id}/situacao-fiscal", get(situacao_fiscal_do_cliente))
         .route_layer(axum_middleware::from_fn_with_state(auth, exigir))
         .with_state(state)
 }
@@ -93,6 +102,34 @@ async fn listar_clientes(
         State(state.listar.as_ref().clone()),
         Extension(context),
         Query(query),
+    )
+    .await
+}
+
+async fn listar_consultas_do_cliente(
+    State(state): State<ClientesRouterState>,
+    Extension(context): Extension<RequestContext>,
+    Path(id): Path<Uuid>,
+    Query(query): Query<ListarConsultasQuery>,
+) -> Result<axum::response::Response, ApiError> {
+    handlers::listar_consultas_do_cliente(
+        State(state.listar_consultas.as_ref().clone()),
+        Extension(context),
+        Path(id),
+        Query(query),
+    )
+    .await
+}
+
+async fn situacao_fiscal_do_cliente(
+    State(state): State<ClientesRouterState>,
+    Extension(context): Extension<RequestContext>,
+    Path(id): Path<Uuid>,
+) -> Result<axum::response::Response, ApiError> {
+    handlers::situacao_fiscal_do_cliente(
+        State(state.situacao_fiscal.as_ref().clone()),
+        Extension(context),
+        Path(id),
     )
     .await
 }

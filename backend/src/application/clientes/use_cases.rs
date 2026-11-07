@@ -5,8 +5,10 @@ use uuid::Uuid;
 use crate::application::clientes::{
     AtualizarClienteCommand, AuditoriaClienteRepositorio, ClienteError, ClientePublico,
     ClienteRepositorio, CriarClienteCommand, EventoAuditoriaCliente, ExcluirClienteCommand,
-    ListagemClientes, ListarClientesCommand, ObterClienteCommand, PoliticaClientes,
-    RepositorioError,
+    ListagemClientes, ListagemConsultasDoCliente, ListarClientesCommand,
+    ListarConsultasDoClienteCommand, ObterClienteCommand, PoliticaClientes,
+    RepositorioConsultasDoCliente, RepositorioError, SituacaoFiscalDoClienteCommand,
+    SituacaoFiscalServico,
 };
 use crate::domain::clientes::{Cliente, CpfCnpj, NovoCliente, TipoCliente};
 
@@ -139,6 +141,78 @@ impl ListarClientesUseCase {
         Ok(self
             .repositorio
             .listar(comando.escritorio_id, comando.filtro, comando.paginacao)?)
+    }
+}
+
+/// Lista o histórico de consultas fiscais de UM cliente do escritório do
+/// contexto. O cliente é procurado com `escritorio_id` do contexto: um id
+/// de outro escritório responde 404 (IDOR), sem vazar existência.
+#[derive(Clone)]
+pub struct ListarConsultasDoClienteUseCase {
+    clientes: Arc<dyn ClienteRepositorio>,
+    consultas: Arc<dyn RepositorioConsultasDoCliente>,
+}
+
+impl ListarConsultasDoClienteUseCase {
+    pub fn novo(
+        clientes: Arc<dyn ClienteRepositorio>,
+        consultas: Arc<dyn RepositorioConsultasDoCliente>,
+    ) -> Self {
+        Self {
+            clientes,
+            consultas,
+        }
+    }
+
+    pub async fn executar(
+        &self,
+        comando: ListarConsultasDoClienteCommand,
+    ) -> Result<ListagemConsultasDoCliente, ClienteError> {
+        self.clientes
+            .buscar_por_id(comando.escritorio_id, comando.cliente_id)?
+            .ok_or(ClienteError::Repositorio(RepositorioError::NaoEncontrado))?;
+
+        self.consultas
+            .listar(
+                comando.escritorio_id,
+                comando.cliente_id,
+                comando.filtro,
+                comando.paginacao,
+            )
+            .map_err(Into::into)
+    }
+}
+
+/// Última tentativa por serviço fiscal do cliente (cartões de situação).
+/// Mesma regra de isolação do histórico: 404 para cliente alheio.
+#[derive(Clone)]
+pub struct SituacaoFiscalDoClienteUseCase {
+    clientes: Arc<dyn ClienteRepositorio>,
+    consultas: Arc<dyn RepositorioConsultasDoCliente>,
+}
+
+impl SituacaoFiscalDoClienteUseCase {
+    pub fn novo(
+        clientes: Arc<dyn ClienteRepositorio>,
+        consultas: Arc<dyn RepositorioConsultasDoCliente>,
+    ) -> Self {
+        Self {
+            clientes,
+            consultas,
+        }
+    }
+
+    pub async fn executar(
+        &self,
+        comando: SituacaoFiscalDoClienteCommand,
+    ) -> Result<Vec<SituacaoFiscalServico>, ClienteError> {
+        self.clientes
+            .buscar_por_id(comando.escritorio_id, comando.cliente_id)?
+            .ok_or(ClienteError::Repositorio(RepositorioError::NaoEncontrado))?;
+
+        self.consultas
+            .situacao_fiscal(comando.escritorio_id, comando.cliente_id)
+            .map_err(ClienteError::from)
     }
 }
 

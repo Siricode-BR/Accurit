@@ -12,7 +12,8 @@ use crate::application::certificados::{
 };
 use crate::application::clientes::{
     AtualizarClienteUseCase, CriarClienteUseCase, ExcluirClienteUseCase, ListarClientesUseCase,
-    ObterClienteUseCase, PoliticaClientes,
+    ListarConsultasDoClienteUseCase, ObterClienteUseCase, PoliticaClientes,
+    SituacaoFiscalDoClienteUseCase,
 };
 use crate::application::divida_ativa::use_cases::{
     ConsultarDevedorUseCase, ConsultarInscricaoUseCase,
@@ -68,6 +69,21 @@ where
     let excluir_clientes = ExcluirClienteUseCase::novo(
         std::sync::Arc::new(cliente_repo.clone()),
         std::sync::Arc::new(cliente_repo.clone()),
+    );
+
+    // Histórico e situação fiscal por cliente (leitura, SPEC §9.3).
+    let consultas_cliente_repo = std::sync::Arc::new(
+        crate::infrastructure::persistence::clientes::ConsultasDoClienteRepositorioDiesel::novo(
+            pool.clone(),
+        ),
+    );
+    let listar_consultas_cliente = ListarConsultasDoClienteUseCase::novo(
+        std::sync::Arc::new(cliente_repo.clone()),
+        consultas_cliente_repo.clone(),
+    );
+    let situacao_fiscal_cliente = SituacaoFiscalDoClienteUseCase::novo(
+        std::sync::Arc::new(cliente_repo.clone()),
+        consultas_cliente_repo,
     );
 
     let provisionar_tenant_uc = ProvisionarTenantUseCase::novo(
@@ -167,6 +183,8 @@ where
                 listar_clientes,
                 atualizar_clientes,
                 excluir_clientes,
+                listar_consultas_cliente,
+                situacao_fiscal_cliente,
                 auth_state.clone(),
             ),
         );

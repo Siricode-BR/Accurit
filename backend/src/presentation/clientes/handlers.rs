@@ -10,13 +10,14 @@ use uuid::Uuid;
 use crate::application::clientes::{
     AtualizarClienteCommand, AtualizarClienteUseCase, CriarClienteCommand, CriarClienteUseCase,
     ExcluirClienteCommand, ExcluirClienteUseCase, ListarClientesCommand, ListarClientesUseCase,
-    ObterClienteCommand, ObterClienteUseCase,
+    ListarConsultasDoClienteCommand, ListarConsultasDoClienteUseCase, ObterClienteCommand,
+    ObterClienteUseCase, SituacaoFiscalDoClienteCommand, SituacaoFiscalDoClienteUseCase,
 };
 use crate::domain::auth::Papel;
 use crate::presentation::auth::RequestContext;
 use crate::presentation::clientes::dto::{
     AtualizarClienteRequest, ClienteResponse, CriarClienteRequest, ListagemClientesResponse,
-    ListarClientesQuery,
+    ListagemConsultasResponse, ListarClientesQuery, ListarConsultasQuery, SituacaoFiscalResponse,
 };
 use crate::presentation::error::ApiError;
 
@@ -137,6 +138,55 @@ pub async fn excluir_cliente(
 
     excluir_use_case.executar(comando).await?;
     Ok(StatusCode::NO_CONTENT.into_response())
+}
+
+pub async fn listar_consultas_do_cliente(
+    State(use_case): State<ListarConsultasDoClienteUseCase>,
+    Extension(context): Extension<RequestContext>,
+    Path(id): Path<Uuid>,
+    Query(query): Query<ListarConsultasQuery>,
+) -> Result<Response, ApiError> {
+    if context.papel != Papel::Operador && context.papel != Papel::Cliente {
+        return Err(ApiError::proibido());
+    }
+
+    let escritorio_id = context.escritorio_id.ok_or_else(ApiError::proibido)?;
+    let (filtro, paginacao) = query.para_filtro_e_paginacao()?;
+
+    let listagem = use_case
+        .executar(ListarConsultasDoClienteCommand {
+            escritorio_id,
+            cliente_id: id,
+            filtro,
+            paginacao,
+        })
+        .await?;
+    Ok(Json(ListagemConsultasResponse::from(listagem)).into_response())
+}
+
+pub async fn situacao_fiscal_do_cliente(
+    State(use_case): State<SituacaoFiscalDoClienteUseCase>,
+    Extension(context): Extension<RequestContext>,
+    Path(id): Path<Uuid>,
+) -> Result<Response, ApiError> {
+    if context.papel != Papel::Operador && context.papel != Papel::Cliente {
+        return Err(ApiError::proibido());
+    }
+
+    let escritorio_id = context.escritorio_id.ok_or_else(ApiError::proibido)?;
+
+    let servicos = use_case
+        .executar(SituacaoFiscalDoClienteCommand {
+            escritorio_id,
+            cliente_id: id,
+        })
+        .await?;
+
+    Ok(Json(SituacaoFiscalResponse {
+        aviso: crate::presentation::divida_ativa::dto::AVISO_CONSULTIVO,
+        servicos: servicos.into_iter().map(Into::into).collect(),
+    })
+    .into_response())
 }
 
 pub fn erro_para_resposta(erro: crate::application::clientes::ClienteError) -> Response {
