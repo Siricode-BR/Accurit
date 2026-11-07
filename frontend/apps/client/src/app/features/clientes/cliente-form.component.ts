@@ -1,19 +1,19 @@
 import {
   Component,
   inject,
+  output,
+  signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
-import { CreateClienteRequestDto } from '@accurit/core';
+import { ClienteDto, CreateClienteRequestDto } from '@accurit/core';
 import {
   isValidDocument,
   isValidEmail,
   sanitizeDocument,
 } from '@accurit/shared';
 import { ClienteService } from '../../data/cliente.service';
-import { AccButtonComponent, AccCardComponent } from '@accurit/ui';
-import { AccDocumentMaskDirective } from '@accurit/ui';
+import { AccButtonComponent, AccDocumentMaskDirective } from '@accurit/ui';
 
 function apenasDigitos(value: string | null | undefined): string {
   if (!value) return '';
@@ -26,7 +26,6 @@ function apenasDigitos(value: string | null | undefined): string {
   imports: [
     ReactiveFormsModule,
     AccButtonComponent,
-    AccCardComponent,
     AccDocumentMaskDirective,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -35,7 +34,13 @@ function apenasDigitos(value: string | null | undefined): string {
 })
 export class ClienteFormComponent {
   protected readonly clienteService = inject(ClienteService);
-  protected readonly router = inject(Router);
+
+  /** Emitido com o cliente criado; quem hospeda decide para onde navegar. */
+  readonly cadastrado = output<ClienteDto>();
+  readonly cancelado = output<void>();
+
+  /** Erro do cadastro fica local para não derrubar a listagem que está atrás do modal. */
+  protected readonly erroCadastro = signal<string | null>(null);
 
   protected readonly form = inject(FormBuilder).group({
     tipo: ['', [Validators.required]],
@@ -126,12 +131,12 @@ export class ClienteFormComponent {
       telefone: telefone || undefined,
     } as unknown as CreateClienteRequestDto;
 
+    this.erroCadastro.set(null);
     this.clienteService.criar(payload).then(
-      () => {
-        this.router.navigate(['/clientes']);
-      },
-      (erro: any) => {
-        // erro já é exibido pelo clienteService.erro() no template
+      (novo) => this.cadastrado.emit(novo),
+      (erro: { error?: { message?: string }; message?: string }) => {
+        this.erroCadastro.set(erro?.error?.message ?? erro?.message ?? 'Falha ao cadastrar cliente.');
+        this.clienteService.definirErro('');
         this.form.markAllAsTouched();
       },
     );

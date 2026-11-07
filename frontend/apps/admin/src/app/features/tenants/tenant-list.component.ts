@@ -7,7 +7,8 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
+import { TenantFormComponent } from './tenant-form.component';
 import { TenantService } from '../../data/tenant.service';
 import {
   AccButtonComponent,
@@ -17,11 +18,12 @@ import {
   AccFilterChipsComponent,
   AccFilterOption,
   AccIconComponent,
+  AccModalComponent,
   AccSearchFieldComponent,
   AccSpinnerComponent,
 } from '@accurit/ui';
 import { formatPtBrDateTime } from '@accurit/shared';
-import { TenantDto } from '@accurit/core';
+import { CriarTenantResponseDto, TenantDto } from '@accurit/core';
 
 type FiltroAmbiente = 'todos' | 'producao' | 'trial';
 
@@ -36,7 +38,9 @@ type FiltroAmbiente = 'todos' | 'producao' | 'trial';
     AccCtaButtonComponent,
     AccFilterChipsComponent,
     AccIconComponent,
+    AccModalComponent,
     AccSearchFieldComponent,
+    TenantFormComponent,
     AccSpinnerComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -46,6 +50,8 @@ type FiltroAmbiente = 'todos' | 'producao' | 'trial';
 export class TenantListComponent implements OnInit {
   protected readonly tenantService = inject(TenantService);
   protected readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+  protected readonly modalNovoAberto = signal(false);
 
   protected readonly opcoesFiltro: readonly AccFilterOption<FiltroAmbiente>[] = [
     { value: 'todos', label: 'Todos' },
@@ -67,11 +73,32 @@ export class TenantListComponent implements OnInit {
   });
 
   protected novoTenant(): void {
-    this.router.navigate(['/tenants/novo']);
+    this.modalNovoAberto.set(true);
+  }
+
+  protected fecharModalNovo(): void {
+    this.modalNovoAberto.set(false);
+  }
+
+  /** Após cadastrar, fecha o popup e abre a página do escritório criado. */
+  protected aoCadastrar(novo: CriarTenantResponseDto): void {
+    this.modalNovoAberto.set(false);
+    void this.router.navigate(['/tenants', novo.escritorioId], {
+      state: { titularEmail: novo.emailTitular },
+    });
+  }
+
+  protected abrirDetalhes(tenant: TenantDto): void {
+    void this.router.navigate(['/tenants', tenant.id]);
   }
 
   ngOnInit(): void {
     this.tenantService.listar();
+    // Atalhos (dashboard, links antigos) chegam com ?novo=1 para abrir o cadastro direto.
+    if (this.route.snapshot.queryParamMap.has('novo')) {
+      this.modalNovoAberto.set(true);
+      void this.router.navigate([], { queryParams: { novo: null }, replaceUrl: true });
+    }
   }
 
   recarregar(): void {

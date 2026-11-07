@@ -1,15 +1,6 @@
-<div class="form-layout">
-  <div class="form-brand">
-    <span class="brand-name">Accurit</span>
-    <p class="brand-tagline">Cadastro de Cliente</p>
-  </div>
-
-  <acc-card>
-    <form [formGroup]="form" (ngSubmit)="onSubmit()" class="cliente-form">
-      <h2 class="form-title">Novo Cliente</h2>
-
-      @if (clienteService.erro()) {
-        <div class="alert-error" role="alert">{{ clienteService.erro() }}</div>
+<form [formGroup]="form" (ngSubmit)="onSubmit()" class="cliente-form" novalidate>
+      @if (erroCadastro(); as mensagem) {
+        <div class="alert-error" role="alert">{{ mensagem }}</div>
       }
 
       <div class="field">
@@ -39,7 +30,7 @@
         }
       </div>
 
-      <div class="field">
+      <div class="field field--full">
         <label for="nomeRazaoSocial" class="label">Nome / Razão Social</label>
         <input
           id="nomeRazaoSocial"
@@ -110,26 +101,24 @@
       <div class="actions">
         <button
           acc-button
+          type="button"
+          variant="outline"
+          size="md"
+          (click)="cancelado.emit()"
+          class="cliente-cancel"
+        >
+          Cancelar
+        </button>
+        <button
+          acc-button
           type="submit"
           variant="primary"
-          size="lg"
+          size="md"
           [loading]="clienteService.carregando()"
           [disabled]="form.invalid || clienteService.carregando()"
           class="cliente-submit"
         >
           Cadastrar Cliente
         </button>
-        <button
-          acc-button
-          type="button"
-          variant="outline"
-          size="lg"
-          (click)="router.navigate(['/clientes'])"
-          class="cliente-cancel"
-        >
-          Cancelar
-        </button>
       </div>
     </form>
-  </acc-card>
-</div>

@@ -1,0 +1,122 @@
+.page-container {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 1.5rem 2rem 2rem;
+}
+
+.voltar {
+  --acc-icon-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  color: var(--acc-color-text-muted);
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+.voltar:hover {
+  color: var(--acc-color-primary);
+}
+
+.sucesso {
+  margin: 0 0 1.25rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--acc-radius-md);
+  background-color: var(--acc-color-success-bg);
+  color: var(--acc-color-success);
+  font-size: 0.875rem;
+}
+
+.cabecalho {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.cabecalho__icone {
+  --acc-icon-size: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--acc-radius-lg);
+  background-color: var(--acc-color-primary-light);
+  color: var(--acc-color-primary);
+}
+
+.cabecalho__texto {
+  flex: 1;
+  min-width: 0;
+}
+
+.titulo {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--acc-color-text-main);
+}
+
+.slug {
+  margin: 0.125rem 0 0;
+  font-family: monospace;
+  font-size: 0.875rem;
+  color: var(--acc-color-text-muted);
+}
+
+.grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 1rem;
+}
+
+.secao__titulo {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--acc-color-text-main);
+}
+
+.secao__texto {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  color: var(--acc-color-text-muted);
+}
+
+.dados {
+  display: grid;
+  gap: 0.875rem;
+  margin: 0;
+}
+
+.dados dt {
+  font-size: 0.75rem;
+  color: var(--acc-color-text-muted);
+}
+
+.dados dd {
+  margin: 0.125rem 0 0;
+  font-size: 0.875rem;
+  color: var(--acc-color-text-main);
+}
+
+.mono {
+  font-family: monospace;
+}
+
+.alert-error {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--acc-radius-md);
+  background-color: var(--acc-color-danger-bg);
+  color: var(--acc-color-danger);
+  font-size: 0.875rem;
+}
+
+@media (max-width: 767px) {
+  .page-container {
+    padding: 1rem;
+  }
+}

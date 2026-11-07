@@ -6,4 +6,5 @@ export interface AcaoRapida {
   descricao: string;
   icone: AccIconName;
   rota: string;
+  params?: Record<string, string | number>;
 }

@@ -1,169 +1,126 @@
 import {
   Component,
   inject,
+  output,
+  signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
-import { CriarTenantRequestDto } from '@accurit/core';
+import { CriarTenantRequestDto, CriarTenantResponseDto } from '@accurit/core';
 import { TenantService } from '../../data/tenant.service';
-import { AccButtonComponent, AccCardComponent } from '@accurit/ui';
+import { AccButtonComponent } from '@accurit/ui';
 
 @Component({
   selector: 'app-admin-tenant-form',
   standalone: true,
-  imports: [ReactiveFormsModule, AccButtonComponent, AccCardComponent],
+  imports: [ReactiveFormsModule, AccButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="form-layout">
-      <div class="form-brand">
-        <span class="brand-name">Accurit</span>
-        <p class="brand-tagline">Cadastro de Escritório (Tenant)</p>
+    <form [formGroup]="form" (ngSubmit)="onSubmit()" class="tenant-form" novalidate>
+      @if (erroCadastro(); as mensagem) {
+        <div class="alert-error" role="alert">{{ mensagem }}</div>
+      }
+
+      <div class="field">
+        <label for="slug" class="label">Slug / Subdomínio</label>
+        <input
+          id="slug"
+          type="text"
+          formControlName="slug"
+          autocomplete="off"
+          class="input"
+          [class.input--error]="isInvalid('slug')"
+          placeholder="ex: escritorio-silva"
+        />
+        <small class="hint">Usado na URL do escritório (a-z, 0-9 e hífen).</small>
       </div>
 
-      <acc-card>
-        <form [formGroup]="form" (ngSubmit)="onSubmit()" class="tenant-form">
-          <h2 class="form-title">Novo Escritório</h2>
+      <div class="field">
+        <label for="nome" class="label">Nome do Escritório</label>
+        <input
+          id="nome"
+          type="text"
+          formControlName="nome"
+          autocomplete="off"
+          class="input"
+          [class.input--error]="isInvalid('nome')"
+          placeholder="ex: Escritório Silva & Associados"
+        />
+      </div>
 
-          @if (tenantService.erro()) {
-            <div class="alert-error" role="alert">{{ tenantService.erro() }}</div>
-          }
+      <div class="field">
+        <label for="emailTitular" class="label">E-mail do Titular</label>
+        <input
+          id="emailTitular"
+          type="email"
+          formControlName="emailTitular"
+          autocomplete="username"
+          class="input"
+          [class.input--error]="isInvalid('emailTitular')"
+        />
+      </div>
 
-          <div class="field">
-            <label for="slug" class="label">Slug / Subdomínio</label>
-            <input
-              id="slug"
-              type="text"
-              formControlName="slug"
-              autocomplete="off"
-              class="input"
-              [class.input--error]="isInvalid('slug')"
-              placeholder="ex: escritorio-silva"
-            />
-            <small class="hint">Usado na URL do escritório (a-z, 0-9 e hífen).</small>
-          </div>
+      <div class="field">
+        <label for="cpfTitular" class="label">CPF do Titular</label>
+        <input
+          id="cpfTitular"
+          type="text"
+          formControlName="cpfTitular"
+          autocomplete="off"
+          class="input"
+          [class.input--error]="isInvalid('cpfTitular')"
+          placeholder="000.000.000-00"
+        />
+      </div>
 
-          <div class="field">
-            <label for="nome" class="label">Nome do Escritório</label>
-            <input
-              id="nome"
-              type="text"
-              formControlName="nome"
-              autocomplete="off"
-              class="input"
-              [class.input--error]="isInvalid('nome')"
-              placeholder="ex: Escritório Silva & Associados"
-            />
-          </div>
+      <div class="field field--full">
+        <label for="senhaTitular" class="label">Senha do Titular</label>
+        <input
+          id="senhaTitular"
+          type="password"
+          formControlName="senhaTitular"
+          autocomplete="new-password"
+          class="input"
+          [class.input--error]="isInvalid('senhaTitular')"
+          placeholder="mínimo 6 caracteres"
+        />
+      </div>
 
-          <div class="field">
-            <label for="emailTitular" class="label">E-mail do Titular</label>
-            <input
-              id="emailTitular"
-              type="email"
-              formControlName="emailTitular"
-              autocomplete="username"
-              class="input"
-              [class.input--error]="isInvalid('emailTitular')"
-            />
-          </div>
-
-          <div class="field">
-            <label for="cpfTitular" class="label">CPF do Titular</label>
-            <input
-              id="cpfTitular"
-              type="text"
-              formControlName="cpfTitular"
-              autocomplete="off"
-              class="input"
-              [class.input--error]="isInvalid('cpfTitular')"
-              placeholder="000.000.000-00"
-            />
-          </div>
-
-          <div class="field">
-            <label for="senhaTitular" class="label">Senha do Titular</label>
-            <input
-              id="senhaTitular"
-              type="password"
-              formControlName="senhaTitular"
-              autocomplete="new-password"
-              class="input"
-              [class.input--error]="isInvalid('senhaTitular')"
-              placeholder="mínimo 6 caracteres"
-            />
-          </div>
-
-          <button
-            acc-button
-            type="submit"
-            variant="primary"
-            size="lg"
-            [loading]="tenantService.carregando()"
-            [disabled]="form.invalid || tenantService.carregando()"
-            class="tenant-submit"
-          >
-            Criar Escritório
-          </button>
-
-          <button
-            acc-button
-            type="button"
-            variant="outline"
-            size="lg"
-            (click)="router.navigate(['/tenants'])"
-            class="tenant-cancel"
-          >
-            Cancelar
-          </button>
-        </form>
-      </acc-card>
-    </div>
+      <div class="actions">
+        <button acc-button type="button" variant="outline" size="md" (click)="cancelado.emit()">
+          Cancelar
+        </button>
+        <button
+          acc-button
+          type="submit"
+          variant="primary"
+          size="md"
+          [loading]="enviando()"
+          [disabled]="form.invalid || enviando()"
+        >
+          Criar Escritório
+        </button>
+      </div>
+    </form>
   `,
   styles: `
-    .form-layout {
-      min-height: calc(100dvh - 4rem);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 2rem;
-      padding: 1.5rem;
-      background-color: var(--acc-color-bg);
-    }
-
-    .form-brand {
-      text-align: center;
-    }
-
-    .brand-name {
-      font-size: 2rem;
-      font-weight: 800;
-      color: var(--acc-color-primary);
-      letter-spacing: -0.04em;
-    }
-
-    .brand-tagline {
-      margin: 0.25rem 0 0;
-      color: var(--acc-color-text-muted);
-      font-size: 0.875rem;
-    }
-
     .tenant-form {
-      display: flex;
-      flex-direction: column;
-      gap: 1.25rem;
-      min-width: 340px;
-      max-width: 460px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
       width: 100%;
-      padding: 2rem;
     }
 
-    .form-title {
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: var(--acc-color-text-main);
-      margin: 0 0 0.5rem;
+    @media (min-width: 560px) {
+      .tenant-form {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .field--full,
+    .alert-error,
+    .actions {
+      grid-column: 1 / -1;
     }
 
     .field {
@@ -181,7 +138,6 @@ import { AccButtonComponent, AccCardComponent } from '@accurit/ui';
     .hint {
       font-size: 0.75rem;
       color: var(--acc-color-text-muted);
-      margin-top: 0.125rem;
     }
 
     .input {
@@ -213,33 +169,21 @@ import { AccButtonComponent, AccCardComponent } from '@accurit/ui';
 
     .actions {
       display: flex;
+      justify-content: flex-end;
       gap: 0.75rem;
       margin-top: 0.5rem;
-    }
-
-    .tenant-submit {
-      width: 100%;
-    }
-
-    .tenant-cancel {
-      width: 100%;
-    }
-
-    @media (min-width: 480px) {
-      .actions {
-        flex-direction: row;
-      }
-      .tenant-submit,
-      .tenant-cancel {
-        width: auto;
-        flex: 1;
-      }
     }
   `,
 })
 export class TenantFormComponent {
-  protected readonly tenantService = inject(TenantService);
-  protected readonly router = inject(Router);
+  private readonly tenantService = inject(TenantService);
+
+  /** Emitido com o escritório criado; quem hospeda decide para onde navegar. */
+  readonly cadastrado = output<CriarTenantResponseDto>();
+  readonly cancelado = output<void>();
+
+  protected readonly enviando = signal(false);
+  protected readonly erroCadastro = signal<string | null>(null);
 
   protected readonly form = inject(FormBuilder).group({
     slug: ['', [Validators.required, Validators.pattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)]],
@@ -261,12 +205,16 @@ export class TenantFormComponent {
     }
 
     const payload = this.form.getRawValue() as unknown as CriarTenantRequestDto;
+    this.enviando.set(true);
+    this.erroCadastro.set(null);
     this.tenantService.criar(payload).then(
-      () => {
-        this.router.navigate(['/tenants']);
+      (novo) => {
+        this.enviando.set(false);
+        this.cadastrado.emit(novo);
       },
-      () => {
-        // erro já é exibido pelo tenantService.erro() no template
+      (erro: { error?: { message?: string }; message?: string }) => {
+        this.enviando.set(false);
+        this.erroCadastro.set(erro?.error?.message ?? erro?.message ?? 'Falha ao criar o escritório.');
         this.form.markAllAsTouched();
       },
     );

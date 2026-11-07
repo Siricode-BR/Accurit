@@ -21,6 +21,7 @@ interface AcaoRapida {
   descricao: string;
   icone: AccIconName;
   rota: string;
+  params?: Record<string, string | number>;
 }
 
 /**
@@ -50,7 +51,7 @@ export class DashboardPage implements OnInit {
   private readonly sessao = inject(SessionStore);
 
   protected readonly acoes: readonly AcaoRapida[] = [
-    { id: 'novo', titulo: 'Cadastrar escritório', descricao: 'Crie um novo tenant com titular.', icone: 'plus', rota: '/tenants/novo' },
+    { id: 'novo', titulo: 'Cadastrar escritório', descricao: 'Crie um novo tenant com titular.', icone: 'plus', rota: '/tenants', params: { novo: 1 } },
     { id: 'lista', titulo: 'Ver escritórios', descricao: 'Lista, busca e ambiente SERPRO.', icone: 'building', rota: '/tenants' },
   ];
 

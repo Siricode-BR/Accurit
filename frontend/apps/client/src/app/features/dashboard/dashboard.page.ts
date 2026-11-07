@@ -42,7 +42,7 @@ export class DashboardPage implements OnInit {
   private readonly sessao = inject(SessionStore);
 
   protected readonly acoes: readonly AcaoRapida[] = [
-    { id: 'novo-cliente', titulo: 'Cadastrar cliente', descricao: 'Adicione um novo contribuinte.', icone: 'user-plus', rota: '/clientes/novo' },
+    { id: 'novo-cliente', titulo: 'Cadastrar cliente', descricao: 'Adicione um novo contribuinte.', icone: 'user-plus', rota: '/clientes', params: { novo: 1 } },
     { id: 'clientes', titulo: 'Ver clientes', descricao: 'Lista e fichas dos clientes.', icone: 'clientes', rota: '/clientes' },
     { id: 'integra-contador', titulo: 'Consultar Integra Contador', descricao: 'Consulta avulsa por CPF/CNPJ.', icone: 'integra-contador', rota: '/consultas/integra-contador' },
     { id: 'divida-ativa', titulo: 'Consultar Dívida Ativa', descricao: 'Consulta avulsa por devedor ou inscrição.', icone: 'divida-ativa', rota: '/consultas/divida-ativa' },

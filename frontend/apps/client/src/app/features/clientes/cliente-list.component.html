@@ -180,3 +180,14 @@
     </div>
   }
 </div>
+
+@if (modalNovoAberto()) {
+  <acc-modal
+    title="Novo cliente"
+    subtitle="Cadastre um contribuinte para consultas e acompanhamento."
+    size="lg"
+    (fechar)="fecharModalNovo()"
+  >
+    <app-client-form (cadastrado)="aoCadastrar($event)" (cancelado)="fecharModalNovo()" />
+  </acc-modal>
+}

@@ -26,7 +26,7 @@
     <h2 id="titulo-acoes" class="bloco-titulo">Ações rápidas</h2>
     <div class="acoes">
       @for (acao of acoes; track acao.id) {
-        <a class="acao" [routerLink]="acao.rota">
+        <a class="acao" [routerLink]="acao.rota" [queryParams]="acao.params">
           <acc-icon [name]="acao.icone" />
           <span class="acao-textos">
             <span class="acao-titulo">{{ acao.titulo }}</span>
@@ -49,7 +49,7 @@
         title="Nenhum cliente cadastrado"
         descricao="Cadastre o primeiro cliente para começar a consultar."
       >
-        <a acc-button variant="primary" routerLink="/clientes/novo">Cadastrar cliente</a>
+        <a acc-button variant="primary" routerLink="/clientes" [queryParams]="{ novo: 1 }">Cadastrar cliente</a>
       </acc-empty-state>
     } @else {
       <ul class="recentes">

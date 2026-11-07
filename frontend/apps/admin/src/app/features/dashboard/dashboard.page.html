@@ -1,6 +1,6 @@
 <div class="page-container">
   <acc-page-header [title]="saudacao()" [subtitle]="subtitulo()">
-    <a acc-cta icon="plus" routerLink="/tenants/novo">Novo escritório</a>
+    <a acc-cta icon="plus" routerLink="/tenants" [queryParams]="{ novo: 1 }">Novo escritório</a>
   </acc-page-header>
 
   <section class="indicadores" aria-label="Indicadores">
@@ -54,7 +54,7 @@
       <h2 id="titulo-acoes" class="bloco-titulo">Ações rápidas</h2>
       <div class="acoes">
         @for (acao of acoes; track acao.id) {
-          <a class="acao" [routerLink]="acao.rota">
+          <a class="acao" [routerLink]="acao.rota" [queryParams]="acao.params">
             <acc-icon [name]="acao.icone" />
             <span class="acao-textos">
               <span class="acao-titulo">{{ acao.titulo }}</span>
@@ -81,7 +81,7 @@
         title="Nenhum escritório cadastrado"
         descricao="Cadastre o primeiro escritório para começar a operar a plataforma."
       >
-        <a acc-button variant="primary" routerLink="/tenants/novo">Cadastrar escritório</a>
+        <a acc-button variant="primary" routerLink="/tenants" [queryParams]="{ novo: 1 }">Cadastrar escritório</a>
       </acc-empty-state>
     } @else {
       <ul class="recentes">

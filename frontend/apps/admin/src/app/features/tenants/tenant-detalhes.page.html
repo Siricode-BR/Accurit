@@ -1,0 +1,79 @@
+<div class="page-container">
+  <a class="voltar" routerLink="/tenants">
+    <acc-icon name="chevron-left" />
+    Escritórios
+  </a>
+
+  @if (tenant(); as t) {
+    @if (titularEmail) {
+      <p class="sucesso" role="status">
+        Escritório cadastrado com sucesso. O titular pode acessar com <strong>{{ titularEmail }}</strong>.
+      </p>
+    }
+
+    <header class="cabecalho">
+      <span class="cabecalho__icone"><acc-icon name="building" /></span>
+      <div class="cabecalho__texto">
+        <h1 class="titulo">{{ t.nome }}</h1>
+        <p class="slug">{{ t.slug }}</p>
+      </div>
+      <acc-badge [status]="t.modoTrialSerpro ? 'warning' : 'success'">
+        {{ t.modoTrialSerpro ? 'Trial SERPRO' : 'Produção' }}
+      </acc-badge>
+    </header>
+
+    @if (erroAcao(); as mensagem) {
+      <div class="alert-error" role="alert">{{ mensagem }}</div>
+    }
+
+    <div class="grade">
+      <acc-card>
+        <section class="secao">
+          <h2 class="secao__titulo">Ambiente SERPRO</h2>
+          <p class="secao__texto">
+            {{
+              t.modoTrialSerpro
+                ? 'As consultas deste escritório usam o ambiente de avaliação (dados demonstrativos).'
+                : 'As consultas deste escritório usam o ambiente real do SERPRO.'
+            }}
+          </p>
+          <button acc-button variant="outline" size="md" [loading]="alterando()" (click)="alternarAmbiente()">
+            {{ t.modoTrialSerpro ? 'Ativar Produção' : 'Mudar para Trial' }}
+          </button>
+        </section>
+      </acc-card>
+
+      <acc-card>
+        <section class="secao">
+          <h2 class="secao__titulo">Informações</h2>
+          <dl class="dados">
+            <div>
+              <dt>Slug / Subdomínio</dt>
+              <dd class="mono">{{ t.slug }}</dd>
+            </div>
+            <div>
+              <dt>Última atualização</dt>
+              <dd>{{ formatarData(t.atualizadoEm) }}</dd>
+            </div>
+            <div>
+              <dt>Versão do registro</dt>
+              <dd>{{ t.versao }}</dd>
+            </div>
+            @if (titularEmail) {
+              <div>
+                <dt>E-mail do titular</dt>
+                <dd>{{ titularEmail }}</dd>
+              </div>
+            }
+          </dl>
+        </section>
+      </acc-card>
+    </div>
+  } @else if (carregando()) {
+    <acc-skeleton />
+  } @else {
+    <acc-empty-state title="Escritório não encontrado" descricao="Ele pode ter sido removido ou o link está incorreto.">
+      <a acc-button variant="primary" routerLink="/tenants">Voltar para a lista</a>
+    </acc-empty-state>
+  }
+</div>

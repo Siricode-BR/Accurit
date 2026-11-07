@@ -1,4 +1,5 @@
-import { Routes } from '@angular/router';
+import { inject } from '@angular/core';
+import { Router, Routes } from '@angular/router';
 import { authGuard, publicGuard } from './core/auth/auth.guards';
 import { operadorGuard } from './core/auth/operador.guards';
 
@@ -28,10 +29,9 @@ export const routes: Routes = [
       import('./features/clientes/cliente-list.component').then((m) => m.ClienteListComponent),
   },
   {
+    // Cadastro agora é um modal em /clientes; mantém links antigos funcionando.
     path: 'clientes/novo',
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import('./features/clientes/cliente-form.component').then((m) => m.ClienteFormComponent),
+    redirectTo: () => inject(Router).parseUrl('/clientes?novo=1'),
   },
   {
     path: 'clientes/:id',

@@ -8,7 +8,8 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
+import { ClienteFormComponent } from './cliente-form.component';
 import { CommonModule } from '@angular/common';
 import { ClienteService } from '../../data/cliente.service';
 import { ProcuracaoService } from '../../data/procuracao.service';
@@ -19,6 +20,7 @@ import {
   AccSpinnerComponent,
   AccCtaButtonComponent,
   AccIconComponent,
+  AccModalComponent,
   AccSearchFieldComponent,
   AccFilterChipsComponent,
   AccFilterOption,
@@ -37,7 +39,9 @@ import { ClienteDto, FiltroClientes } from '@accurit/core';
     AccSpinnerComponent,
     AccCtaButtonComponent,
     AccIconComponent,
+    AccModalComponent,
     AccSearchFieldComponent,
+    ClienteFormComponent,
     AccFilterChipsComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -48,6 +52,7 @@ export class ClienteListComponent implements OnInit {
   protected readonly clienteService = inject(ClienteService);
   protected readonly procuracaoService = inject(ProcuracaoService);
   protected readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly opcoesFiltro: readonly AccFilterOption<FiltroClientes>[] = [
@@ -59,6 +64,7 @@ export class ClienteListComponent implements OnInit {
     { value: 'cnpj_real', label: 'Lucro Real' },
   ];
 
+  readonly modalNovoAberto = signal(false);
   readonly termoBusca = signal<string>('');
   readonly filtroAtivo = signal<FiltroClientes>('todos');
 
@@ -88,6 +94,11 @@ export class ClienteListComponent implements OnInit {
 
   ngOnInit(): void {
     this.clienteService.listar();
+    // Atalhos (dashboard, links antigos) chegam com ?novo=1 para abrir o cadastro direto.
+    if (this.route.snapshot.queryParamMap.has('novo')) {
+      this.modalNovoAberto.set(true);
+      void this.router.navigate([], { queryParams: { novo: null }, replaceUrl: true });
+    }
   }
 
   aplicarFiltro(filtro: FiltroClientes): void {
@@ -104,7 +115,18 @@ export class ClienteListComponent implements OnInit {
   }
 
   abrirModalNovo(): void {
-    this.router.navigate(['/clientes/novo']);
+    this.clienteService.definirErro('');
+    this.modalNovoAberto.set(true);
+  }
+
+  fecharModalNovo(): void {
+    this.modalNovoAberto.set(false);
+  }
+
+  /** Após cadastrar, fecha o popup e abre a ficha do cliente criado. */
+  aoCadastrar(cliente: ClienteDto): void {
+    this.modalNovoAberto.set(false);
+    void this.router.navigate(['/clientes', cliente.id]);
   }
 
   abrirDetalhes(cliente: ClienteDto): void {

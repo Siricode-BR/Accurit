@@ -1,4 +1,5 @@
-import { Routes } from '@angular/router';
+import { inject } from '@angular/core';
+import { Router, Routes } from '@angular/router';
 import { authGuard, publicGuard } from './core/auth/auth.guards';
 
 export const routes: Routes = [
@@ -26,10 +27,15 @@ export const routes: Routes = [
       import('./features/tenants/tenant-list.component').then((m) => m.TenantListComponent),
   },
   {
+    // Cadastro agora é um modal em /tenants; mantém links antigos funcionando.
     path: 'tenants/novo',
+    redirectTo: () => inject(Router).parseUrl('/tenants?novo=1'),
+  },
+  {
+    path: 'tenants/:id',
     canActivate: [authGuard],
     loadComponent: () =>
-      import('./features/tenants/tenant-form.component').then((m) => m.TenantFormComponent),
+      import('./features/tenants/tenant-detalhes.page').then((m) => m.TenantDetalhesPage),
   },
   { path: '**', redirectTo: 'dashboard' },
 ];
