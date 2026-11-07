@@ -5,8 +5,10 @@
 **Legenda:** `[ ]` pendente · `[x]` concluído · `[~]` em andamento. A marcação deve refletir o estado real do repositório.
 
 **Estado atual:** a Fase 0 (reconciliação documental e configuração) foi concluída. A Fase 1
-(fundação, infraestrutura e base multi-tenant) foi implementada e validada tecnicamente; o aceite
-formal está pendente. A Fase 2A (login por aplicação) foi implementada e revisada pelo
+(fundação, infraestrutura e base multi-tenant) foi implementada e validada tecnicamente; o
+frontend da plataforma do escritório agora inclui a tela de detalhes do cliente somente leitura
+com abas por `?aba=`, cartões de situação fiscal, histórico de consultas com paginação, edição
+restrita a `OPERADOR` e tela de consulta Dívida Ativa pré-preenchida por `?clienteId=`. A Fase 2A (login por aplicação) foi implementada e revisada pelo
 [ADR-0010](docs/ADR/0010-revisao-atores-papeis-e-provisionamento.md) — a ligação papel↔audiência e
 a separação do gestor SaaS (`administradores`/`sessoes_admin`) já estão no código e nas tabelas,
 com testes. A Fase 2B (backoffice de tenants, clientes, certificados e procurações) está

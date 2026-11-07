@@ -480,7 +480,8 @@ npm run build
 
 cd ../client
 npm ci
-npm test -- --watch=false
+npm test -- --watch=false          # Karma/Jasmine (ng test)
+npm run test:vitest -- --watch=false   # Vitest (serviços, guards, estado)
 npm run build
 
 # Next.js

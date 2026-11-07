@@ -1169,6 +1169,8 @@ e a revogação da família operam de forma idêntica a `sessoes`, com os evento
 | `GET` | `/api/v1/clientes/{id}` | Detalhe do cliente |
 | `PUT` | `/api/v1/clientes/{id}` | Atualização (campos opcionais aplicados parcialmente, semântica PATCH em corpo) |
 | `DELETE` | `/api/v1/clientes/{id}` | Remoção lógica ou física conforme política |
+| `GET` | `/api/v1/clientes/{id}/consultas` | Histórico paginado de consultas fiscais do cliente (apenas leitura, papéis `CLIENTE`/`OPERADOR`) |
+| `GET` | `/api/v1/clientes/{id}/situacao-fiscal` | Resumo por serviço fiscal (cartões da visão geral, apenas leitura, papéis `CLIENTE`/`OPERADOR`) |
 | `GET` | `/api/v1/divida-ativa/devedores/{cpfCnpj}` | Consulta devedor |
 | `GET` | `/api/v1/divida-ativa/inscricoes/{numero}` | Detalhe da inscrição |
 | `POST` | `/api/v1/integra-contador/{verbo}` | Execução de `apoiar`, `consultar`, `declarar`, `emitir` ou `monitorar` |
