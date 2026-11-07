@@ -95,12 +95,10 @@ interface ConsultaState {
             <label for="verbo" class="label">Verbo</label>
             <select id="verbo"
               [(ngModel)]="verboSelecionado"
-              (change)="aoMudarVerbo($event)"
               class="input input--select"
+              disabled
             >
-              @for (v of verbos; track v.valor) {
-                <option [value]="v.valor">{{ v.label }}</option>
-              }
+              <option [value]="verboSelecionado">{{ verboSelecionado }}</option>
             </select>
           </div>
 
@@ -549,15 +547,6 @@ export class IntegraContadorConsultaPage implements OnInit {
   protected atualizarConfirmacaoExplicita(event: Event): void {
     const target = event.target as HTMLInputElement;
     this.confirmacaoExplicita.set(target.checked);
-  }
-
-  /** Quando o verbo muda, reseta sistema, serviço e versão. */
-  protected aoMudarVerbo(event: Event): void {
-    const target = event.target as HTMLSelectElement;
-    this.verboSelecionado.set(target.value as VerboIntegraContador);
-    this.idSistemaSelecionado.set('');
-    this.idServicoSelecionado.set('');
-    this.versaoSistemaSelecionada.set('');
   }
 
   /** Quando o sistema muda, reseta serviço e versão. */
