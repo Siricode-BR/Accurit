@@ -13,6 +13,7 @@ pub struct Escritorio {
 pub struct Usuario {
     pub id: Uuid,
     pub escritorio_id: Uuid,
+    pub nome: String,
     pub email: String,
     pub senha_hash: String,
     pub papel: Papel,
@@ -63,6 +64,7 @@ mod tests {
         Usuario {
             id: Uuid::now_v7(),
             escritorio_id: Uuid::now_v7(),
+            nome: "Teste".into(),
             email: "teste@exemplo.test".into(),
             senha_hash: "hash".into(),
             papel: Papel::Operador,

@@ -143,7 +143,7 @@ fn validar_slug(slug: &str) -> Result<(), ProvisionarError> {
     Ok(())
 }
 
-fn validar_nome(nome: &str) -> Result<(), ProvisionarError> {
+pub(crate) fn validar_nome(nome: &str) -> Result<(), ProvisionarError> {
     let limpo = nome.trim();
     if limpo.is_empty() || limpo.chars().count() > 200 {
         return Err(ProvisionarError::Validacao(
@@ -153,7 +153,7 @@ fn validar_nome(nome: &str) -> Result<(), ProvisionarError> {
     Ok(())
 }
 
-fn validar_email(email: &str) -> Result<(), ProvisionarError> {
+pub(crate) fn validar_email(email: &str) -> Result<(), ProvisionarError> {
     let email = email.trim().to_ascii_lowercase();
     let mut partes = email.split('@');
     let (Some(local), Some(dominio), None) = (partes.next(), partes.next(), partes.next()) else {
@@ -165,7 +165,7 @@ fn validar_email(email: &str) -> Result<(), ProvisionarError> {
     Ok(())
 }
 
-fn validar_cpf(cpf: &str) -> Result<(), ProvisionarError> {
+pub(crate) fn validar_cpf(cpf: &str) -> Result<(), ProvisionarError> {
     let digitos: String = cpf.chars().filter(|c| c.is_ascii_digit()).collect();
     if digitos.len() != 11 {
         return Err(ProvisionarError::Validacao(
@@ -195,7 +195,7 @@ fn calcular_digito(digitos: &[u32], peso_inicial: u32) -> u32 {
     if resto == 10 { 0 } else { resto }
 }
 
-fn validar_senha(senha: &str) -> Result<(), ProvisionarError> {
+pub(crate) fn validar_senha(senha: &str) -> Result<(), ProvisionarError> {
     if senha.len() < 8 {
         return Err(ProvisionarError::Validacao(
             "senha deve ter pelo menos 8 caracteres".into(),

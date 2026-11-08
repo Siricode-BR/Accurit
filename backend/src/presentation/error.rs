@@ -5,6 +5,7 @@ use serde::Serialize;
 
 use crate::application::admin::ProvisionarError;
 use crate::application::clientes::ClienteError;
+use crate::application::usuarios::{RepositorioError as UsuarioRepoError, UsuarioError};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -292,6 +293,29 @@ impl From<crate::application::certificados::CertificadoError> for ApiError {
             crate::application::certificados::CertificadoError::Fingerprint(e) => {
                 Self::validacao(e.to_string())
             }
+        }
+    }
+}
+
+impl From<UsuarioError> for ApiError {
+    fn from(erro: UsuarioError) -> Self {
+        match erro {
+            UsuarioError::Validacao(msg) => Self::validacao(msg),
+            UsuarioError::NaoEncontrado => Self::nao_encontrado("usuário"),
+            UsuarioError::EscritorioNaoEncontrado => Self::nao_encontrado("escritório"),
+            UsuarioError::Conflito(msg) => Self::conflito(msg),
+            UsuarioError::Senha => Self::erro_interno(),
+            UsuarioError::Repositorio(e) => match e {
+                UsuarioRepoError::Indisponivel => Self::indisponivel(),
+                UsuarioRepoError::Dados => Self::erro_interno(),
+                UsuarioRepoError::EmailExistente => {
+                    Self::conflito("Já existe um usuário com este e-mail")
+                }
+                UsuarioRepoError::CpfExistente => {
+                    Self::conflito("CPF já cadastrado neste escritório")
+                }
+                UsuarioRepoError::EscritorioInexistente => Self::nao_encontrado("escritório"),
+            },
         }
     }
 }

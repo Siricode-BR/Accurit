@@ -17,6 +17,7 @@ export interface ClienteDto {
   cpfCnpj: string;
   nomeRazaoSocial: string;
   nomeFantasia?: string;
+  representanteNome?: string;
   email?: string;
   telefone?: string;
   criadoEm: string;
@@ -36,6 +37,7 @@ export interface CreateClienteRequestDto {
   cpfCnpj: string;
   nomeRazaoSocial: string;
   nomeFantasia?: string;
+  representanteNome?: string;
   email?: string;
   telefone?: string;
 }
@@ -46,6 +48,7 @@ export interface UpdateClienteRequestDto {
   cpfCnpj?: string;
   nomeRazaoSocial?: string;
   nomeFantasia?: string | null;
+  representanteNome?: string | null;
   email?: string | null;
   telefone?: string | null;
 }

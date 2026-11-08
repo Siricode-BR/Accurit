@@ -1,17 +1,6 @@
 <div class="page-container">
-  <header class="page-header">
-    <button
-      acc-button
-      variant="ghost"
-      size="sm"
-      (click)="voltarParaLista()"
-    >
-      ← Voltar à lista
-    </button>
-    <h1 class="page-title">Detalhes do cliente</h1>
-    @if (cliente(); as c) {
-      <span class="type-badge">{{ c.tipo }}</span>
-    }
+  <acc-page-header title="Detalhes do cliente" [subtitle]="cliente()?.nomeRazaoSocial ?? ''">
+    <button acc-back label="Voltar para clientes" (click)="voltarParaLista()"></button>
     <div class="page-acoes">
       @if (podeEditar()) {
         <button
@@ -43,7 +32,7 @@
         Integra Contador
       </button>
     </div>
-  </header>
+  </acc-page-header>
 
   @if (estadoCliente() === 'carregando') {
     <div class="carregando-cliente" aria-hidden="true">
@@ -107,6 +96,12 @@
                   <dd>{{ c.nomeFantasia }}</dd>
                 </div>
               }
+              @if (c.representanteNome) {
+                <div class="dado-item">
+                  <dt>Representante</dt>
+                  <dd>{{ c.representanteNome }}</dd>
+                </div>
+              }
               @if (c.porteRegime) {
                 <div class="dado-item">
                   <dt>Porte / Regime</dt>
@@ -122,6 +117,34 @@
                 <dd>{{ formatarData(c.atualizadoEm) }}</dd>
               </div>
             </dl>
+          </acc-card>
+          <acc-card class="dado-card">
+            <h2 class="section-title">Procuração e-CAC</h2>
+            <div class="procuracao">
+              <div class="procuracao__status">
+                <span class="procuracao__rotulo">Status de validação</span>
+                <acc-badge [status]="statusProcuracao() === 'AUTORIZADA' ? 'success' : 'warning'">
+                  {{ statusProcuracao() === 'AUTORIZADA' ? 'Autorizada' : 'Pendente' }}
+                </acc-badge>
+              </div>
+              <p class="procuracao__texto">
+                {{ statusProcuracao() === 'AUTORIZADA'
+                  ? 'A procuração foi validada nesta sessão.'
+                  : 'A procuração ainda não foi validada nesta sessão.' }}
+              </p>
+              @if (erroProcuracao(); as erro) {
+                <div class="alert-error" role="alert">{{ erro }}</div>
+              }
+              <button
+                acc-button
+                variant="primary"
+                size="sm"
+                [disabled]="procuracaoValidando()"
+                (click)="validarProcuracao(c.id)"
+              >
+                {{ procuracaoValidando() ? 'Validando…' : 'Validar procuração e-CAC' }}
+              </button>
+            </div>
           </acc-card>
         </div>
       </section>

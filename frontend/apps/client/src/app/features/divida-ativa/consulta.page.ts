@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ClienteDto } from '@accurit/core';
 import {
+  AccBackButtonComponent,
   AccButtonComponent,
   AccEmptyStateComponent,
   AccPageHeaderComponent,
@@ -22,6 +23,7 @@ import { EstadoClienteConsulta } from './divida-ativa.types';
   standalone: true,
   imports: [
     RouterLink,
+    AccBackButtonComponent,
     AccButtonComponent,
     AccEmptyStateComponent,
     AccPageHeaderComponent,

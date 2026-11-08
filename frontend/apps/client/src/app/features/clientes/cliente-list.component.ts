@@ -114,6 +114,11 @@ export class ClienteListComponent implements OnInit {
     return formatDocument(doc);
   }
 
+  /** SIMPLES_NACIONAL → SIMPLES NACIONAL. */
+  formatarRegime(regime?: string | null): string {
+    return regime ? regime.replaceAll('_', ' ') : '—';
+  }
+
   abrirModalNovo(): void {
     this.clienteService.definirErro('');
     this.modalNovoAberto.set(true);

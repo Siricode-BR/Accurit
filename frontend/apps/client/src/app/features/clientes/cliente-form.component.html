@@ -55,6 +55,20 @@
         />
       </div>
 
+      @if (form.get('tipo')?.value === 'PJ') {
+        <div class="field">
+          <label for="representanteNome" class="label">Representante da empresa</label>
+          <input
+            id="representanteNome"
+            type="text"
+            formControlName="representanteNome"
+            autocomplete="off"
+            class="input"
+            placeholder="ex: Maria Souza (sócia-administradora)"
+          />
+        </div>
+      }
+
       <div class="field">
         <label for="porteRegime" class="label">Porte / Regime Tributário</label>
         <select id="porteRegime" formControlName="porteRegime" class="input input--select">

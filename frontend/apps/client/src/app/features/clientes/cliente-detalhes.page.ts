@@ -15,6 +15,8 @@ import {
   ConsultaFiscalDto,
 } from '@accurit/core';
 import { sanitizeDocument } from '@accurit/shared';
+import { ProcuracaoService } from '../../data/procuracao.service';
+import { mensagemDeErro } from '../../core/http/mensagem-erro';
 import { ClienteService } from '../../data/cliente.service';
 import { ConsultasFiscaisService } from '../../data/consultas-fiscais.service';
 import { SessionStore } from '../../core/auth/session.store';
@@ -26,6 +28,8 @@ import {
   AccSkeletonComponent,
   AccCopyButtonComponent,
   AccBadgeComponent,
+  AccBackButtonComponent,
+  AccPageHeaderComponent,
   AccTab,
 } from '@accurit/ui';
 import { AbaId, EstadoCliente, LeituraEstado } from './cliente-detalhes.types';
@@ -130,6 +134,8 @@ function formatarData(value: string | null | undefined): string {
     AccSkeletonComponent,
     AccCopyButtonComponent,
     AccBadgeComponent,
+    AccBackButtonComponent,
+    AccPageHeaderComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './cliente-detalhes.page.html',
@@ -139,6 +145,13 @@ export class ClienteDetalhesPage implements OnInit {
   protected readonly consultas = inject(ConsultasFiscaisService);
   protected readonly clienteService = inject(ClienteService);
   protected readonly sessao = inject(SessionStore);
+  private readonly procuracaoService = inject(ProcuracaoService);
+  protected readonly procuracaoValidando = signal(false);
+  protected readonly erroProcuracao = signal<string | null>(null);
+  protected readonly statusProcuracao = computed(() => {
+    const id = this.cliente()?.id;
+    return id ? this.procuracaoService.statusPorCliente()[id] ?? 'PENDENTE' : 'PENDENTE';
+  });
   private readonly route = inject(ActivatedRoute);
   protected readonly router = inject(Router);
 
@@ -291,6 +304,18 @@ export class ClienteDetalhesPage implements OnInit {
 
   protected rotuloAmbiente(ambiente: string): string {
     return ambiente === 'TRIAL' ? 'Ambiente de avaliação' : 'Produção';
+  }
+
+  protected validarProcuracao(clienteId: string): void {
+    this.erroProcuracao.set(null);
+    this.procuracaoValidando.set(true);
+    this.procuracaoService.validarProcuracao(clienteId).subscribe({
+      next: () => this.procuracaoValidando.set(false),
+      error: (erro: unknown) => {
+        this.procuracaoValidando.set(false);
+        this.erroProcuracao.set(mensagemDeErro(erro, 'Falha ao validar a procuração e-CAC.'));
+      },
+    });
   }
 
   protected rotuloPorte(porte: string): string {

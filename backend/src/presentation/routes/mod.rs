@@ -52,7 +52,7 @@ where
     let pool = estado.pool.clone();
     let cliente_repo = ClienteRepositorioDiesel::novo(pool.clone());
     let admin_repo = AdminRepositorioDiesel::novo(pool.clone());
-    let argon2 = HashArgon2::novo(&config.auth).expect("argon2 deve inicializar");
+    let argon2 = std::sync::Arc::new(HashArgon2::novo(&config.auth).expect("argon2 deve inicializar"));
 
     let criar_clientes = CriarClienteUseCase::novo(
         std::sync::Arc::new(cliente_repo.clone()),
@@ -90,7 +90,7 @@ where
         std::sync::Arc::new(admin_repo.clone()),
         std::sync::Arc::new(admin_repo.clone()),
         std::sync::Arc::new(admin_repo.clone()),
-        std::sync::Arc::new(argon2),
+        argon2.clone(),
     );
     let listar_tenant_uc = ListarEscritoriosUseCase::novo(std::sync::Arc::new(admin_repo.clone()));
 
@@ -168,6 +168,16 @@ where
         serpro_state.clone(),
     );
 
+    let usuarios_gestao_repo = std::sync::Arc::new(
+        crate::infrastructure::persistence::usuarios::UsuarioGestaoRepositorioDiesel::novo(
+            pool.clone(),
+        ),
+    );
+    let gestao_usuarios = crate::application::usuarios::GestaoUsuariosUseCase::novo(
+        usuarios_gestao_repo,
+        argon2.clone(),
+    );
+
     let mut api = Router::new()
         .route("/health", get(handlers::saude::<S>))
         .with_state(estado);
@@ -190,8 +200,20 @@ where
         );
 
         api = api.nest(
+            "/usuarios",
+            crate::presentation::usuarios::construir_usuarios(
+                gestao_usuarios.clone(),
+                &auth_state,
+            ),
+        );
+
+        api = api.nest(
             "/admin",
-            Router::new()
+            crate::presentation::usuarios::construir_usuarios_admin(
+                gestao_usuarios.clone(),
+                &auth_state,
+            )
+            .merge(Router::new()
                 .route(
                     "/escritorios",
                     post(provisionar_tenant).get(listar_escritorios),
@@ -207,7 +229,7 @@ where
                     ),
                     exigir,
                 ))
-                .with_state(admin_state),
+                .with_state(admin_state)),
         );
 
         api = api.nest(

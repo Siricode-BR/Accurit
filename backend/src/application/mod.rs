@@ -7,3 +7,4 @@ pub mod integra_contador;
 pub mod ports;
 pub mod saude;
 pub mod serpro;
+pub mod usuarios;

@@ -101,6 +101,7 @@ pub struct NovoCliente {
     pub documento: CpfCnpj,
     pub nome_razao_social: String,
     pub nome_fantasia: Option<String>,
+    pub representante_nome: Option<String>,
     pub email: Option<String>,
     pub telefone: Option<String>,
 }
@@ -142,6 +143,7 @@ pub struct Cliente {
     pub documento: CpfCnpj,
     pub nome_razao_social: String,
     pub nome_fantasia: Option<String>,
+    pub representante_nome: Option<String>,
     pub email: Option<String>,
     pub telefone: Option<String>,
     pub criado_em: chrono::DateTime<chrono::Utc>,
@@ -171,6 +173,7 @@ mod tests {
             documento,
             nome_razao_social: "Alfa Serviços".to_string(),
             nome_fantasia: None,
+            representante_nome: None,
             email: None,
             telefone: None,
         }

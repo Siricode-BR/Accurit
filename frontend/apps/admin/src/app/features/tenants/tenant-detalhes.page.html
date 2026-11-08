@@ -1,8 +1,9 @@
 <div class="page-container">
-  <a class="voltar" routerLink="/tenants">
-    <acc-icon name="chevron-left" />
-    Escritórios
-  </a>
+  @if (!tenant()) {
+    <div class="voltar-linha">
+      <a acc-back routerLink="/tenants" label="Voltar para escritórios"></a>
+    </div>
+  }
 
   @if (tenant(); as t) {
     @if (titularEmail) {
@@ -12,6 +13,7 @@
     }
 
     <header class="cabecalho">
+      <a acc-back routerLink="/tenants" label="Voltar para escritórios"></a>
       <span class="cabecalho__icone"><acc-icon name="building" /></span>
       <div class="cabecalho__texto">
         <h1 class="titulo">{{ t.nome }}</h1>

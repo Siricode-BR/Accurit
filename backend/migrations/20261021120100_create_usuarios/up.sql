@@ -1,6 +1,7 @@
 CREATE TABLE usuarios (
     id UUID PRIMARY KEY,
     escritorio_id UUID NOT NULL REFERENCES escritorios(id),
+    nome TEXT NOT NULL DEFAULT '',
     email TEXT NOT NULL,
     cpf VARCHAR(11) NOT NULL,
     senha_hash TEXT NOT NULL,

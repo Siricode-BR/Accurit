@@ -4,6 +4,7 @@ import { AccAppShellComponent, AccShellUsuario } from '@accurit/ui';
 import { AuthService } from './core/auth/auth.service';
 import { SessionStore } from './core/auth/session.store';
 import { NAVEGACAO_CLIENT } from './core/layout/navegacao';
+import { ehTitular } from './core/auth/titular.guards';
 import { SerproAmbienteService } from './data/serpro.ambiente.service';
 import { RotuloAmbiente } from './app.types';
 
@@ -20,7 +21,12 @@ export class App {
   private readonly sessao = inject(SessionStore);
   private readonly ambiente = inject(SerproAmbienteService);
 
-  protected readonly navegacao = NAVEGACAO_CLIENT;
+  /** Itens de administração (Usuários) só aparecem para o titular do escritório. */
+  protected readonly navegacao = computed(() =>
+    ehTitular(this.sessao.user()?.role)
+      ? NAVEGACAO_CLIENT
+      : NAVEGACAO_CLIENT.filter((g) => g.id !== 'administracao'),
+  );
   protected readonly autenticado = this.sessao.isAuthenticated;
   protected readonly isTrial = this.ambiente.isTrial;
 

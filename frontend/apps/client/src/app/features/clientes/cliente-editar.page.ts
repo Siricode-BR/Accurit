@@ -57,6 +57,7 @@ export class ClienteEditarPage implements OnInit {
     cpfCnpj: ['', [Validators.required, cpfCnpjValido]],
     nomeRazaoSocial: ['', [Validators.required, Validators.minLength(3)]],
     nomeFantasia: [''],
+    representanteNome: [''],
     porteRegime: [''],
     email: ['', [Validators.email]],
     telefone: ['', [telefoneValido]],
@@ -124,6 +125,7 @@ export class ClienteEditarPage implements OnInit {
       cpfCnpj: cliente.cpfCnpj,
       nomeRazaoSocial: cliente.nomeRazaoSocial,
       nomeFantasia: cliente.nomeFantasia ?? '',
+      representanteNome: cliente.representanteNome ?? '',
       porteRegime: cliente.porteRegime ?? '',
       email: cliente.email ?? '',
       telefone: cliente.telefone ?? '',
@@ -142,6 +144,11 @@ export class ClienteEditarPage implements OnInit {
     const nomeRazaoSocial = (this.form.get('nomeRazaoSocial')?.value ?? '').trim();
     const nomeFantasia =
       (this.form.get('nomeFantasia')?.value ?? '').trim() || undefined;
+
+    const representanteNome =
+      this.form.get('tipo')?.value === 'PJ'
+        ? (this.form.get('representanteNome')?.value ?? '').trim() || null
+        : null;
 
     if (!isValidDocument(cpfCnpj)) {
       const c = this.form.get('cpfCnpj');
@@ -173,6 +180,7 @@ export class ClienteEditarPage implements OnInit {
       cpfCnpj,
       nomeRazaoSocial,
       nomeFantasia,
+      representanteNome,
       email,
       telefone,
     } as UpdateClienteRequestDto;

@@ -7,6 +7,7 @@ import {
 } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { CriarTenantRequestDto, CriarTenantResponseDto } from '@accurit/core';
+import { mensagemDeErro } from '../../core/http/mensagem-erro';
 import { TenantService } from '../../data/tenant.service';
 import { AccButtonComponent } from '@accurit/ui';
 
@@ -82,7 +83,7 @@ import { AccButtonComponent } from '@accurit/ui';
           autocomplete="new-password"
           class="input"
           [class.input--error]="isInvalid('senhaTitular')"
-          placeholder="mínimo 6 caracteres"
+          placeholder="mínimo 8 caracteres"
         />
       </div>
 
@@ -190,7 +191,7 @@ export class TenantFormComponent {
     nome: ['', [Validators.required, Validators.minLength(3)]],
     emailTitular: ['', [Validators.required, Validators.email]],
     cpfTitular: ['', [Validators.required]],
-    senhaTitular: ['', [Validators.required, Validators.minLength(6)]],
+    senhaTitular: ['', [Validators.required, Validators.minLength(8)]],
   });
 
   protected isInvalid(field: string): boolean {
@@ -214,7 +215,7 @@ export class TenantFormComponent {
       },
       (erro: { error?: { message?: string }; message?: string }) => {
         this.enviando.set(false);
-        this.erroCadastro.set(erro?.error?.message ?? erro?.message ?? 'Falha ao criar o escritório.');
+        this.erroCadastro.set(mensagemDeErro(erro, 'Falha ao criar o escritório.'));
         this.form.markAllAsTouched();
       },
     );

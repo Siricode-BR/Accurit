@@ -12,6 +12,7 @@ import {
   isValidEmail,
   sanitizeDocument,
 } from '@accurit/shared';
+import { mensagemDeErro } from '../../core/http/mensagem-erro';
 import { ClienteService } from '../../data/cliente.service';
 import { AccButtonComponent, AccDocumentMaskDirective } from '@accurit/ui';
 
@@ -47,6 +48,7 @@ export class ClienteFormComponent {
     cpfCnpj: ['', [Validators.required, cpfCnpjValido]],
     nomeRazaoSocial: ['', [Validators.required, Validators.minLength(3)]],
     nomeFantasia: [''],
+    representanteNome: [''],
     porteRegime: [''],
     email: ['', [Validators.email]],
     telefone: ['', [telefoneValido]],
@@ -97,6 +99,9 @@ export class ClienteFormComponent {
     const email = (this.form.get('email')?.value ?? '').trim().toLowerCase();
     const nomeRazaoSocial = (this.form.get('nomeRazaoSocial')?.value ?? '').trim();
     const nomeFantasia = (this.form.get('nomeFantasia')?.value ?? '').trim() || undefined;
+    const tipoSel = this.form.get('tipo')?.value === 'PJ' ? 'PJ' : 'PF';
+    const representanteNome =
+      tipoSel === 'PJ' ? (this.form.get('representanteNome')?.value ?? '').trim() || undefined : undefined;
 
     // Revalida o documento já sanitizado
     if (!isValidDocument(cpfCnpj)) {
@@ -127,6 +132,7 @@ export class ClienteFormComponent {
       cpfCnpj,
       nomeRazaoSocial,
       nomeFantasia,
+      representanteNome,
       email: email || undefined,
       telefone: telefone || undefined,
     } as unknown as CreateClienteRequestDto;
@@ -135,7 +141,7 @@ export class ClienteFormComponent {
     this.clienteService.criar(payload).then(
       (novo) => this.cadastrado.emit(novo),
       (erro: { error?: { message?: string }; message?: string }) => {
-        this.erroCadastro.set(erro?.error?.message ?? erro?.message ?? 'Falha ao cadastrar cliente.');
+        this.erroCadastro.set(mensagemDeErro(erro, 'Falha ao cadastrar cliente.'));
         this.clienteService.definirErro('');
         this.form.markAllAsTouched();
       },

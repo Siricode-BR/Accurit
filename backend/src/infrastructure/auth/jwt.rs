@@ -208,6 +208,7 @@ mod tests {
         Usuario {
             id: Uuid::now_v7(),
             escritorio_id: Uuid::now_v7(),
+            nome: "Teste".into(),
             email: "teste@exemplo.test".into(),
             senha_hash: "hash".into(),
             papel,

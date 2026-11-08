@@ -51,6 +51,9 @@ impl CriarClienteUseCase {
         if let Some(ref fantasia) = comando.nome_fantasia {
             validar_opcional_max_len(fantasia, self.politica.max_fantasia_len, "nome_fantasia")?;
         }
+        if let Some(ref representante) = comando.representante_nome {
+            validar_opcional_max_len(representante, self.politica.max_nome_len, "representante_nome")?;
+        }
         if let Some(ref email) = comando.email {
             validar_opcional_max_len(email, self.politica.max_email_len, "email")?;
         }
@@ -64,6 +67,12 @@ impl CriarClienteUseCase {
             documento: cpf_cnpj,
             nome_razao_social: comando.nome_razao_social.trim().to_owned(),
             nome_fantasia: comando.nome_fantasia.as_ref().map(|s| s.trim().to_owned()),
+            // Representante só existe para pessoa jurídica; vazio vira ausente.
+            representante_nome: comando
+                .representante_nome
+                .as_ref()
+                .map(|s| s.trim().to_owned())
+                .filter(|s| !s.is_empty() && comando.tipo == TipoCliente::Pj),
             email: comando.email.as_ref().map(|s| s.trim().to_owned()),
             telefone: comando.telefone.as_ref().map(|s| s.trim().to_owned()),
         };
@@ -78,6 +87,7 @@ impl CriarClienteUseCase {
             documento: novo.documento,
             nome_razao_social: novo.nome_razao_social,
             nome_fantasia: novo.nome_fantasia,
+            representante_nome: novo.representante_nome,
             email: novo.email,
             telefone: novo.telefone,
             criado_em: chrono::Utc::now(),
@@ -323,6 +333,15 @@ impl AtualizarClienteUseCase {
             self.politica.max_fantasia_len,
             "nome_fantasia",
         )?;
+        aplicar_opcional(
+            &mut cliente.representante_nome,
+            comando.representante_nome,
+            self.politica.max_nome_len,
+            "representante_nome",
+        )?;
+        if cliente.tipo == TipoCliente::Pf {
+            cliente.representante_nome = None;
+        }
         aplicar_opcional(
             &mut cliente.email,
             comando.email,

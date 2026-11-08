@@ -27,3 +27,4 @@ export * from './lib/search-field/acc-search-field.component';
 export * from './lib/filter-chips/acc-filter-chips.component';
 export * from './lib/cta-button/acc-cta-button.component';
 export * from './lib/modal/acc-modal.component';
+export * from './lib/back-button/acc-back-button.component';

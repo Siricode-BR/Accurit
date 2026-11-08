@@ -218,3 +218,14 @@
   align-items: center;
   flex-wrap: wrap;
 }
+
+.linha-clicavel {
+  cursor: pointer;
+}
+.linha-clicavel:hover > td {
+  background: var(--acc-color-surface-hover, rgba(0, 0, 0, 0.03));
+}
+.linha-clicavel:focus-visible {
+  outline: 2px solid var(--acc-color-primary, #2563eb);
+  outline-offset: -2px;
+}

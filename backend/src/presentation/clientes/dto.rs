@@ -13,6 +13,7 @@ pub struct ClienteResponse {
     pub cpf_cnpj: String,
     pub nome_razao_social: String,
     pub nome_fantasia: Option<String>,
+    pub representante_nome: Option<String>,
     pub email: Option<String>,
     pub telefone: Option<String>,
     pub criado_em: chrono::DateTime<chrono::Utc>,
@@ -38,6 +39,7 @@ impl From<crate::application::clientes::ClientePublico> for ClienteResponse {
             cpf_cnpj: cliente.cpf_cnpj,
             nome_razao_social: cliente.nome_razao_social,
             nome_fantasia: cliente.nome_fantasia,
+            representante_nome: cliente.representante_nome,
             email: cliente.email,
             telefone: cliente.telefone,
             criado_em: cliente.criado_em,
@@ -65,6 +67,7 @@ pub struct CriarClienteRequest {
     pub cpf_cnpj: String,
     pub nome_razao_social: String,
     pub nome_fantasia: Option<String>,
+    pub representante_nome: Option<String>,
     pub email: Option<String>,
     pub telefone: Option<String>,
 }
@@ -90,6 +93,8 @@ pub struct AtualizarClienteRequest {
     pub nome_razao_social: Option<String>,
     #[serde(default, deserialize_with = "opcoes_duas::duas")]
     pub nome_fantasia: Option<Option<String>>,
+    #[serde(default, deserialize_with = "opcoes_duas::duas")]
+    pub representante_nome: Option<Option<String>>,
     #[serde(default, deserialize_with = "opcoes_duas::duas")]
     pub email: Option<Option<String>>,
     #[serde(default, deserialize_with = "opcoes_duas::duas")]

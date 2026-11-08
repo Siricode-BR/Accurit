@@ -7,3 +7,4 @@ pub use ports::{
     ProvisionarTenantResultado, RepositorioError, UsuarioAdminRepositorio, UsuarioNovo,
 };
 pub use use_case::{ListarEscritoriosUseCase, ProvisionarTenantUseCase};
+pub(crate) use use_case::{validar_cpf, validar_email, validar_nome, validar_senha};

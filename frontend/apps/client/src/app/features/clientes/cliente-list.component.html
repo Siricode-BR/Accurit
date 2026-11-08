@@ -97,7 +97,14 @@
           </thead>
           <tbody>
             @for (cliente of clientesExibidos(); track cliente.id) {
-              <tr>
+              <tr
+                class="linha-clicavel"
+                tabindex="0"
+                role="link"
+                [attr.aria-label]="'Abrir detalhes de ' + cliente.nomeRazaoSocial"
+                (click)="abrirDetalhes(cliente)"
+                (keydown.enter)="abrirDetalhes(cliente)"
+              >
                 <td>
                   <acc-badge [status]="cliente.tipo === 'PJ' ? 'info' : 'neutral'">
                     {{ cliente.tipo }}
@@ -109,13 +116,16 @@
                     @if (cliente.nomeFantasia) {
                       <span class="client-fantasy">{{ cliente.nomeFantasia }}</span>
                     }
+                    @if (cliente.representanteNome) {
+                      <span class="client-fantasy">Representante: {{ cliente.representanteNome }}</span>
+                    }
                   </div>
                 </td>
                 <td class="client-doc font-mono">
                   {{ formatarDoc(cliente.cpfCnpj) }}
                 </td>
                 <td>
-                  {{ cliente.porteRegime ?? '—' }}
+                  {{ formatarRegime(cliente.porteRegime) }}
                 </td>
                 <td>
                   <div class="client-contact">
@@ -129,14 +139,6 @@
                 </td>
                 <td>
                   <div class="acoes-cliente">
-                    <button
-                      acc-button
-                      variant="ghost"
-                      size="sm"
-                      (click)="abrirDetalhes(cliente)"
-                    >
-                      Detalhes
-                    </button>
                     @if (procuracaoValidando().has(cliente.id)) {
                       <acc-spinner size="sm"></acc-spinner>
                     } @else {
@@ -144,7 +146,7 @@
                         acc-button
                         variant="primary"
                         size="sm"
-                        (click)="validarProcuracao(cliente)"
+                        (click)="$event.stopPropagation(); validarProcuracao(cliente)"
                       >
                         Validar Procuração e-CAC
                       </button>

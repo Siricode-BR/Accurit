@@ -25,6 +25,7 @@ impl PoliticaAuth {
 #[derive(Debug, Clone)]
 pub struct UsuarioPublico {
     pub id: Uuid,
+    pub nome: String,
     pub email: String,
     pub papel: Papel,
     pub escritorio_id: Uuid,
@@ -34,6 +35,7 @@ impl From<&Usuario> for UsuarioPublico {
     fn from(usuario: &Usuario) -> Self {
         Self {
             id: usuario.id,
+            nome: usuario.nome.clone(),
             email: usuario.email.clone(),
             papel: usuario.papel,
             escritorio_id: usuario.escritorio_id,

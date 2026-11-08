@@ -91,6 +91,7 @@ diesel::table! {
         cpf_cnpj -> Varchar,
         nome_razao_social -> Text,
         nome_fantasia -> Nullable<Text>,
+        representante_nome -> Nullable<Text>,
         email -> Nullable<Text>,
         telefone -> Nullable<Text>,
         criado_em -> Timestamptz,
@@ -263,6 +264,7 @@ diesel::table! {
     usuarios (id) {
         id -> Uuid,
         escritorio_id -> Uuid,
+        nome -> Text,
         email -> Text,
         #[max_length = 11]
         cpf -> Varchar,

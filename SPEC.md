@@ -896,6 +896,7 @@ CREATE TABLE clientes (
     cpf_cnpj VARCHAR(14) NOT NULL,
     nome_razao_social TEXT NOT NULL,
     nome_fantasia TEXT,
+    representante_nome TEXT,          -- apenas PJ (CHECK abaixo)
     email TEXT,
     telefone TEXT,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -905,6 +906,7 @@ CREATE TABLE clientes (
       (tipo = 'PJ' AND (porte_regime IS NULL OR porte_regime IN
         ('MEI','SIMPLES_NACIONAL','LUCRO_PRESUMIDO','LUCRO_REAL')))
     ),
+    CHECK (tipo = 'PJ' OR representante_nome IS NULL),
     UNIQUE (escritorio_id, cpf_cnpj)
 );
 CREATE INDEX idx_clientes_escritorio_tipo ON clientes(escritorio_id, tipo);
@@ -1179,6 +1181,14 @@ e a revogação da família operam de forma idêntica a `sessoes`, com os evento
 | `GET` | `/api/v1/admin/escritorios?page=...&pageSize=...` | Lista paginada de escritórios, apenas metadados (id, slug, nome, modoTrialSerpro, versao, atualizadoEm) — ADMIN |
 | `GET` | `/api/v1/serpro/ambiente` | Ambiente efetivo do escritório do token, `{ ambienteEfetivo, atualizadoEm }` — somente leitura, audiência `client` |
 | `PATCH` | `/api/v1/admin/escritorios/{id}/serpro/trial` | Alternância do modo Trial pelo gestor de tenants — corpo `{ modoTrialSerpro, versao }` (concorrência otimista; `409` em divergência; credencial/certificado ausentes → `400`) |
+| `GET` | `/api/v1/usuarios?busca=&ativo=` | Lista usuários do escritório do token (`{ itens, total }`) — apenas titular `CLIENTE`; `OPERADOR` → `403` |
+| `POST` | `/api/v1/usuarios` | Cria usuário — corpo `{ nome, email, cpf, papel (CLIENTE\|OPERADOR), senha }`; `201`; e-mail único na plataforma e CPF único no escritório (`409`) |
+| `GET` / `PATCH` | `/api/v1/usuarios/{id}` | Detalhe / atualização `{ nome?, papel?, ativo? }`; outro escritório → `404`; não pode desativar a si mesmo nem remover/desativar o último titular ativo (`409`) |
+| `POST` | `/api/v1/usuarios/{id}/senha` | Redefine a senha (`204`); revoga sessões e zera bloqueio |
+| `GET` | `/api/v1/admin/usuarios?escritorioId=&busca=&ativo=` | Lista global de usuários — ADMIN |
+| `POST` | `/api/v1/admin/usuarios` | Cria usuário em `escritorioId` — ADMIN |
+| `GET` / `PATCH` | `/api/v1/admin/usuarios/{id}` | Detalhe / atualização — ADMIN, mesmas travas |
+| `POST` | `/api/v1/admin/usuarios/{id}/senha` | Redefine a senha — ADMIN |
 | `GET` | `/api/v1/health` | Health check |
 
 Autenticação (Fase 2A, [ADR-0009](docs/ADR/0009-autenticacao-por-aplicacao.md), revisada por [ADR-0010](docs/ADR/0010-revisao-atores-papeis-e-provisionamento.md)): o login da plataforma do escritório recebe `{ email, senha }` (o e-mail é único na plataforma e identifica o escritório — [ADR-0011](docs/ADR/0011-login-por-email-unico.md)) e o do backoffice `{ email, senha }`; ambos respondem `{ accessToken, expiresIn, usuario }` com `Set-Cookie` do refresh (`usuario.escritorioId` vem `null` no backoffice). `/me` exige `Authorization: Bearer` com a claim `aud` da audiência e o papel correspondente (`ADMIN` no backoffice, `CLIENTE`/`OPERADOR` na plataforma do escritório). `refresh` e `logout` usam somente o cookie `HttpOnly` (`SameSite=Strict`, `Path=/api/v1/auth/{admin|client}`) com `Content-Type: application/json` e `X-Requested-With: accurit`; a rotação invalida o token anterior e o reuso revoga a família. Credencial inválida responde sempre `401 AUTH_INVALID_CREDENTIALS` (sem enumeração), com lockout após 5 falhas por 900 s e rate limit de 10 r/m (burst 5) por IP+caminho+e-mail. A auditoria registra `AUTH_LOGIN_SUCESSO`, `AUTH_LOGIN_FALHA`, `AUTH_LOGOUT` e `AUTH_REFRESH_REUSO` — os eventos de sessão do gestor de tenants são gravados com `escritorio_id NULL`.

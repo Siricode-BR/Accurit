@@ -2,7 +2,9 @@
   <acc-page-header
     title="Consulta Dívida Ativa"
     subtitle="Consulta avulsa para contribuinte não cadastrado como cliente do escritório."
-  />
+  >
+    <a acc-back routerLink="/clientes" label="Voltar para clientes"></a>
+  </acc-page-header>
 
   @if (ambienteEfetivo(); as env) {
     <p class="ambiente-sel">Ambiente: {{ env === 'TRIAL' ? 'Trial (avaliação)' : 'Produção' }}</p>

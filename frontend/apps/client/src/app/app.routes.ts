@@ -2,6 +2,7 @@ import { inject } from '@angular/core';
 import { Router, Routes } from '@angular/router';
 import { authGuard, publicGuard } from './core/auth/auth.guards';
 import { operadorGuard } from './core/auth/operador.guards';
+import { titularGuard } from './core/auth/titular.guards';
 
 export const routes: Routes = [
   {
@@ -44,6 +45,13 @@ export const routes: Routes = [
     canActivate: [authGuard, operadorGuard],
     loadComponent: () =>
       import('./features/clientes/cliente-editar.page').then((m) => m.ClienteEditarPage),
+  },
+  {
+    // Gestão de usuários do escritório: somente o titular (papel CLIENTE).
+    path: 'usuarios',
+    canActivate: [authGuard, titularGuard],
+    loadComponent: () =>
+      import('./features/usuarios/usuario-list.component').then((m) => m.UsuarioListComponent),
   },
   // Consultas vinculadas a um cliente cadastrado (documento bloqueado). Exigem ?clienteId=.
   {

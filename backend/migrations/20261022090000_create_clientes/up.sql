@@ -6,6 +6,7 @@ CREATE TABLE clientes (
     cpf_cnpj VARCHAR(14) NOT NULL,
     nome_razao_social TEXT NOT NULL,
     nome_fantasia TEXT,
+    representante_nome TEXT,
     email TEXT,
     telefone TEXT,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -15,6 +16,7 @@ CREATE TABLE clientes (
       (tipo = 'PJ' AND (porte_regime IS NULL OR porte_regime IN
         ('MEI','SIMPLES_NACIONAL','LUCRO_PRESUMIDO','LUCRO_REAL')))
     ),
+    CHECK (tipo = 'PJ' OR representante_nome IS NULL),
     CHECK (cpf_cnpj ~ '^[0-9]{11}$' OR cpf_cnpj ~ '^[0-9]{14}$'),
     UNIQUE (escritorio_id, cpf_cnpj)
 );

@@ -42,6 +42,8 @@ struct UsuarioRow {
     #[diesel(sql_type = SqlUuid)]
     escritorio_id: Uuid,
     #[diesel(sql_type = Text)]
+    nome: String,
+    #[diesel(sql_type = Text)]
     email: String,
     #[diesel(sql_type = Text)]
     senha_hash: String,
@@ -78,6 +80,8 @@ struct SessaoUsuarioRow {
     #[diesel(sql_type = Nullable<Text>)]
     user_agent: Option<String>,
     #[diesel(sql_type = Text)]
+    nome: String,
+    #[diesel(sql_type = Text)]
     email: String,
     #[diesel(sql_type = Text)]
     senha_hash: String,
@@ -94,6 +98,7 @@ fn para_usuario(row: UsuarioRow) -> Result<Usuario, RepositorioError> {
     Ok(Usuario {
         id: row.id,
         escritorio_id: row.escritorio_id,
+        nome: row.nome,
         email: row.email,
         senha_hash: row.senha_hash,
         papel,
@@ -106,7 +111,7 @@ impl UsuarioRepositorio for RepositorioDiesel {
     fn buscar_por_email(&self, email: &str) -> Result<Option<Usuario>, RepositorioError> {
         let mut conexao = self.conexao()?;
         let resultado = diesel::sql_query(
-            "SELECT id, escritorio_id, email, senha_hash, papel, ativo, bloqueado_ate \
+            "SELECT id, escritorio_id, nome, email, senha_hash, papel, ativo, bloqueado_ate \
              FROM usuarios WHERE lower(email) = lower($1)",
         )
         .bind::<Text, _>(email)
@@ -127,7 +132,7 @@ impl UsuarioRepositorio for RepositorioDiesel {
     ) -> Result<Option<Usuario>, RepositorioError> {
         let mut conexao = self.conexao()?;
         let resultado = diesel::sql_query(
-            "SELECT id, escritorio_id, email, senha_hash, papel, ativo, bloqueado_ate \
+            "SELECT id, escritorio_id, nome, email, senha_hash, papel, ativo, bloqueado_ate \
              FROM usuarios WHERE escritorio_id = $1 AND id = $2",
         )
         .bind::<SqlUuid, _>(escritorio_id)
@@ -213,7 +218,7 @@ impl SessaoRepositorio for RepositorioDiesel {
             "SELECT s.id, s.escritorio_id, s.usuario_id, s.audiencia::text AS audiencia, \
              s.familia_id, s.refresh_hash::text AS refresh_hash, s.criado_em, s.expira_em, \
              s.revogada_em, s.ip::text AS ip, s.user_agent, \
-             u.email, u.senha_hash, u.papel, u.ativo, u.bloqueado_ate \
+             u.nome, u.email, u.senha_hash, u.papel, u.ativo, u.bloqueado_ate \
              FROM sessoes s \
              JOIN usuarios u ON u.id = s.usuario_id AND u.escritorio_id = s.escritorio_id \
              WHERE s.refresh_hash = $1",
@@ -244,6 +249,7 @@ impl SessaoRepositorio for RepositorioDiesel {
                     usuario: Usuario {
                         id: row.usuario_id,
                         escritorio_id: row.escritorio_id,
+                        nome: row.nome,
                         email: row.email,
                         senha_hash: row.senha_hash,
                         papel,

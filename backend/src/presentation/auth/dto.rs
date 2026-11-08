@@ -53,6 +53,7 @@ pub struct AdministradorAtualResponse {
 #[serde(rename_all = "camelCase")]
 pub struct UsuarioResponse {
     pub id: Uuid,
+    pub nome: String,
     pub email: String,
     pub papel: String,
     pub escritorio_id: Uuid,
@@ -62,6 +63,7 @@ impl From<UsuarioPublico> for UsuarioResponse {
     fn from(usuario: UsuarioPublico) -> Self {
         Self {
             id: usuario.id,
+            nome: usuario.nome,
             email: usuario.email,
             papel: usuario.papel.como_str().to_owned(),
             escritorio_id: usuario.escritorio_id,

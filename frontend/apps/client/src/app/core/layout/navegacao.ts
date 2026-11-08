@@ -17,4 +17,9 @@ export const NAVEGACAO_CLIENT: readonly AccNavGroup[] = [
       { id: 'divida-ativa', label: 'Dívida Ativa', icon: 'divida-ativa', route: '/consultas/divida-ativa' },
     ],
   },
+  {
+    id: 'administracao',
+    label: 'Administração',
+    items: [{ id: 'usuarios', label: 'Usuários', icon: 'users', route: '/usuarios' }],
+  },
 ];

@@ -7,6 +7,7 @@ export const NAVEGACAO_ADMIN: readonly AccNavGroup[] = [
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', route: '/dashboard', exact: true },
       { id: 'tenants', label: 'Escritórios', icon: 'building', route: '/tenants' },
+      { id: 'usuarios', label: 'Usuários', icon: 'users', route: '/usuarios' },
     ],
   },
 ];

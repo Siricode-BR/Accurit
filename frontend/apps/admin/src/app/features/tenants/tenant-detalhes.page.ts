@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { formatPtBrDateTime } from '@accurit/shared';
 import {
+  AccBackButtonComponent,
   AccBadgeComponent,
   AccButtonComponent,
   AccCardComponent,
@@ -9,6 +10,7 @@ import {
   AccIconComponent,
   AccSkeletonComponent,
 } from '@accurit/ui';
+import { mensagemDeErro } from '../../core/http/mensagem-erro';
 import { TenantService } from '../../data/tenant.service';
 
 /** Página do escritório (`/tenants/:id`) — destino após o cadastro e a partir da lista. */
@@ -17,6 +19,7 @@ import { TenantService } from '../../data/tenant.service';
   standalone: true,
   imports: [
     RouterLink,
+    AccBackButtonComponent,
     AccBadgeComponent,
     AccButtonComponent,
     AccCardComponent,
@@ -64,7 +67,7 @@ export class TenantDetalhesPage implements OnInit {
       await this.tenantService.alternarModoSerpro(t.id, !t.modoTrialSerpro, t.versao);
     } catch (e) {
       const erro = e as { error?: { message?: string }; message?: string };
-      this.erroAcao.set(erro?.error?.message ?? erro?.message ?? 'Não foi possível alterar o ambiente.');
+      this.erroAcao.set(mensagemDeErro(e, 'Não foi possível alterar o ambiente.'));
     } finally {
       this.alterando.set(false);
     }

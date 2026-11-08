@@ -10,6 +10,7 @@ export type AccIconName =
   | 'lock'
   | 'search'
   | 'user-plus'
+  | 'users'
   | 'plus'
   | 'refresh'
   | 'building'

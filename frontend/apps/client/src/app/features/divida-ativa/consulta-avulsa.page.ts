@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { AccPageHeaderComponent } from '@accurit/ui';
+import { RouterLink } from '@angular/router';
+import { AccBackButtonComponent, AccPageHeaderComponent } from '@accurit/ui';
 import { SerproAmbienteService } from '../../data/serpro.ambiente.service';
 import { DividaAtivaConsultaComponent } from './components/divida-ativa-consulta.component';
 
@@ -7,7 +8,7 @@ import { DividaAtivaConsultaComponent } from './components/divida-ativa-consulta
 @Component({
   selector: 'app-divida-ativa-avulsa-page',
   standalone: true,
-  imports: [AccPageHeaderComponent, DividaAtivaConsultaComponent],
+  imports: [RouterLink, AccBackButtonComponent, AccPageHeaderComponent, DividaAtivaConsultaComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './consulta-avulsa.page.html',
   styleUrl: './consulta-avulsa.page.css',

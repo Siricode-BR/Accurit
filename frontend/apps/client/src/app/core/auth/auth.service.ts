@@ -14,6 +14,7 @@ type LoginClientResposta = {
   usuario: {
     id: string;
     email: string;
+    nome?: string;
     papel: string;
     escritorio_id: string;
   };
@@ -47,7 +48,7 @@ export class AuthService {
           this.#status.set('idle');
           const usuario: UsuarioSessaoDto = {
             id: res.usuario.id,
-            nome: res.usuario.email,
+            nome: res.usuario.nome || res.usuario.email,
             email: res.usuario.email,
             role: (res.usuario.papel ?? 'CONTADOR') as UserRole,
             tenantId: res.usuario.escritorio_id ?? undefined,

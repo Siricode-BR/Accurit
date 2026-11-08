@@ -393,6 +393,50 @@ async fn crud_de_clientes_isolado_por_escritorio() {
 }
 
 #[tokio::test]
+async fn representante_so_existe_para_pessoa_juridica_e_pode_ser_limpo() {
+    let ambiente = ambiente(&[]);
+    semear_usuario(&ambiente.banco, "alfa", "OPERADOR", true, &cpf_com_dv(5));
+    let token = token_de(&entrar_portal(&ambiente.app, "alfa", "OPERADOR").await);
+
+    let mut pj = corpo_cliente("PJ", "11444777000161", "Acme Ltda", Some("MEI"));
+    pj["representanteNome"] = json!("  Carlos Pereira ");
+    let resposta = enviar(
+        &ambiente.app,
+        pedido(Method::POST, "/api/v1/clientes", Some(pj), Some(&token)),
+    )
+    .await;
+    assert_eq!(resposta.status(), StatusCode::CREATED);
+    let cliente = corpo_json(resposta).await;
+    assert_eq!(cliente["representanteNome"], "Carlos Pereira");
+    let id = cliente["id"].as_str().expect("id").to_owned();
+
+    // Pessoa física ignora o representante.
+    let mut pf = corpo_cliente("PF", "52998224725", "Maria da Silva", None);
+    pf["representanteNome"] = json!("Alguém");
+    let resposta = enviar(
+        &ambiente.app,
+        pedido(Method::POST, "/api/v1/clientes", Some(pf), Some(&token)),
+    )
+    .await;
+    assert_eq!(resposta.status(), StatusCode::CREATED);
+    assert!(corpo_json(resposta).await["representanteNome"].is_null());
+
+    // `null` explícito limpa o representante.
+    let resposta = enviar(
+        &ambiente.app,
+        pedido(
+            Method::PUT,
+            &format!("/api/v1/clientes/{id}"),
+            Some(json!({ "representanteNome": null })),
+            Some(&token),
+        ),
+    )
+    .await;
+    assert_eq!(resposta.status(), StatusCode::OK);
+    assert!(corpo_json(resposta).await["representanteNome"].is_null());
+}
+
+#[tokio::test]
 async fn validacao_de_criacao_retorna_400_com_envelope() {
     let ambiente = ambiente(&[]);
     semear_usuario(&ambiente.banco, "alfa", "OPERADOR", true, &cpf_com_dv(3));
