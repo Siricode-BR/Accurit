@@ -1,0 +1,96 @@
+<div class="page-container">
+  <div class="page-header">
+    <h1 class="page-title">Consultas em Lote</h1>
+    <p class="page-subtitle">
+      Execuções de consultas fiscais em lote para múltiplos contribuintes.
+    </p>
+    <button
+      acc-button
+      variant="primary"
+      size="md"
+      [disabled]="carregando()"
+      (click)="abrirCriacao()"
+    >
+      Nova consulta em lote
+    </button>
+  </div>
+
+  @if (carregando() && lotes().length === 0) {
+    <div class="loading-state" aria-hidden="true">
+      <acc-spinner size="lg"></acc-spinner>
+      <p>Carregando consultas em lote...</p>
+    </div>
+  } @else if (erro(); as mensagemErro) {
+    <div class="alert-error" role="alert">
+      <p>{{ mensagemErro }}</p>
+      <button
+        acc-button
+        variant="outline"
+        size="sm"
+        (click)="ngOnInit()"
+      >
+        Tentar novamente
+      </button>
+    </div>
+  } @else if (lotes().length === 0) {
+    <div class="empty-state">
+      <p>Nenhuma consulta em lote encontrada.</p>
+      <button
+        acc-button
+        variant="primary"
+        size="md"
+        (click)="abrirCriacao()"
+      >
+        Criar primeira consulta em lote
+      </button>
+    </div>
+  } @else {
+    <acc-card>
+      <table class="acc-table">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Produto</th>
+            <th>Serviço</th>
+            <th>Verbo</th>
+            <th>Total itens</th>
+            <th>Concluídos</th>
+            <th>Com erro</th>
+            <th>Status</th>
+            <th>Criado em</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (lote of lotes(); track lote.id) {
+            <tr class="linha-clicavel" (click)="abrirDetalhes(lote.id)">
+              <td><strong>{{ lote.nome }}</strong></td>
+              <td>{{ lote.produto }}</td>
+              <td>{{ lote.servico }}</td>
+              <td>{{ lote.verbo ?? '—' }}</td>
+              <td>{{ lote.totalItens }}</td>
+              <td>{{ lote.itensConcluidos }}</td>
+              <td>{{ lote.itensComErro }}</td>
+              <td>
+                <acc-badge [status]="badgeStatus(lote.status)">
+                  {{ rotuloStatus(lote.status) }}
+                </acc-badge>
+              </td>
+              <td>{{ lote.criadoEm }}</td>
+              <td>
+                <button
+                  acc-button
+                  variant="outline"
+                  size="sm"
+                  (click)="$event.stopPropagation(); abrirDetalhes(lote.id)"
+                >
+                  Detalhes
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </acc-card>
+  }
+</div>

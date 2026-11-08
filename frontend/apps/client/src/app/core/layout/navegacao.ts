@@ -22,4 +22,12 @@ export const NAVEGACAO_CLIENT: readonly AccNavGroup[] = [
     label: 'Administração',
     items: [{ id: 'usuarios', label: 'Usuários', icon: 'users', route: '/usuarios' }],
   },
+  {
+    id: 'automacao',
+    label: 'Automação (Fase B)',
+    items: [
+      { id: 'trabalhos', label: 'Trabalhos agendados', icon: 'users', route: '/trabalhos' },
+      { id: 'consultas-lote', label: 'Consultas em lote', icon: 'search', route: '/consultas-lote' },
+    ],
+  },
 ];

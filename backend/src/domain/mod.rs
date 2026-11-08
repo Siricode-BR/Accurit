@@ -5,3 +5,4 @@ pub mod divida_ativa;
 pub mod integra_contador;
 pub mod serpro;
 pub mod tenancy;
+pub mod trabalhos;

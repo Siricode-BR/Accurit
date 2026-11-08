@@ -17,6 +17,15 @@ clientes/provisionamento existem, mas pendem remediação de qualidade (`cargo f
 `clippy -D warnings` violados no último commit), testes HTTP de IDOR/isolamento multi-tenant e o
 frontend (telas de `/admin` e `/app`); certificados A1 cifrados e procurações não foram iniciados.
 
+A **FASE 5A (procurações persistentes + catálogo configurável do Integra Contador) foi concluída**:
+tabela `procuracoes` com `cliente_id` e isolamento por `escritorio_id`, `catalogo_servicos_integra`
+autoritativo no banco, `ValidadorProcuracaoDiesel` substituindo o stub `ProcuracaoNaoVerificavel`,
+fluxo `validar`/`revalidar` com TTL (`SERPRO_PROCURACAO_CACHE_TTL_SECS`), rotas
+`GET/POST /serpro/integra-contador/procuracoes`, `GET/PATCH /admin/integra-contador/catalogo`,
+testes de integração `http_procuracoes.rs` (6 testes verdes), e
+[ADR-0013](docs/ADR/0013-catalogo-configuravel-servicos-integra.md) escrito. O item P7
+(formato da resposta `OBTERPROCURACAO41`) foi adicionado a `docs/DECISOES-PENDENTES.md`.
+
 Além disso, as camadas de banco, backend e frontend da Fase 4 (Consulta Dívida Ativa) estão
 implementadas e validadas: testes Angular, testes Rust e integração HTTP com PostgreSQL/Docker
 passaram. O fallback por Código de Contribuinte continua bloqueado até confirmação oficial da
@@ -232,7 +241,9 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 
 **Aceite:** os cinco verbos são encaminhados pelo envelope comum, `x-cpf-usuario` é enviado quando habilitado, serviços protegidos são bloqueados antes da chamada quando não há procuração válida (e o autor difere do contribuinte) e o XML assinado passa na validação ICP-Brasil.
 
-**Estado de implementação:** o fluxo Trial conservador, persistência operacional tenant-scoped, catálogo allowlist, interface autenticada e bloqueios fail-closed estão implementados. A Fase 5 **não está concluída**: produção e serviços adicionais seguem desabilitados até confirmação do contrato SERPRO e aprovação de D5; SAPI/mTLS, cache/renovação de tokens, validação oficial de procuração e XMLDSig com validação ICP-Brasil/LCR continuam pendentes. A SPEC define retenção de 90 dias para consultas da Dívida Ativa, mas não define prazo para chamadas operacionais/idempotência da Fase 5; esse prazo e a auditoria de mudanças de configuração precisam de decisão antes da produção. Não habilitar operações mutáveis nem tratar consulta como prova de autorização enquanto esses bloqueios permanecerem.
+**Estado de implementação:** a FASE 5A (procurações persistentes + catálogo configurável do Integra Contador) está concluída: persistência operacional tenant-scoped, catálogo allowlist autoritativo no banco, interface autenticada e bloqueios fail-closed implementados, com [ADR-0013](docs/ADR/0013-catalogo-configuravel-servicos-integra.md) e item P7 em `docs/DECISOES-PENDENTES.md`. A Fase 5 **não está concluída** como um todo: produção e serviços adicionais seguem desabilitados até confirmação do contrato SERPRO e aprovação de D5; SAPI/mTLS, cache/renovação de tokens, validação oficial de procuração e XMLDSig com validação ICP-Brasil/LCR continuam pendentes. A SPEC define retenção de 90 dias para consultas da Dívida Ativa, mas não define prazo para chamadas operacionais/idempotência da Fase 5; esse prazo e a auditoria de mudanças de configuração precisam de decisão antes da produção. Não habilitar operações mutáveis nem tratar consulta como prova de autorização enquanto esses bloqueios permanecerem.
+
+A **FASE B (job runner, consultas em lote e painel de rotina fiscal) foi concluída**: domínio de trabalhos agendados (`trabalhos_agendados`), execuções (`execucoes_trabalho`), consultas em lote (`consultas_em_lote`) e itens (`itens_consulta_lote`) com migrations; repositórios Diesel isolados por `escritorio_id`; use cases para criar/listar/buscar trabalhos, habilitar/desabilitar, criar lotes, listar itens; handlers e rotas REST sob `/trabalhos` e `/consultas-lote`; testes unitários e de integração verdes; `cargo fmt`, `cargo clippy -D warnings` e `schema-tool` válidos.
 
 ---
 

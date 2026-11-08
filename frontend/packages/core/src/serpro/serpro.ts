@@ -38,3 +38,65 @@ export interface AutenticarProcuradorResponseDto {
   expiraEm: string | null;
 }
 
+export type StatusProcuracaoGeral = 'AUTORIZADA' | 'NAO_AUTORIZADA' | 'INDETERMINADA' | 'PENDENTE';
+export type EstadoProcuracaoServicoTipo = 'NAO_EXIGIDA' | 'AUTORIZADA' | 'CONSULTADA' | 'PENDENTE';
+
+export interface EstadoProcuracaoServicoDto {
+  idSistema: string;
+  idServico: string;
+  verbo: string;
+  habilitado: boolean;
+  estado: EstadoProcuracaoServicoTipo | string;
+}
+
+export interface EstadoProcuracaoClienteDto {
+  contribuinteCpfCnpj: string;
+  procuradorCpfCnpj: string;
+  status: StatusProcuracaoGeral | null;
+  verificadoEm: string | null;
+  validoDe: string | null;
+  validoAte: string | null;
+  servicos: EstadoProcuracaoServicoDto[];
+}
+
+export interface ValidarProcuracaoRequestDto {
+  clienteId: string;
+}
+
+export interface ProcuracaoRegistroDto {
+  id: string;
+  clienteId: string;
+  ambiente: string;
+  contribuinteCpfCnpj: string;
+  procuradorCpfCnpj: string;
+  codigoServico: string;
+  status: string;
+  validoDe: string | null;
+  validoAte: string | null;
+  verificadoEm: string;
+  origem: string;
+}
+
+export interface ResultadoValidarProcuracaoResponseDto {
+  fonte: 'CACHE' | 'SERPRO';
+  registro: ProcuracaoRegistroDto;
+}
+
+export interface LinhaCatalogoServicoDto {
+  id: string;
+  idSistema: string;
+  idServico: string;
+  verbo: string;
+  versaoSistema: string | null;
+  versaoConfirmada: boolean;
+  habilitado: boolean;
+  apenasConsulta: boolean;
+  requerProcuracao: boolean;
+  codigosProcuracao: string[];
+  descricao: string;
+  atualizadoEm: string;
+}
+
+export interface RequisicaoHabilitarServicoDto {
+  habilitado: boolean;
+}

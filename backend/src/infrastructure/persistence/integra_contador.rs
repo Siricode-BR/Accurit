@@ -1,16 +1,19 @@
+﻿use chrono::{DateTime, TimeDelta, Utc};
 use diesel::prelude::*;
 use diesel::sql_types::{
-    Binary, Bool, Integer, Jsonb, Nullable, Text, Timestamptz, Uuid as SqlUuid,
+    BigInt, Binary, Bool, Integer, Jsonb, Nullable, Text, Timestamptz, Uuid as SqlUuid,
 };
 use serde_json::Value;
 use uuid::Uuid;
 
 use crate::application::integra_contador::ports::{
     AuditoriaIntegraContador, CatalogoEscritoriosIntegra, CertificadoA1Provider,
-    ContextoIntegraContador, EventoAuditoriaIntegra, EventoChamadaIntegra, RepositorioIdempotencia,
-    ReservaIdempotencia, ResultadoReservaIdempotencia, TokensSerproRepositorio,
+    ContextoIntegraContador, EventoAuditoriaIntegra, EventoChamadaIntegra, LinhaCatalogoServico,
+    NovoRegistroProcuracao, ProvedorCatalogoIntegra, RegistroProcuracao, RepositorioIdempotencia,
+    RepositorioProcuracoes, ReservaIdempotencia, ResultadoReservaIdempotencia, ServicoResolvido,
+    TokensSerproRepositorio, ValidadorProcuracao,
 };
-use crate::domain::integra_contador::envelope::Identificacao;
+use crate::domain::integra_contador::envelope::{Identificacao, VerboIntegraContador};
 use crate::domain::integra_contador::erros::ErroIntegraContador;
 use crate::domain::serpro::ambiente::AmbienteSerpro;
 use crate::infrastructure::persistence::pool::DbPool;
@@ -88,6 +91,7 @@ impl CatalogoEscritoriosIntegra for IntegraContadorRepositorioDiesel {
                 .map_err(|_| ErroIntegraContador::ConfiguracaoIncompleta)?;
 
             Ok(ContextoIntegraContador {
+                escritorio_id,
                 contratante: contratante.clone(),
                 autor_pedido_dados: contratante,
                 contribuinte,
@@ -300,26 +304,518 @@ impl AuditoriaIntegraContador for IntegraContadorRepositorioDiesel {
     }
 }
 
-pub struct ProcuracaoNaoVerificavel;
+// ===== FASE A â€” procuraÃ§Ãµes persistentes (OBTERPROCURACAO41 agregado, P7) =====
 
-#[async_trait::async_trait]
-impl crate::application::integra_contador::ports::ValidadorProcuracao for ProcuracaoNaoVerificavel {
-    async fn validar(
-        &self,
-        _contexto: &ContextoIntegraContador,
-        _codigo_servico: &str,
-        _ambiente: AmbienteSerpro,
-    ) -> Result<bool, ErroIntegraContador> {
-        Ok(false)
+/// Linha bruta da tabela `procuracoes`.
+#[derive(QueryableByName)]
+struct ProcuracaoRow {
+    #[diesel(sql_type = SqlUuid)]
+    id: Uuid,
+    #[diesel(sql_type = Nullable<SqlUuid>)]
+    cliente_id: Option<Uuid>,
+    #[diesel(sql_type = Text)]
+    ambiente: String,
+    #[diesel(sql_type = Text)]
+    contribuinte_cpf_cnpj: String,
+    #[diesel(sql_type = Text)]
+    procurador_cpf_cnpj: String,
+    #[diesel(sql_type = Nullable<Text>)]
+    codigo_servico: Option<String>,
+    #[diesel(sql_type = Text)]
+    status: String,
+    #[diesel(sql_type = Nullable<Timestamptz>)]
+    valido_de: Option<DateTime<Utc>>,
+    #[diesel(sql_type = Nullable<Timestamptz>)]
+    valido_ate: Option<DateTime<Utc>>,
+    #[diesel(sql_type = Timestamptz)]
+    verificado_em: DateTime<Utc>,
+    #[diesel(sql_type = Text)]
+    origem: String,
+    #[diesel(sql_type = Nullable<Jsonb>)]
+    payload_redigido: Option<Value>,
+}
+
+impl ProcuracaoRow {
+    fn registro(self, escritorio_id: Uuid) -> Result<RegistroProcuracao, ErroIntegraContador> {
+        let ambiente = match self.ambiente.as_str() {
+            "TRIAL" => AmbienteSerpro::Trial,
+            "PRODUCAO" => AmbienteSerpro::Producao,
+            _ => return Err(ErroIntegraContador::Persistencia),
+        };
+        Ok(RegistroProcuracao {
+            id: self.id,
+            escritorio_id,
+            cliente_id: self.cliente_id,
+            ambiente,
+            contribuinte_cpf_cnpj: self.contribuinte_cpf_cnpj,
+            procurador_cpf_cnpj: self.procurador_cpf_cnpj,
+            codigo_servico: self.codigo_servico,
+            status: self.status,
+            valido_de: self.valido_de,
+            valido_ate: self.valido_ate,
+            verificado_em: self.verificado_em,
+            origem: self.origem,
+            payload_redigido: self.payload_redigido,
+        })
     }
 }
 
-// ===== Modelo Software House: certíficado A1 do Procurador e token JWT por cliente =====
+const COLUNAS_PROCURACAO: &str = "id, cliente_id, ambiente, contribuinte_cpf_cnpj, \
+     procurador_cpf_cnpj, codigo_servico, status, valido_de, valido_ate, verificado_em, \
+     origem, payload_redigido";
+
+/// RepositÃ³rio de procuraÃ§Ãµes persistentes (FASE A). Sempre com
+/// `escritorio_id` como escopo (isolamento multi-tenant).
+#[derive(Clone)]
+pub struct ProcuracoesRepositorioDiesel {
+    pool: DbPool,
+}
+
+impl ProcuracoesRepositorioDiesel {
+    pub const fn novo(pool: DbPool) -> Self {
+        Self { pool }
+    }
+
+    fn conexao(
+        &self,
+    ) -> Result<
+        diesel::r2d2::PooledConnection<diesel::r2d2::ConnectionManager<diesel::PgConnection>>,
+        ErroIntegraContador,
+    > {
+        self.pool
+            .get()
+            .map_err(|_| ErroIntegraContador::Persistencia)
+    }
+}
+
+#[async_trait::async_trait]
+impl RepositorioProcuracoes for ProcuracoesRepositorioDiesel {
+    async fn salvar(
+        &self,
+        novo: &NovoRegistroProcuracao,
+    ) -> Result<RegistroProcuracao, ErroIntegraContador> {
+        let repositorio = self.clone();
+        let novo = novo.clone();
+
+        tokio::task::spawn_blocking(move || {
+            let mut conexao = repositorio.conexao()?;
+
+            // Upsert manual (SELECT-then-UPDATE/INSERT): a constraint Ãºnica
+            // usa NULLS NOT DISTINCT, o que exige comparaÃ§Ã£o com
+            // IS NOT DISTINCT FROM; UPDATE-then-INSERT evita depender de
+            // versÃ£o/equerÃªncia do ON CONFLICT para o caso agregado.
+            let registrado = diesel::sql_query(format!(
+                "UPDATE procuracoes SET \
+                     status = $6, valido_de = $7, valido_ate = $8, \
+                     verificado_em = NOW(), origem = $9, payload_redigido = $10, \
+                     cliente_id = COALESCE($11, cliente_id) \
+                 WHERE escritorio_id = $1 AND ambiente = $2 \
+                   AND contribuinte_cpf_cnpj = $3 AND procurador_cpf_cnpj = $4 \
+                   AND codigo_servico IS NOT DISTINCT FROM $5 \
+                 RETURNING {COLUNAS_PROCURACAO}"
+            ))
+            .bind::<SqlUuid, _>(novo.escritorio_id)
+            .bind::<Text, _>(novo.ambiente.as_str())
+            .bind::<Text, _>(&novo.contribuinte_cpf_cnpj)
+            .bind::<Text, _>(&novo.procurador_cpf_cnpj)
+            .bind::<Nullable<Text>, _>(novo.codigo_servico.clone())
+            .bind::<Text, _>(&novo.status)
+            .bind::<Nullable<Timestamptz>, _>(novo.valido_de)
+            .bind::<Nullable<Timestamptz>, _>(novo.valido_ate)
+            .bind::<Text, _>(&novo.origem)
+            .bind::<Nullable<Jsonb>, _>(novo.payload_redigido.clone())
+            .bind::<Nullable<SqlUuid>, _>(novo.cliente_id)
+            .get_result::<ProcuracaoRow>(&mut conexao)
+            .map(|row| row.registro(novo.escritorio_id));
+
+            let registro = match registrado {
+                Ok(registro) => registro,
+                Err(diesel::result::Error::NotFound) => diesel::sql_query(format!(
+                    "INSERT INTO procuracoes \
+                         (id, escritorio_id, cliente_id, ambiente, contribuinte_cpf_cnpj, \
+                          procurador_cpf_cnpj, codigo_servico, status, valido_de, valido_ate, \
+                          verificado_em, origem, payload_redigido) \
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11, $12) \
+                     RETURNING {COLUNAS_PROCURACAO}"
+                ))
+                .bind::<SqlUuid, _>(Uuid::now_v7())
+                .bind::<SqlUuid, _>(novo.escritorio_id)
+                .bind::<Nullable<SqlUuid>, _>(novo.cliente_id)
+                .bind::<Text, _>(novo.ambiente.as_str())
+                .bind::<Text, _>(&novo.contribuinte_cpf_cnpj)
+                .bind::<Text, _>(&novo.procurador_cpf_cnpj)
+                .bind::<Nullable<Text>, _>(novo.codigo_servico.clone())
+                .bind::<Text, _>(&novo.status)
+                .bind::<Nullable<Timestamptz>, _>(novo.valido_de)
+                .bind::<Nullable<Timestamptz>, _>(novo.valido_ate)
+                .bind::<Text, _>(&novo.origem)
+                .bind::<Nullable<Jsonb>, _>(novo.payload_redigido)
+                .get_result::<ProcuracaoRow>(&mut conexao)
+                .map_err(|_| ErroIntegraContador::Persistencia)
+                .and_then(|row| row.registro(novo.escritorio_id)),
+                Err(_) => Err(ErroIntegraContador::Persistencia),
+            }?;
+            Ok(registro)
+        })
+        .await
+        .map_err(|_| ErroIntegraContador::Persistencia)?
+    }
+
+    async fn listar_por_cliente(
+        &self,
+        escritorio_id: Uuid,
+        cliente_id: Uuid,
+    ) -> Result<Vec<RegistroProcuracao>, ErroIntegraContador> {
+        let repositorio = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut conexao = repositorio.conexao()?;
+            let linhas = diesel::sql_query(format!(
+                "SELECT {COLUNAS_PROCURACAO} FROM procuracoes \
+                 WHERE escritorio_id = $1 AND cliente_id = $2 \
+                 ORDER BY verificado_em DESC, id DESC"
+            ))
+            .bind::<SqlUuid, _>(escritorio_id)
+            .bind::<SqlUuid, _>(cliente_id)
+            .load::<ProcuracaoRow>(&mut conexao)
+            .map_err(|_| ErroIntegraContador::Persistencia)?;
+            linhas
+                .into_iter()
+                .map(|row| row.registro(escritorio_id))
+                .collect()
+        })
+        .await
+        .map_err(|_| ErroIntegraContador::Persistencia)?
+    }
+
+    async fn buscar_agregado_recente(
+        &self,
+        escritorio_id: Uuid,
+        ambiente: AmbienteSerpro,
+        contribuinte_cpf_cnpj: &str,
+        procurador_cpf_cnpj: &str,
+    ) -> Result<Option<RegistroProcuracao>, ErroIntegraContador> {
+        let repositorio = self.clone();
+        let contribuinte = contribuinte_cpf_cnpj.to_owned();
+        let procurador = procurador_cpf_cnpj.to_owned();
+        tokio::task::spawn_blocking(move || {
+            let mut conexao = repositorio.conexao()?;
+            let encontrado = diesel::sql_query(format!(
+                "SELECT {COLUNAS_PROCURACAO} FROM procuracoes \
+                 WHERE escritorio_id = $1 AND ambiente = $2 \
+                   AND contribuinte_cpf_cnpj = $3 AND procurador_cpf_cnpj = $4 \
+                   AND codigo_servico IS NULL \
+                 ORDER BY verificado_em DESC, id DESC LIMIT 1"
+            ))
+            .bind::<SqlUuid, _>(escritorio_id)
+            .bind::<Text, _>(ambiente.as_str())
+            .bind::<Text, _>(&contribuinte)
+            .bind::<Text, _>(&procurador)
+            .get_result::<ProcuracaoRow>(&mut conexao)
+            .optional()
+            .map_err(|_| ErroIntegraContador::Persistencia)?;
+            encontrado
+                .map(|row| row.registro(escritorio_id))
+                .transpose()
+        })
+        .await
+        .map_err(|_| ErroIntegraContador::Persistencia)?
+    }
+
+    async fn existe_valida(
+        &self,
+        escritorio_id: Uuid,
+        ambiente: AmbienteSerpro,
+        contribuinte_cpf_cnpj: &str,
+        procurador_cpf_cnpj: &str,
+        codigo_servico: &str,
+        idade_maxima: Option<TimeDelta>,
+    ) -> Result<bool, ErroIntegraContador> {
+        let repositorio = self.clone();
+        let contribuinte = contribuinte_cpf_cnpj.to_owned();
+        let procurador = procurador_cpf_cnpj.to_owned();
+        let codigo = codigo_servico.to_owned();
+        tokio::task::spawn_blocking(move || {
+            let mut conexao = repositorio.conexao()?;
+            let corte: Option<DateTime<Utc>> = idade_maxima.map(|idade| Utc::now() - idade);
+            let total = diesel::sql_query(
+                "SELECT COUNT(*) AS total FROM procuracoes \
+                 WHERE escritorio_id = $1 AND ambiente = $2 \
+                   AND contribuinte_cpf_cnpj = $3 AND procurador_cpf_cnpj = $4 \
+                   AND codigo_servico = $5 \
+                   AND status IN ('VALIDA', 'ATIVA') \
+                   AND (valido_de IS NULL OR valido_de <= NOW()) \
+                   AND (valido_ate IS NULL OR valido_ate >= NOW()) \
+                   AND ($6::timestamptz IS NULL OR verificado_em >= $6::timestamptz)",
+            )
+            .bind::<SqlUuid, _>(escritorio_id)
+            .bind::<Text, _>(ambiente.as_str())
+            .bind::<Text, _>(&contribuinte)
+            .bind::<Text, _>(&procurador)
+            .bind::<Text, _>(&codigo)
+            .bind::<Nullable<Timestamptz>, _>(corte)
+            .get_result::<TotalRow>(&mut conexao)
+            .map(|linha| linha.total)
+            .map_err(|_| ErroIntegraContador::Persistencia)?;
+            Ok(total > 0)
+        })
+        .await
+        .map_err(|_| ErroIntegraContador::Persistencia)?
+    }
+}
+
+#[derive(QueryableByName)]
+struct TotalRow {
+    #[diesel(sql_type = BigInt)]
+    total: i64,
+}
+
+/// Adaptador da porta `ValidadorProcuracao`: fail-closed, responde com base
+/// no registro vigente do repositÃ³rio com a idade mÃ¡xima (TTL) da
+/// configuraÃ§Ã£o. Nenhuma chamada ao SERPRO acontece aqui (a atualizaÃ§Ã£o Ã©
+/// responsabilidade do `ValidarProcuracoesUseCase`).
+pub struct ValidadorProcuracaoDiesel {
+    repositorio: std::sync::Arc<ProcuracoesRepositorioDiesel>,
+    idade_maxima: Option<TimeDelta>,
+}
+
+impl ValidadorProcuracaoDiesel {
+    pub fn novo(
+        repositorio: std::sync::Arc<ProcuracoesRepositorioDiesel>,
+        idade_maxima_secs: Option<u64>,
+    ) -> Self {
+        Self {
+            repositorio,
+            idade_maxima: idade_maxima_secs
+                .filter(|segundos| *segundos > 0)
+                .and_then(|segundos| TimeDelta::try_seconds(segundos as i64)),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl ValidadorProcuracao for ValidadorProcuracaoDiesel {
+    async fn validar(
+        &self,
+        contexto: &ContextoIntegraContador,
+        codigo_servico: &str,
+        ambiente: AmbienteSerpro,
+    ) -> Result<bool, ErroIntegraContador> {
+        self.repositorio
+            .existe_valida(
+                contexto.escritorio_id,
+                ambiente,
+                &contexto.contribuinte.numero,
+                &contexto.autor_pedido_dados.numero,
+                codigo_servico,
+                self.idade_maxima,
+            )
+            .await
+    }
+}
+
+// ===== FASE A â€” catÃ¡logo configurÃ¡vel de serviÃ§os do Integra Contador =====
+
+/// Adaptador da porta `ProvedorCatalogoIntegra` sobre a tabela
+/// `catalogo_servicos_integra` (ADR-0013).
+#[derive(Clone)]
+pub struct CatalogoServicosIntegraDiesel {
+    pool: DbPool,
+}
+
+impl CatalogoServicosIntegraDiesel {
+    pub const fn novo(pool: DbPool) -> Self {
+        Self { pool }
+    }
+
+    fn conexao(
+        &self,
+    ) -> Result<
+        diesel::r2d2::PooledConnection<diesel::r2d2::ConnectionManager<diesel::PgConnection>>,
+        ErroIntegraContador,
+    > {
+        self.pool
+            .get()
+            .map_err(|_| ErroIntegraContador::Persistencia)
+    }
+}
+
+fn verbo_de(valor: &str) -> Result<VerboIntegraContador, ErroIntegraContador> {
+    match valor {
+        "Apoiar" => Ok(VerboIntegraContador::Apoiar),
+        "Consultar" => Ok(VerboIntegraContador::Consultar),
+        "Declarar" => Ok(VerboIntegraContador::Declarar),
+        "Emitir" => Ok(VerboIntegraContador::Emitir),
+        "Monitorar" => Ok(VerboIntegraContador::Monitorar),
+        _ => Err(ErroIntegraContador::Persistencia),
+    }
+}
+
+#[derive(QueryableByName)]
+struct LinhaCatalogoRow {
+    #[diesel(sql_type = SqlUuid)]
+    id: Uuid,
+    #[diesel(sql_type = Text)]
+    id_sistema: String,
+    #[diesel(sql_type = Text)]
+    id_servico: String,
+    #[diesel(sql_type = Text)]
+    verbo: String,
+    #[diesel(sql_type = Nullable<Text>)]
+    versao_sistema: Option<String>,
+    #[diesel(sql_type = Bool)]
+    versao_confirmada: bool,
+    #[diesel(sql_type = Bool)]
+    habilitado: bool,
+    #[diesel(sql_type = Bool)]
+    apenas_consulta: bool,
+    #[diesel(sql_type = Bool)]
+    requer_procuracao: bool,
+    #[diesel(sql_type = diesel::sql_types::Array<Nullable<Text>>)]
+    codigos_procuracao: Vec<Option<String>>,
+    #[diesel(sql_type = Text)]
+    descricao: String,
+    #[diesel(sql_type = Timestamptz)]
+    atualizado_em: DateTime<Utc>,
+}
+
+impl LinhaCatalogoRow {
+    fn linha(self) -> Result<LinhaCatalogoServico, ErroIntegraContador> {
+        Ok(LinhaCatalogoServico {
+            id: self.id,
+            id_sistema: self.id_sistema,
+            id_servico: self.id_servico,
+            verbo: verbo_de(&self.verbo)?,
+            versao_sistema: self.versao_sistema,
+            versao_confirmada: self.versao_confirmada,
+            habilitado: self.habilitado,
+            apenas_consulta: self.apenas_consulta,
+            requer_procuracao: self.requer_procuracao,
+            codigos_procuracao: self.codigos_procuracao.into_iter().flatten().collect(),
+            descricao: self.descricao,
+            atualizado_em: self.atualizado_em,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl ProvedorCatalogoIntegra for CatalogoServicosIntegraDiesel {
+    async fn resolver(
+        &self,
+        id_sistema: &str,
+        id_servico: &str,
+        versao_sistema: &str,
+        verbo: VerboIntegraContador,
+    ) -> Result<ServicoResolvido, ErroIntegraContador> {
+        let repositorio = self.clone();
+        let id_sistema = id_sistema.to_owned();
+        let id_servico = id_servico.to_owned();
+        let versao = versao_sistema.to_owned();
+
+        tokio::task::spawn_blocking(move || {
+            let mut conexao = repositorio.conexao()?;
+            let linha = diesel::sql_query(
+                "SELECT id, id_sistema, id_servico, verbo, versao_sistema, \
+                        versao_confirmada, habilitado, apenas_consulta, \
+                        requer_procuracao, codigos_procuracao, descricao, atualizado_em \
+                 FROM catalogo_servicos_integra \
+                 WHERE id_sistema = $1 AND id_servico = $2",
+            )
+            .bind::<Text, _>(id_sistema)
+            .bind::<Text, _>(id_servico)
+            .get_result::<LinhaCatalogoRow>(&mut conexao)
+            .optional()
+            .map_err(|_| ErroIntegraContador::Persistencia)?
+            .ok_or(ErroIntegraContador::ServicoNaoHabilitado)?;
+
+            if linha.verbo != verbo.como_str() {
+                return Err(ErroIntegraContador::ServicoNaoHabilitado);
+            }
+            if !linha.habilitado || !linha.versao_confirmada {
+                return Err(ErroIntegraContador::ServicoNaoHabilitado);
+            }
+            let versao_confirmada = linha
+                .versao_sistema
+                .clone()
+                .ok_or(ErroIntegraContador::VersaoNaoConfirmada)?;
+            if versao_confirmada != versao {
+                return Err(ErroIntegraContador::VersaoNaoConfirmada);
+            }
+
+            Ok(ServicoResolvido {
+                id_sistema: linha.id_sistema.clone(),
+                id_servico: linha.id_servico.clone(),
+                versao_sistema: versao_confirmada,
+                apenas_consulta: linha.apenas_consulta,
+                requer_procuracao: linha.requer_procuracao,
+                codigos_procuracao: linha.codigos_procuracao.into_iter().flatten().collect(),
+            })
+        })
+        .await
+        .map_err(|_| ErroIntegraContador::Persistencia)?
+    }
+
+    async fn listar(&self) -> Result<Vec<LinhaCatalogoServico>, ErroIntegraContador> {
+        let repositorio = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut conexao = repositorio.conexao()?;
+            let linhas = diesel::sql_query(
+                "SELECT id, id_sistema, id_servico, verbo, versao_sistema, \
+                        versao_confirmada, habilitado, apenas_consulta, \
+                        requer_procuracao, codigos_procuracao, descricao, atualizado_em \
+                 FROM catalogo_servicos_integra \
+                 ORDER BY id_sistema, id_servico",
+            )
+            .load::<LinhaCatalogoRow>(&mut conexao)
+            .map_err(|_| ErroIntegraContador::Persistencia)?;
+            linhas.into_iter().map(LinhaCatalogoRow::linha).collect()
+        })
+        .await
+        .map_err(|_| ErroIntegraContador::Persistencia)?
+    }
+
+    async fn definir_habilitado(
+        &self,
+        id_sistema: &str,
+        id_servico: &str,
+        habilitado: bool,
+    ) -> Result<LinhaCatalogoServico, ErroIntegraContador> {
+        let repositorio = self.clone();
+        let id_sistema = id_sistema.to_owned();
+        let id_servico = id_servico.to_owned();
+
+        tokio::task::spawn_blocking(move || {
+            let mut conexao = repositorio.conexao()?;
+            // Habilitar exige versÃ£o confirmada (fail-closed: uma linha sem
+            // `versao_confirmada` Ã© tratada como se nÃ£o existisse). VersÃ£o
+            // confirmada Ã© Ãºnica origem: a atualizaÃ§Ã£o manual de versÃ£o Ã©
+            // um ato de engenharia (migraÃ§Ã£o de semente), nÃ£o de runtime.
+            let atualizados = diesel::sql_query(
+                "UPDATE catalogo_servicos_integra \
+                 SET habilitado = $3, atualizado_em = NOW() \
+                 WHERE id_sistema = $1 AND id_servico = $2 \
+                   AND (NOT $3 OR versao_confirmada) \
+                 RETURNING id, id_sistema, id_servico, verbo, versao_sistema, \
+                           versao_confirmada, habilitado, apenas_consulta, \
+                           requer_procuracao, codigos_procuracao, descricao, atualizado_em",
+            )
+            .bind::<Text, _>(&id_sistema)
+            .bind::<Text, _>(&id_servico)
+            .bind::<Bool, _>(habilitado)
+            .get_result::<LinhaCatalogoRow>(&mut conexao)
+            .map_err(|_| ErroIntegraContador::ServicoNaoHabilitado)?;
+            atualizados.linha()
+        })
+        .await
+        .map_err(|_| ErroIntegraContador::Persistencia)?
+    }
+}
+
+// ===== Modelo Software House: certÃ­ficado A1 do Procurador e token JWT por cliente =====
 
 /// Adaptador da porta `CertificadoA1Provider`: busca o certificado A1 ativo
-/// e válido do escritório (Procurador) — usado para assinar o Termo de
-/// Autorização do AUTENTICAPROCURADOR. O conteúdo continua cifrado na
-/// saída (descifragem ocorre apenas em memória, no caso de uso).
+/// e vÃ¡lido do escritÃ³rio (Procurador) â€” usado para assinar o Termo de
+/// AutorizaÃ§Ã£o do AUTENTICAPROCURADOR. O conteÃºdo continua cifrado na
+/// saÃ­da (descifragem ocorre apenas em memÃ³ria, no caso de uso).
 pub struct CertificadoA1ProviderDiesel {
     repo: std::sync::Arc<
         crate::infrastructure::persistence::certificados::CertificadoRepositorioDiesel,
@@ -393,10 +889,10 @@ impl TokensSerproRepositorio for TokensSerproRepositorioDiesel {
                 .get()
                 .map_err(|_| ErroIntegraContador::Persistencia)?;
 
-            // Upsert pela constraint única nomeada uq_tokens_serpro
-            // (UNIQUE NULLS NOT DISTINCT): um escritório tem um token vigente
+            // Upsert pela constraint Ãºnica nomeada uq_tokens_serpro
+            // (UNIQUE NULLS NOT DISTINCT): um escritÃ³rio tem um token vigente
             // por (cliente, produto, ambiente, tipo_token, autor_pedido_dados);
-            // para AUTENTICAR_PROCURADOR o cliente_id é obrigatório (CHECK).
+            // para AUTENTICAR_PROCURADOR o cliente_id Ã© obrigatÃ³rio (CHECK).
             diesel::sql_query(
                 "INSERT INTO tokens_serpro \
                  (id, escritorio_id, cliente_id, produto, ambiente, tipo_token, \

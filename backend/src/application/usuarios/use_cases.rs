@@ -133,7 +133,10 @@ impl GestaoUsuariosUseCase {
                 outro => UsuarioError::Repositorio(outro),
             })?;
 
-        let criado = self.repo.obter(id, Some(escritorio_id))?.ok_or(UsuarioError::NaoEncontrado)?;
+        let criado = self
+            .repo
+            .obter(id, Some(escritorio_id))?
+            .ok_or(UsuarioError::NaoEncontrado)?;
         self.repo.registrar_auditoria(&EventoAuditoriaUsuario {
             escritorio_id,
             ator: ator.clone(),
@@ -152,7 +155,9 @@ impl GestaoUsuariosUseCase {
         comando: AtualizarUsuarioCommand,
     ) -> Result<UsuarioDetalhe, UsuarioError> {
         if comando.nome.is_none() && comando.papel.is_none() && comando.ativo.is_none() {
-            return Err(UsuarioError::Validacao("nenhuma alteração informada".into()));
+            return Err(UsuarioError::Validacao(
+                "nenhuma alteração informada".into(),
+            ));
         }
         if let Some(nome) = &comando.nome {
             validacao(validar_nome(nome))?;
@@ -168,8 +173,8 @@ impl GestaoUsuariosUseCase {
 
         let desativando = comando.ativo == Some(false) && atual.ativo;
         let reativando = comando.ativo == Some(true) && !atual.ativo;
-        let deixando_de_ser_titular = comando.papel == Some(Papel::Operador)
-            && atual.papel == Papel::Cliente;
+        let deixando_de_ser_titular =
+            comando.papel == Some(Papel::Operador) && atual.papel == Papel::Cliente;
 
         if desativando && ator.id == atual.id {
             return Err(UsuarioError::Conflito(

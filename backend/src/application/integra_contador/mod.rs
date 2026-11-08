@@ -5,12 +5,16 @@ pub use ports::{
     AuditoriaIntegraContador, AutenticaProcuradorCliente, AutenticarProcuradorResultado,
     CatalogoEscritoriosIntegra, CertificadoA1Provider, ClienteIntegraContador,
     ContextoIntegraContador, ContratantePlataforma, EntregaIntegraContador, EventoAuditoriaIntegra,
-    EventoChamadaIntegra, RepositorioIdempotencia, ReservaIdempotencia, TokensSerproRepositorio,
+    EventoChamadaIntegra, LinhaCatalogoServico, ProvedorCatalogoIntegra, RegistroProcuracao,
+    RepositorioIdempotencia, RepositorioProcuracoes, ServicoResolvido, TokensSerproRepositorio,
     ValidadorProcuracao,
 };
 pub use use_cases::{
     AutenticarProcuradorUseCase, ComandoAutenticarProcurador, ComandoIntegraContador,
-    ExecutarIntegraContadorUseCase, ResultadoAutenticarProcurador, ResultadoIntegraContador,
+    ComandoListarProcuracao, ComandoValidarProcuracao, EstadoProcuracaoCliente,
+    EstadoProcuracaoServico, ExecutarIntegraContadorUseCase, ListarProcuracoesUseCase,
+    ResultadoAutenticarProcurador, ResultadoIntegraContador, ResultadoValidarProcuracao,
+    ValidarProcuracoesUseCase,
 };
 
 pub const PRODUTO_INTEGRA_CONTADOR: &str = "INTEGRA_CONTADOR";

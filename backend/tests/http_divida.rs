@@ -383,8 +383,7 @@ async fn entrar_portal(app: &Router, email: &str) -> String {
             .header(header::CONTENT_TYPE, "application/json")
             .header("x-real-ip", "10.9.0.1")
             .body(Body::from(
-                json!({ "email": email, "senha": SENHA_PORTAL })
-                    .to_string(),
+                json!({ "email": email, "senha": SENHA_PORTAL }).to_string(),
             ))
             .expect("login válido"),
     )

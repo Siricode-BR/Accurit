@@ -34,12 +34,22 @@ const SERVICOS: &[(&str, &str, Option<&str>, VerboIntegraContador, bool)] = &[
         true,
     ),
     (
+        "AUTENTICAPROCURADOR",
+        "ENVIOXMLASSINADO81",
+        Some("1.0"),
+        VerboIntegraContador::Apoiar,
+        false,
+    ),
+    // ===== FASE A — serviços priorizados pela rotina fiscal =====
+    // Situação Fiscal / Relatório de pendências (SITFIS, procuração 00002).
+    (
         "SITFIS",
         "RELATORIOSITFIS92",
         None,
         VerboIntegraContador::Emitir,
         false,
     ),
+    // PGDAS-D/DAS (Simples Nacional, procuração 00146).
     (
         "PGDASD",
         "CONSDECLARACAO13",
@@ -55,12 +65,36 @@ const SERVICOS: &[(&str, &str, Option<&str>, VerboIntegraContador, bool)] = &[
         false,
     ),
     (
+        "PGDASD",
+        "GERARDAS12",
+        None,
+        VerboIntegraContador::Emitir,
+        false,
+    ),
+    // DAS MEI (PGMEI — sem procuração no catálogo oficial).
+    (
+        "PGMEI",
+        "GERARDASPDF21",
+        None,
+        VerboIntegraContador::Emitir,
+        false,
+    ),
+    (
+        "PGMEI",
+        "GERARDASCODBARRA22",
+        None,
+        VerboIntegraContador::Emitir,
+        false,
+    ),
+    // DCTFWeb (procuração 00103).
+    (
         "DCTFWEB",
         "GERARGUIA31",
         None,
         VerboIntegraContador::Emitir,
         false,
     ),
+    // Caixa Postal (procuração 00006).
     (
         "CAIXAPOSTAL",
         "INNOVAMSG63",
@@ -69,10 +103,40 @@ const SERVICOS: &[(&str, &str, Option<&str>, VerboIntegraContador, bool)] = &[
         false,
     ),
     (
-        "AUTENTICAPROCURADOR",
-        "ENVIOXMLASSINADO81",
-        Some("1.0"),
-        VerboIntegraContador::Apoiar,
+        "CAIXAPOSTAL",
+        "MSGCONTRIBUINTE61",
+        None,
+        VerboIntegraContador::Consultar,
+        false,
+    ),
+    // Parcelamentos (Integra-Parcelamentos) — apenas consulta (ADR-0013),
+    // procuração 00076 OU 00188.
+    (
+        "PARCSN",
+        "PEDIDOSPARC163",
+        None,
+        VerboIntegraContador::Consultar,
+        false,
+    ),
+    (
+        "PARCSN",
+        "OBTERPARC164",
+        None,
+        VerboIntegraContador::Consultar,
+        false,
+    ),
+    (
+        "PARCSN",
+        "PARCELASPARAGERAR162",
+        None,
+        VerboIntegraContador::Consultar,
+        false,
+    ),
+    (
+        "PARCSN",
+        "DETPAGTOPARC165",
+        None,
+        VerboIntegraContador::Consultar,
         false,
     ),
 ];
@@ -102,13 +166,34 @@ pub fn catalogo_de_referencia() -> Vec<ServicoIntegraContador> {
         .collect()
 }
 
+/// Bloqueio combinado pela allowlist considerando o verbo ([ADR-0013]):
+/// - sistemas de parcelamento seguem bloqueados para `Emitir`/`Declarar`/
+///   `Apoiar`/`Monitorar`, mas serviços `Consultar` de Integra-Parcelamentos
+///   são viáveis para a rotina fiscal (dependem do catálogo configurável);
+/// - `SICALC` `Emitir` (51, 53) permanece bloqueado em qualquer cenário.
+pub fn bloqueado_por_verbo(
+    id_sistema: &str,
+    id_servico: &str,
+    verbo: VerboIntegraContador,
+) -> bool {
+    if !super::regras_procuracao::bloqueado_allowlist(id_sistema, id_servico) {
+        return false;
+    }
+    if super::regras_procuracao::sistema_de_parcelamento(id_sistema)
+        && verbo == VerboIntegraContador::Consultar
+    {
+        return false;
+    }
+    true
+}
+
 pub fn resolver_servico(
     id_sistema: &str,
     id_servico: &str,
     versao_sistema: &str,
     verbo: VerboIntegraContador,
 ) -> Result<ServicoIntegraContador, ErroIntegraContador> {
-    if super::regras_procuracao::bloqueado_allowlist(id_sistema, id_servico) {
+    if bloqueado_por_verbo(id_sistema, id_servico, verbo) {
         return Err(ErroIntegraContador::ServicoNaoHabilitado);
     }
 
@@ -179,18 +264,56 @@ mod tests {
     }
 
     #[test]
-    fn bloqueia_todos_os_verbos_de_servico_de_parcelamento() {
+    fn bloqueia_verbos_mutaveis_de_parcelamento() {
+        // ADR-0013: parcelamentos liberados apenas para `Consultar`.
         for verbo in [
             VerboIntegraContador::Apoiar,
-            VerboIntegraContador::Consultar,
             VerboIntegraContador::Declarar,
             VerboIntegraContador::Emitir,
             VerboIntegraContador::Monitorar,
         ] {
             assert_eq!(
                 resolver_servico("PARCSN", "OBTERPARC164", "1", verbo),
-                Err(ErroIntegraContador::ServicoNaoHabilitado)
+                Err(ErroIntegraContador::ServicoNaoHabilitado),
+                "verbo {verbo:?} deve continuar bloqueado"
             );
         }
+    }
+
+    #[test]
+    fn parcelamentos_consulta_ficam_pendentes_de_versao() {
+        // ADR-0013: `Consultar` é viável, mas a versão dos serviços do
+        // Integra-Parcelamentos não foi confirmada (P4): falha explícita.
+        assert_eq!(
+            resolver_servico(
+                "PARCSN",
+                "OBTERPARC164",
+                "1",
+                VerboIntegraContador::Consultar
+            ),
+            Err(ErroIntegraContador::VersaoNaoConfirmada)
+        );
+        assert_eq!(
+            resolver_servico(
+                "PARCSN",
+                "PARCELASPARAGERAR162",
+                "1",
+                VerboIntegraContador::Consultar
+            ),
+            Err(ErroIntegraContador::VersaoNaoConfirmada)
+        );
+    }
+
+    #[test]
+    fn sicalc_emitir_permanece_bloqueado() {
+        assert_eq!(
+            resolver_servico(
+                "SICALC",
+                "GERARDARFCODBARRA53",
+                "1",
+                VerboIntegraContador::Emitir
+            ),
+            Err(ErroIntegraContador::ServicoNaoHabilitado)
+        );
     }
 }

@@ -1,0 +1,119 @@
+<div class="page-container">
+  <div class="page-header">
+    <h1 class="page-title">Detalhes do Trabalho</h1>
+    <button
+      acc-button
+      variant="outline"
+      size="sm"
+      (click)="voltar()"
+    >
+      Voltar à lista
+    </button>
+  </div>
+
+  @if (erro(); as mensagemErro) {
+    <div class="alert-error" role="alert">{{ mensagemErro }}</div>
+  }
+
+  @if (carregandoTrabalho() && !trabalho()) {
+    <div class="loading-state" aria-hidden="true">
+      <acc-spinner size="lg"></acc-spinner>
+      <p>Carregando detalhes do trabalho...</p>
+    </div>
+  } @else if (trabalho(); as trabalho) {
+    <div class="detalhes-grid">
+      <acc-card class="detalhes-card">
+        <h2 class="card-titulo">Identificação</h2>
+        <dl class="detalhes-lista">
+          <div class="detalhe-item">
+            <dt>Nome</dt>
+            <dd>{{ trabalho.nome }}</dd>
+          </div>
+          <div class="detalhe-item">
+            <dt>Tipo</dt>
+            <dd>{{ rotuloTipo(trabalho.tipo) }}</dd>
+          </div>
+          <div class="detalhe-item">
+            <dt>Produto</dt>
+            <dd>{{ trabalho.produto }}</dd>
+          </div>
+          <div class="detalhe-item">
+            <dt>Ambiente</dt>
+            <dd>{{ rotuloAmbiente(trabalho.ambiente) }}</dd>
+          </div>
+          <div class="detalhe-item">
+            <dt>Cron</dt>
+            <dd class="font-mono">{{ trabalho.cronExpression }}</dd>
+          </div>
+          <div class="detalhe-item">
+            <dt>Próxima execução</dt>
+            <dd>{{ trabalho.proximaExecucao ?? '—' }}</dd>
+          </div>
+          <div class="detalhe-item">
+            <dt>Última execução</dt>
+            <dd>{{ trabalho.ultimaExecucao ?? '—' }}</dd>
+          </div>
+          <div class="detalhe-item">
+            <dt>Criado em</dt>
+            <dd>{{ trabalho.criadoEm }}</dd>
+          </div>
+          <div class="detalhe-item">
+            <dt>Atualizado em</dt>
+            <dd>{{ trabalho.atualizadoEm }}</dd>
+          </div>
+        </dl>
+        <div class="card-acoes">
+          <button
+            acc-button
+            variant={trabalho.habilitado ? 'danger' : 'success'}
+            size="md"
+            (click)="alternar()"
+          >
+            {{ trabalho.habilitado ? 'Desabilitar trabalho' : 'Habilitar trabalho' }}
+          </button>
+        </div>
+      </acc-card>
+
+      <acc-card class="execucoes-card">
+        <h2 class="card-titulo">Execuções</h2>
+        @if (carregandoExecucoes() && execucoes().length === 0) {
+          <div class="loading-state" aria-hidden="true">
+            <acc-spinner size="md"></acc-spinner>
+            <p>Carregando execuções...</p>
+          </div>
+        } @else if (execucoes().length === 0) {
+          <p class="vazio">Nenhuma execução registrada.</p>
+        } @else {
+          <table class="acc-table">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Iniciado em</th>
+                <th>Finalizado em</th>
+                <th>Registros processados</th>
+                <th>Registros com erro</th>
+                <th>Erro</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (execucao of execucoes(); track execucao.id) {
+                <tr>
+                  <td>
+                    <acc-badge [status]="badgeStatus(execucao.status)">
+                      {{ rotuloStatus(execucao.status) }}
+                    </acc-badge>
+                  </td>
+                  <td>{{ execucao.iniciadoEm }}</td>
+                  <td>{{ execucao.finalizadoEm ?? '—' }}</td>
+                  <td>{{ execucao.registrosProcessados }}</td>
+                  <td>{{ execucao.registrosComErro }}</td>
+                  <td>{{ execucao.erroMensagem ?? '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </acc-card>
+    </div>
+  }
+</div>

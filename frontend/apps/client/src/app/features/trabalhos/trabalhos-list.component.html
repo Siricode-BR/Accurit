@@ -1,0 +1,99 @@
+<div class="page-container">
+  <div class="page-header">
+    <h1 class="page-title">Trabalhos Agendados</h1>
+    <p class="page-subtitle">
+      Tarefas fiscais recorrentes do escritório (consulta Dívida Ativa, validação
+      de procuração, consulta Integra Contador).
+    </p>
+    <button
+      acc-button
+      variant="primary"
+      size="md"
+      [disabled]="carregando()"
+      (click)="abrirCriacao()"
+    >
+      Novo trabalho agendado
+    </button>
+  </div>
+
+  @if (carregando() && trabalhos().length === 0) {
+    <div class="loading-state" aria-hidden="true">
+      <acc-spinner size="lg"></acc-spinner>
+      <p>Carregando trabalhos agendados...</p>
+    </div>
+  } @else if (erro(); as mensagemErro) {
+    <div class="alert-error" role="alert">
+      <p>{{ mensagemErro }}</p>
+      <button
+        acc-button
+        variant="outline"
+        size="sm"
+        (click)="ngOnInit()"
+      >
+        Tentar novamente
+      </button>
+    </div>
+  } @else if (trabalhos().length === 0) {
+    <div class="empty-state">
+      <p>Nenhum trabalho agendado encontrado.</p>
+      <button
+        acc-button
+        variant="primary"
+        size="md"
+        (click)="abrirCriacao()"
+      >
+        Criar primeiro trabalho
+      </button>
+    </div>
+  } @else {
+    <acc-card>
+      <table class="acc-table">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Tipo</th>
+            <th>Produto</th>
+            <th>Ambiente</th>
+            <th>Cron</th>
+            <th>Próxima execução</th>
+            <th>Status</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (trabalho of trabalhos(); track trabalho.id) {
+            <tr class="linha-clicavel" (click)="abrirDetalhes(trabalho.id)">
+              <td>
+                <strong>{{ trabalho.nome }}</strong>
+              </td>
+              <td>{{ rotuloTipo(trabalho.tipo) }}</td>
+              <td>{{ trabalho.produto }}</td>
+              <td>{{ trabalho.ambiente }}</td>
+              <td class="font-mono">{{ trabalho.cronExpression }}</td>
+              <td>{{ trabalho.proximaExecucao ?? '—' }}</td>
+              <td>
+                <acc-badge [status]="badgeHabilitado(trabalho.habilitado)">
+                  {{ rotuloHabilitado(trabalho.habilitado) }}
+                </acc-badge>
+              </td>
+              <td>
+                <div class="acoes-linha">
+                  <button
+                    acc-button
+                    variant="outline"
+                    size="sm"
+                    (click)="$event.stopPropagation(); alternar(trabalho)"
+                  >
+                    {{
+                      trabalho.habilitado ? 'Desabilitar' : 'Habilitar'
+                    }}
+                  </button>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </acc-card>
+  }
+</div>

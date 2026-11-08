@@ -5,12 +5,16 @@ use axum::http::StatusCode;
 
 use crate::application::integra_contador::ComandoAutenticarProcurador;
 use crate::application::integra_contador::ComandoIntegraContador;
+use crate::application::integra_contador::ComandoListarProcuracao;
+use crate::application::integra_contador::ComandoValidarProcuracao;
 use crate::domain::integra_contador::erros::ErroIntegraContador;
 use crate::presentation::auth::RequestContext;
 use crate::presentation::error::ApiError;
 use crate::presentation::integra_contador::dto::{
+    ConsultaProcuracoesQuery, EstadoProcuracaoClienteResponse, LinhaCatalogoServicoResponse,
     RequisicaoAutenticarProcurador, RequisicaoConsultaProcuracoes, RequisicaoExecucao,
-    ResultadoAutenticarProcuradorResponse, ResultadoIntegraContadorResponse,
+    RequisicaoHabilitarServico, RequisicaoValidarProcuracao, ResultadoAutenticarProcuradorResponse,
+    ResultadoIntegraContadorResponse, ResultadoValidarProcuracaoResponse,
     StatusIntegraContadorResponse,
 };
 use crate::presentation::integra_contador::state::EstadoIntegraContador;
@@ -106,6 +110,122 @@ pub async fn consultar_procuracoes(
     Ok(Json(resultado.into()))
 }
 
+// ===== FASE A — procurações persistentes e catálogo configurável =====
+
+/// `POST /procuracoes/validar` — consulta o SERPRO (OBTERPROCURACAO41) se a
+/// última verificação saiu do TTL. Persistência fica em `procuracoes`
+/// (registro agregado, P7).
+pub async fn validar_procuracao(
+    State(estado): State<EstadoIntegraContador>,
+    Extension(contexto): Extension<RequestContext>,
+    Extension(ambiente): Extension<AmbienteResolvido>,
+    request_id: RequestId,
+    Json(requisicao): Json<RequisicaoValidarProcuracao>,
+) -> Result<Json<ResultadoValidarProcuracaoResponse>, ApiError> {
+    validar_ou_revalidar(estado, contexto, ambiente, request_id, requisicao, false).await
+}
+
+/// `POST /procuracoes/revalidar` — força a consulta ignorando o TTL.
+pub async fn revalidar_procuracao(
+    State(estado): State<EstadoIntegraContador>,
+    Extension(contexto): Extension<RequestContext>,
+    Extension(ambiente): Extension<AmbienteResolvido>,
+    request_id: RequestId,
+    Json(requisicao): Json<RequisicaoValidarProcuracao>,
+) -> Result<Json<ResultadoValidarProcuracaoResponse>, ApiError> {
+    validar_ou_revalidar(estado, contexto, ambiente, request_id, requisicao, true).await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn validar_ou_revalidar(
+    estado: EstadoIntegraContador,
+    contexto: RequestContext,
+    ambiente: AmbienteResolvido,
+    request_id: RequestId,
+    requisicao: RequisicaoValidarProcuracao,
+    forcar: bool,
+) -> Result<Json<ResultadoValidarProcuracaoResponse>, ApiError> {
+    let escritorio_id = escritorio_do_contexto(&contexto)?;
+    let resultado = estado
+        .validar_procuracao
+        .executar(ComandoValidarProcuracao {
+            escritorio_id,
+            usuario_id: contexto.usuario_id,
+            cliente_id: requisicao.cliente_id,
+            ambiente: ambiente.ambiente,
+            request_id: request_id.como_str().to_owned(),
+            forcar,
+        })
+        .await
+        .map_err(mapear_erro)?;
+    Ok(Json(resultado.into()))
+}
+
+/// `GET /procuracoes?clienteId=…` — estado consolidado da procuração do
+/// cliente (registro agregado + estado por serviço, fail-closed — P7).
+pub async fn listar_procuracao(
+    State(estado): State<EstadoIntegraContador>,
+    Extension(contexto): Extension<RequestContext>,
+    Extension(ambiente): Extension<AmbienteResolvido>,
+    axum::extract::Query(consulta): axum::extract::Query<ConsultaProcuracoesQuery>,
+) -> Result<Json<EstadoProcuracaoClienteResponse>, ApiError> {
+    let escritorio_id = escritorio_do_contexto(&contexto)?;
+    let resultado = estado
+        .listar_procuracao
+        .executar(ComandoListarProcuracao {
+            escritorio_id,
+            cliente_id: consulta.cliente_id,
+            ambiente: ambiente.ambiente,
+        })
+        .await
+        .map_err(mapear_erro)?;
+    Ok(Json(resultado.into()))
+}
+
+/// `GET /admin/integra-contador/catalogo` — linhas do catálogo configurável.
+pub async fn catalogo(
+    State(estado): State<EstadoIntegraContador>,
+) -> Result<Json<Vec<LinhaCatalogoServicoResponse>>, ApiError> {
+    let linhas = estado.catalogo.listar().await.map_err(mapear_erro)?;
+    Ok(Json(
+        linhas
+            .into_iter()
+            .map(LinhaCatalogoServicoResponse::from)
+            .collect(),
+    ))
+}
+
+/// `PATCH /admin/integra-contador/catalogo/{idSistema}/{idServico}` —
+/// liga/desliga uma linha. Fail-closed: sem versão confirmada não habilita;
+/// o contrato precisa existir no catálogo de referência do domínio.
+pub async fn definir_habilitado_catalogo(
+    State(estado): State<EstadoIntegraContador>,
+    axum::extract::Path((id_sistema, id_servico)): axum::extract::Path<(String, String)>,
+    Json(requisicao): Json<RequisicaoHabilitarServico>,
+) -> Result<Json<LinhaCatalogoServicoResponse>, ApiError> {
+    // Fail-closed contra o catálogo de referência do domínio: só é possível
+    // ligar/desligar linha cujo contrato exista no catálogo estático.
+    let existe_no_dominio = crate::domain::integra_contador::servicos::catalogo_de_referencia()
+        .iter()
+        .any(|servico| {
+            servico.id_sistema.eq_ignore_ascii_case(&id_sistema)
+                && servico.id_servico.eq_ignore_ascii_case(&id_servico)
+        });
+    if !existe_no_dominio {
+        return Err(ApiError::nova(
+            StatusCode::NOT_FOUND,
+            "NAO_ENCONTRADO",
+            "Serviço não existe no catálogo de referência do domínio.",
+        ));
+    }
+    let linha = estado
+        .catalogo
+        .definir_habilitado(&id_sistema, &id_servico, requisicao.habilitado)
+        .await
+        .map_err(mapear_erro)?;
+    Ok(Json(linha.into()))
+}
+
 fn escritorio_do_contexto(contexto: &RequestContext) -> Result<uuid::Uuid, ApiError> {
     contexto.escritorio_id.ok_or_else(|| {
         ApiError::nova(
@@ -127,6 +247,11 @@ fn mapear_erro(erro: ErroIntegraContador) -> ApiError {
             StatusCode::CONFLICT,
             "VERSAO_NAO_CONFIRMADA",
             "A versão deste serviço ainda não foi confirmada.",
+        ),
+        ErroIntegraContador::ClienteNaoEncontrado => ApiError::nova(
+            StatusCode::NOT_FOUND,
+            "NAO_ENCONTRADO",
+            "Cliente não encontrado neste escritório.",
         ),
         ErroIntegraContador::ConfirmacaoNecessaria => {
             ApiError::validacao("Confirmação explícita é necessária para esta operação.")

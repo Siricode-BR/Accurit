@@ -1,0 +1,119 @@
+<div class="page-container">
+  <div class="page-header">
+    <h1 class="page-title">Detalhes do Lote</h1>
+    <button
+      acc-button
+      variant="outline"
+      size="sm"
+      (click)="voltar()"
+    >
+      Voltar à lista
+    </button>
+  </div>
+
+  @if (erro(); as mensagemErro) {
+    <div class="alert-error" role="alert">{{ mensagemErro }}</div>
+  }
+
+  @if (carregandoLote() && !lote()) {
+    <div class="loading-state" aria-hidden="true">
+      <acc-spinner size="lg"></acc-spinner>
+      <p>Carregando detalhes do lote...</p>
+    </div>
+  } @else if (lote(); as lote) {
+    <div class="detalhes-grid">
+      <acc-card class="detalhes-card">
+        <h2 class="card-titulo">Identificação</h2>
+        <dl class="detalhes-lista">
+          <div class="detalhe-item">
+            <dt>Nome</dt>
+            <dd>{{ lote.nome }}</dd>
+          </div>
+          <div class="detalhe-item">
+            <dt>Produto</dt>
+            <dd>{{ lote.produto }}</dd>
+          </div>
+          <div class="detalhe-item">
+            <dt>Serviço</dt>
+            <dd>{{ lote.servico }}</dd>
+          </div>
+          <div class="detalhe-item">
+            <dt>Verbo</dt>
+            <dd>{{ lote.verbo ?? '—' }}</dd>
+          </div>
+          <div class="detalhe-item">
+            <dt>Total de itens</dt>
+            <dd>{{ lote.totalItens }}</dd>
+          </div>
+          <div class="detalhe-item">
+            <dt>Concluídos</dt>
+            <dd>{{ lote.itensConcluidos }}</dd>
+          </div>
+          <div class="detalhe-item">
+            <dt>Com erro</dt>
+            <dd>{{ lote.itensComErro }}</dd>
+          </div>
+          <div class="detalhe-item">
+            <dt>Status</dt>
+            <dd>
+              <acc-badge [status]="badgeStatus(lote.status)">
+                {{ rotuloStatus(lote.status) }}
+              </acc-badge>
+            </dd>
+          </div>
+          <div class="detalhe-item">
+            <dt>Criado em</dt>
+            <dd>{{ lote.criadoEm }}</dd>
+          </div>
+          <div class="detalhe-item">
+            <dt>Iniciado em</dt>
+            <dd>{{ lote.iniciadoEm ?? '—' }}</dd>
+          </div>
+          <div class="detalhe-item">
+            <dt>Finalizado em</dt>
+            <dd>{{ lote.finalizadoEm ?? '—' }}</dd>
+          </div>
+        </dl>
+      </acc-card>
+
+      <acc-card class="itens-card">
+        <h2 class="card-titulo">Itens</h2>
+        @if (carregandoItens() && itens().length === 0) {
+          <div class="loading-state" aria-hidden="true">
+            <acc-spinner size="md"></acc-spinner>
+            <p>Carregando itens...</p>
+          </div>
+        } @else if (itens().length === 0) {
+          <p class="vazio">Nenhum item registrado.</p>
+        } @else {
+          <table class="acc-table">
+            <thead>
+              <tr>
+                <th>Documento</th>
+                <th>Tipo</th>
+                <th>Status</th>
+                <th>Erro</th>
+                <th>Criado em</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of itens(); track item.id) {
+                <tr>
+                  <td>{{ item.documento }}</td>
+                  <td>{{ tipoDocumento(item.documento) }}</td>
+                  <td>
+                    <acc-badge [status]="badgeItemStatus(item.status)">
+                      {{ rotuloItemStatus(item.status) }}
+                    </acc-badge>
+                  </td>
+                  <td>{{ item.erro ?? '—' }}</td>
+                  <td>{{ item.criadoEm }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </acc-card>
+    </div>
+  }
+</div>

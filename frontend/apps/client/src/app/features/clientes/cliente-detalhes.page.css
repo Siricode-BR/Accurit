@@ -288,7 +288,15 @@
   }
 }
 
-.procuracao { display: flex; flex-direction: column; gap: 0.75rem; align-items: flex-start; }
+.procuracao { display: flex; flex-direction: column; gap: 0.75rem; align-items: flex-start; width: 100%; }
 .procuracao__status { display: flex; align-items: center; gap: 0.75rem; }
 .procuracao__rotulo { color: var(--acc-color-text-muted); font-size: 0.875rem; }
 .procuracao__texto { margin: 0; color: var(--acc-color-text-muted); font-size: 0.875rem; }
+.procuracao__detalhes { width: 100%; margin: 0.5rem 0 0; }
+.procuracao__acoes { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
+.procuracao__servicos { width: 100%; margin-top: 1rem; border-top: 1px solid var(--acc-color-border); padding-top: 0.75rem; }
+.procuracao__servicos-titulo { margin: 0 0 0.5rem; font-size: 0.875rem; font-weight: 600; color: var(--acc-color-text-main); }
+.procuracao__tabela-wrapper { width: 100%; overflow-x: auto; }
+.procuracao__tabela { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+.procuracao__tabela th { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--acc-color-border); color: var(--acc-color-text-muted); font-weight: 600; }
+.procuracao__tabela td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--acc-color-border); }

@@ -1,54 +1,91 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, inject, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, catchError, tap, throwError } from 'rxjs';
+import { Observable, catchError, switchMap, tap, throwError } from 'rxjs';
 import {
-  AutenticarProcuradorRequestDto,
-  AutenticarProcuradorResponseDto,
+  EstadoProcuracaoClienteDto,
+  ResultadoValidarProcuracaoResponseDto,
+  StatusProcuracaoGeral,
 } from '@accurit/core';
 
-export type StatusProcuracao = 'AUTORIZADA' | 'PENDENTE';
+export type StatusProcuracao = StatusProcuracaoGeral;
 
 /**
- * Valida a procuração e-CAC (endpoint AUTENTICAPROCURADOR do SERPRO) para um
- * cliente do escritório. O backend assina o Termo de Autorização com o
- * certificado A1 do escritório e guarda o jwt_token **cifrado** por cliente —
- * o token nunca chega ao navegador (ADR-0007 / REGRA SEG); este serviço
- * mantém apenas o status de autorização por cliente para exibição na UI.
+ * Serviço de procurações e-CAC (Integra Contador / AUTENTICAPROCURADOR / OBTERPROCURACAO41).
+ * O status é persistido no banco de dados e exposto via API REST (ADR-0013 / FASE A).
+ * Nenhum token é armazenado no cliente nem exposto pelo backend (ADR-0007 / REGRA SEG).
  */
 @Injectable({ providedIn: 'root' })
 export class ProcuracaoService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = '/api/v1/serpro/integra-contador/procuracoes';
 
-  // Status por cliente dentro da sessão (ausente = PENDENTE). Nenhum
-  // token é armazenado — apenas o resultado da validação.
-  #status = signal<Record<string, StatusProcuracao>>({});
+  // Mapa de estados consolidados por cliente lidos do backend
+  #estadoPorCliente = signal<Record<string, EstadoProcuracaoClienteDto>>({});
+  readonly estadoPorCliente = this.#estadoPorCliente.asReadonly();
 
-  /** Visão pública somente-leitura do mapa status-por-cliente. */
-  readonly statusPorCliente = this.#status.asReadonly();
+  /** Visão pública compatível: mapa clienteId -> status geral */
+  readonly statusPorCliente = computed<Record<string, StatusProcuracaoGeral>>(() => {
+    const mapa = this.#estadoPorCliente();
+    const resultado: Record<string, StatusProcuracaoGeral> = {};
+    for (const [id, estado] of Object.entries(mapa)) {
+      resultado[id] = estado.status ?? 'PENDENTE';
+    }
+    return resultado;
+  });
 
-  /** Status atual de um cliente (PENDENTE enquanto não autorizado). */
-  statusDe(clienteId: string): StatusProcuracao {
-    return this.#status()[clienteId] ?? 'PENDENTE';
+  /** Retorna o estado completo da procuração do cliente em cache */
+  estadoDe(clienteId: string): EstadoProcuracaoClienteDto | null {
+    return this.#estadoPorCliente()[clienteId] ?? null;
+  }
+
+  /** Retorna o status geral atual de um cliente (PENDENTE se ainda não carregado ou sem procuração ativa). */
+  statusDe(clienteId: string): StatusProcuracaoGeral {
+    return this.#estadoPorCliente()[clienteId]?.status ?? 'PENDENTE';
   }
 
   /**
-   * Dispara a autenticação do procurador para o cliente e atualiza o
-   * status local na resposta (AUTORIZADA) ou em caso de erro (PENDENTE).
+   * Consulta o estado consolidado da procuração do cliente no backend:
+   * status geral, validade, data da última verificação e status por serviço.
    */
-  validarProcuracao(clienteId: string): Observable<AutenticarProcuradorResponseDto> {
-    const request: AutenticarProcuradorRequestDto = { clienteId };
+  obterPorCliente(clienteId: string): Observable<EstadoProcuracaoClienteDto> {
     return this.http
-      .post<AutenticarProcuradorResponseDto>(`${this.baseUrl}/autenticar`, request)
+      .get<EstadoProcuracaoClienteDto>(this.baseUrl, {
+        params: { cliente_id: clienteId },
+      })
       .pipe(
-        tap((resposta) => {
-          this.#status.update((mapa) => ({
+        tap((estado) => {
+          this.#estadoPorCliente.update((mapa) => ({
             ...mapa,
-            [resposta.clienteId]: 'AUTORIZADA',
+            [clienteId]: estado,
           }));
         }),
+      );
+  }
+
+  /**
+   * Valida a procuração do cliente junto ao SERPRO (com cache de 24h no backend).
+   * Atualiza o estado consolidado do cliente após a validação.
+   */
+  validarProcuracao(clienteId: string): Observable<EstadoProcuracaoClienteDto> {
+    return this.http
+      .post<ResultadoValidarProcuracaoResponseDto>(`${this.baseUrl}/validar`, { clienteId })
+      .pipe(
+        switchMap(() => this.obterPorCliente(clienteId)),
         catchError((erro: unknown) => {
-          this.#status.update((mapa) => ({ ...mapa, [clienteId]: 'PENDENTE' }));
+          return throwError(() => erro);
+        }),
+      );
+  }
+
+  /**
+   * Força uma revalidação imediata no SERPRO (ignora cache no backend).
+   */
+  revalidarProcuracao(clienteId: string): Observable<EstadoProcuracaoClienteDto> {
+    return this.http
+      .post<ResultadoValidarProcuracaoResponseDto>(`${this.baseUrl}/revalidar`, { clienteId })
+      .pipe(
+        switchMap(() => this.obterPorCliente(clienteId)),
+        catchError((erro: unknown) => {
           return throwError(() => erro);
         }),
       );

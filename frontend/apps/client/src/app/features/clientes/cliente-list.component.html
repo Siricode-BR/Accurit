@@ -152,9 +152,9 @@
                       </button>
                     }
                     <acc-badge
-                      [status]="statusProcuracaoDe(cliente.id) === 'AUTORIZADA' ? 'success' : 'warning'"
+                      [status]="badgeStatusProcuracao(statusProcuracaoDe(cliente.id))"
                     >
-                      {{ statusProcuracaoDe(cliente.id) === 'AUTORIZADA' ? 'Autorizada' : 'Pendente' }}
+                      {{ rotuloStatusProcuracao(statusProcuracaoDe(cliente.id)) }}
                     </acc-badge>
                   </div>
                 </td>

@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+﻿use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use ipnet::IpNet;
 use uuid::Uuid;
@@ -177,17 +177,17 @@ impl UsuarioGestaoRepositorio for UsuarioGestaoRepositorioDiesel {
             .transaction::<_, diesel::result::Error, _>(|c| {
                 let alvo = usuarios::table.filter(usuarios::id.eq(id));
                 if let Some(nome) = &alt.nome {
-                    diesel::update(alvo.clone())
+                    diesel::update(alvo)
                         .set(usuarios::nome.eq(nome))
                         .execute(c)?;
                 }
                 if let Some(papel) = alt.papel {
-                    diesel::update(alvo.clone())
+                    diesel::update(alvo)
                         .set(usuarios::papel.eq(papel.como_str()))
                         .execute(c)?;
                 }
                 if let Some(ativo) = alt.ativo {
-                    diesel::update(alvo.clone())
+                    diesel::update(alvo)
                         .set(usuarios::ativo.eq(ativo))
                         .execute(c)?;
                     if ativo {

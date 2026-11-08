@@ -11,8 +11,7 @@ import { CommonModule } from '@angular/common';
 import {
   ClienteDto,
   EstadoConsultaFiscal,
-  SituacaoFiscalServicoDto,
-  ConsultaFiscalDto,
+  EstadoProcuracaoClienteDto,
 } from '@accurit/core';
 import { sanitizeDocument } from '@accurit/shared';
 import { ProcuracaoService } from '../../data/procuracao.service';
@@ -35,7 +34,7 @@ import {
 import { AbaId, EstadoCliente, LeituraEstado } from './cliente-detalhes.types';
 
 /** Abas por `?aba=`; "Unidades" é placeholder da fase seguinte (FASE 2). */
-const ABAS:readonly AccTab[] = [
+const ABAS: readonly AccTab[] = [
   { id: 'visao-geral', label: 'Visão geral' },
   { id: 'consultas', label: 'Consultas' },
   { id: 'contatos', label: 'Contatos' },
@@ -147,11 +146,18 @@ export class ClienteDetalhesPage implements OnInit {
   protected readonly sessao = inject(SessionStore);
   private readonly procuracaoService = inject(ProcuracaoService);
   protected readonly procuracaoValidando = signal(false);
+  protected readonly procuracaoCarregando = signal(false);
   protected readonly erroProcuracao = signal<string | null>(null);
-  protected readonly statusProcuracao = computed(() => {
+
+  protected readonly dadosProcuracao = computed<EstadoProcuracaoClienteDto | null>(() => {
     const id = this.cliente()?.id;
-    return id ? this.procuracaoService.statusPorCliente()[id] ?? 'PENDENTE' : 'PENDENTE';
+    return id ? this.procuracaoService.estadoDe(id) : null;
   });
+
+  protected readonly statusProcuracao = computed(() => {
+    return this.dadosProcuracao()?.status ?? 'PENDENTE';
+  });
+
   private readonly route = inject(ActivatedRoute);
   protected readonly router = inject(Router);
 
@@ -193,8 +199,9 @@ export class ClienteDetalhesPage implements OnInit {
     }
 
     await this.carregarCliente(id);
-    // Dados do cliente prontos: histórico e cartões em paralelo.
+    // Dados do cliente prontos: histórico, situação fiscal e procurações persistentes
     await this.consultas.carregar(id);
+    this.carregarProcuracao(id);
   }
 
   /** Cartões genéricos por serviço federal (Situação fiscal da visão geral). */
@@ -258,7 +265,10 @@ export class ClienteDetalhesPage implements OnInit {
   }
 
   protected recarregarCliente(): void {
-    if (this.idCliente) void this.carregarCliente(this.idCliente);
+    if (this.idCliente) {
+      void this.carregarCliente(this.idCliente);
+      this.carregarProcuracao(this.idCliente);
+    }
   }
 
   protected recarregarConsultas(): void {
@@ -306,6 +316,14 @@ export class ClienteDetalhesPage implements OnInit {
     return ambiente === 'TRIAL' ? 'Ambiente de avaliação' : 'Produção';
   }
 
+  protected carregarProcuracao(clienteId: string): void {
+    this.procuracaoCarregando.set(true);
+    this.procuracaoService.obterPorCliente(clienteId).subscribe({
+      next: () => this.procuracaoCarregando.set(false),
+      error: () => this.procuracaoCarregando.set(false),
+    });
+  }
+
   protected validarProcuracao(clienteId: string): void {
     this.erroProcuracao.set(null);
     this.procuracaoValidando.set(true);
@@ -316,6 +334,72 @@ export class ClienteDetalhesPage implements OnInit {
         this.erroProcuracao.set(mensagemDeErro(erro, 'Falha ao validar a procuração e-CAC.'));
       },
     });
+  }
+
+  protected revalidarProcuracao(clienteId: string): void {
+    this.erroProcuracao.set(null);
+    this.procuracaoValidando.set(true);
+    this.procuracaoService.revalidarProcuracao(clienteId).subscribe({
+      next: () => this.procuracaoValidando.set(false),
+      error: (erro: unknown) => {
+        this.procuracaoValidando.set(false);
+        this.erroProcuracao.set(mensagemDeErro(erro, 'Falha ao revalidar a procuração e-CAC.'));
+      },
+    });
+  }
+
+  protected rotuloStatusProcuracao(status: string | null | undefined): string {
+    switch (status) {
+      case 'AUTORIZADA':
+        return 'Autorizada';
+      case 'NAO_AUTORIZADA':
+        return 'Não autorizada';
+      case 'INDETERMINADA':
+        return 'Indeterminada';
+      default:
+        return 'Pendente';
+    }
+  }
+
+  protected badgeStatusProcuracao(status: string | null | undefined): 'success' | 'danger' | 'warning' | 'info' {
+    switch (status) {
+      case 'AUTORIZADA':
+        return 'success';
+      case 'NAO_AUTORIZADA':
+        return 'danger';
+      case 'INDETERMINADA':
+      case 'PENDENTE':
+      default:
+        return 'warning';
+    }
+  }
+
+  protected rotuloEstadoServico(estado: string): string {
+    switch (estado) {
+      case 'NAO_EXIGIDA':
+        return 'Não exigida';
+      case 'AUTORIZADA':
+        return 'Autorizada';
+      case 'CONSULTADA':
+        return 'Consultada';
+      case 'PENDENTE':
+        return 'Pendente';
+      default:
+        return estado;
+    }
+  }
+
+  protected badgeEstadoServico(estado: string): 'success' | 'danger' | 'warning' | 'info' {
+    switch (estado) {
+      case 'AUTORIZADA':
+        return 'success';
+      case 'NAO_EXIGIDA':
+      case 'CONSULTADA':
+        return 'info';
+      case 'PENDENTE':
+      default:
+        return 'warning';
+    }
   }
 
   protected rotuloPorte(porte: string): string {
@@ -343,10 +427,10 @@ export class ClienteDetalhesPage implements OnInit {
   protected formatarTelefone(telefone: string): string {
     const digitos = sanitizeDocument(telefone) ?? telefone;
     if (digitos.length === 10) {
-      return digitos.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+      return digitos.replace(/(\\d{2})(\\d{4})(\\d{4})/, '($1) $2-$3');
     }
     if (digitos.length === 11) {
-      return digitos.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+      return digitos.replace(/(\\d{2})(\\d{5})(\\d{4})/, '($1) $2-$3');
     }
     return telefone;
   }

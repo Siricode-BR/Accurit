@@ -24,6 +24,7 @@
 | P4 | `versaoSistema` dos demais serviços | **Não confirmado** | Alto | Habilitar serviço a serviço |
 | P5 | Produção do Integra Contador (SAPI) | Parcialmente confirmado | Alto | Validar mTLS/e-CNPJ em homologação |
 | P6 | Ativação do modelo B | Não decidido | Alto | Exige necessidade + revisão jurídica |
+| P7 | Formato da resposta `OBTERPROCURACAO41` | **Não confirmado** | Alto | Persistido como agregado (`codigo_servico NULL`, `payload_redigido` JSONB bruto); revisar quando o documento oficial sair |
 
 ## Decisões de implementação da Fase 1
 
@@ -169,6 +170,20 @@ O fluxo SAPI (endpoint, `Role-Type: TERCEIROS`, `Content-Type`, mTLS e-CNPJ, `ac
 O modelo B (contratante central, autor diferente) exige Termo de Autorização, procuração e
 `autenticar_procurador_token`. Não será habilitado sem necessidade concreta, revisão jurídica e
 aprovação de arquitetura.
+
+## P7 — Formato da resposta `OBTERPROCURACAO41`
+
+**Status:** NÃO CONFIRMADO.
+
+O formato de resposta de `OBTERPROCURACAO41` não está documentado em `docs/Serpro`. Como consequência,
+as procurações dessa servico são persistidas como linhas agregadas (`codigo_servico NULL`) com o
+`payload_redigido` JSONB bruto, e a gate de autorização por serviço permanece fail-closed. Quando o
+documento oficial da SERPRO for confirmado, revisar o mapeamento de campos (`contribuinte`,
+`procurador`, `codigo_servico`, `status`, `valido_de`, `valido_ate`, `verificado_em`) e migrar as
+linhas agregadas para o esquema estruturado.
+
+**Como confirmar:** documento oficial `docs/Serpro/Integra-Contador/` com exemplo de resposta de
+`OBTERPROCURACAO41`.
 
 ## D7 — Rota de troca do Trial com `escritorio_id` no path
 

@@ -1,0 +1,109 @@
+<div class="page-container">
+  <div class="page-header">
+    <h1 class="page-title">Nova Consulta em Lote</h1>
+    <p class="page-subtitle">
+      Defina um grupo de consultas fiscais para executar de uma só vez.
+    </p>
+    <button
+      acc-button
+      variant="outline"
+      size="sm"
+      (click)="voltar()"
+    >
+      Voltar
+    </button>
+  </div>
+
+  @if (erroServico(); as mensagemErro) {
+    <div class="alert-error" role="alert">{{ mensagemErro }}</div>
+  }
+  @if (erroValidacao(); as mensagemErro) {
+    <div class="alert-error" role="alert">{{ mensagemErro }}</div>
+  }
+
+  <acc-card>
+    <form [formGroup]="form" (ngSubmit)="criar()">
+      <div class="form-grid">
+        <div class="form-campo">
+          <label class="form-label">Nome</label>
+          <input
+            id="nome"
+            type="text"
+            formControlName="nome"
+            class="input"
+            placeholder="Ex: Consulta mensal DEVEDOR"
+          />
+          @if (form.get('nome')?.invalid && form.get('nome')?.touched) {
+            <small class="campo-erro">O nome é obrigatório.</small>
+          }
+        </div>
+
+        <div class="form-campo">
+          <label class="form-label">Produto</label>
+          <select id="produto" formControlName="produto" class="input input--select">
+            @for (produto of produtos; track produto.valor) {
+              <option [value]="produto.valor">{{ rotuloProduto(produto.valor) }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="form-campo">
+          <label class="form-label">Serviço</label>
+          <select id="servico" formControlName="servico" class="input input--select">
+            @for (servico of servicos; track servico.valor) {
+              <option [value]="servico.valor">{{ rotuloServico(servico.valor) }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="form-campo">
+          <label class="form-label">Verbo</label>
+          <select id="verbo" formControlName="verbo" class="input input--select">
+            @for (verbo of verbos; track verbo.valor) {
+              <option [value]="verbo.valor">{{ verbo.label }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="form-campo form-campo--full">
+          <label class="form-label">Documentos (CPF/CNPJ, um por linha)</label>
+          <textarea
+            id="documentos"
+            formControlName="documentos"
+            class="input input--textarea"
+            rows="4"
+            placeholder="52998224725
+12345678000195"
+          ></textarea>
+          <small class="campo-ajuda">
+            Informe um documento por linha. O tipo (PF/PJ) é detectado automaticamente pelo tamanho.
+          </small>
+          @if (form.get('documentos')?.invalid && form.get('documentos')?.touched) {
+            <small class="campo-erro">Informe ao menos um documento válido.</small>
+          }
+        </div>
+      </div>
+
+      <div class="form-acoes">
+        <button
+          acc-button
+          variant="outline"
+          size="md"
+          type="button"
+          (click)="voltar()"
+        >
+          Cancelar
+        </button>
+        <button
+          acc-button
+          variant="primary"
+          size="md"
+          type="submit"
+          [disabled]="form.invalid || carregando()"
+        >
+          {{ carregando() ? 'Criando...' : 'Criar lote' }}
+        </button>
+      </div>
+    </form>
+  </acc-card>
+</div>

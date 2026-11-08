@@ -81,5 +81,54 @@ export const routes: Routes = [
         (m) => m.IntegraContadorAvulsaPage,
       ),
   },
+  // Fase B — Trabalhos agendados e consultas em lote.
+  {
+    path: 'trabalhos',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/trabalhos/trabalhos-list.component').then(
+        (m) => m.TrabalhosListComponent,
+      ),
+  },
+  {
+    path: 'trabalhos/novo',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/trabalhos/trabalho-criar.component').then(
+        (m) => m.TrabalhoCriarComponent,
+      ),
+  },
+  {
+    path: 'trabalhos/:id',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/trabalhos/trabalho-detalhes.component').then(
+        (m) => m.TrabalhoDetalhesComponent,
+      ),
+  },
+  {
+    path: 'consultas-lote',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/trabalhos/consultas-lote-list.component').then(
+        (m) => m.ConsultasLoteListComponent,
+      ),
+  },
+  {
+    path: 'consultas-lote/novo',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/trabalhos/consulta-lote-criar.component').then(
+        (m) => m.ConsultaLoteCriarComponent,
+      ),
+  },
+  {
+    path: 'consultas-lote/:id',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/trabalhos/consulta-lote-detalhes.component').then(
+        (m) => m.ConsultaLoteDetalhesComponent,
+      ),
+  },
   { path: '**', redirectTo: 'dashboard' },
 ];

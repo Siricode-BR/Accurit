@@ -6,6 +6,8 @@ pub enum ErroIntegraContador {
     ServicoNaoHabilitado,
     #[error("versão do serviço ainda não foi confirmada")]
     VersaoNaoConfirmada,
+    #[error("cliente não encontrado no escritório")]
+    ClienteNaoEncontrado,
     #[error("payload inválido")]
     PayloadInvalido,
     #[error("confirmação explícita necessária")]

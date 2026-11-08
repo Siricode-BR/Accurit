@@ -5,4 +5,5 @@ export * from './cliente/consultas';
 export * from './tenant/tenant';
 export * from './divida-ativa/divida-ativa';
 export * from './serpro/serpro';
+export * from './trabalhos/trabalhos';
 export * from './usuario/usuario';

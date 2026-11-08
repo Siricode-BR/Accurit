@@ -3,4 +3,4 @@ pub mod handlers;
 pub mod router;
 pub mod state;
 
-pub use router::construir;
+pub use router::{construir, construir_admin};

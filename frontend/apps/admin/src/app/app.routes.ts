@@ -1,4 +1,4 @@
-import { inject } from '@angular/core';
+﻿import { inject } from '@angular/core';
 import { Router, Routes } from '@angular/router';
 import { authGuard, publicGuard } from './core/auth/auth.guards';
 
@@ -42,6 +42,12 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadComponent: () =>
       import('./features/usuarios/usuario-list.component').then((m) => m.UsuarioListComponent),
+  },
+  {
+    path: 'catalogo',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/integra-contador/catalogo.page').then((m) => m.CatalogoIntegraPage),
   },
   { path: '**', redirectTo: 'dashboard' },
 ];

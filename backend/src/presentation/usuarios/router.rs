@@ -53,7 +53,11 @@ async fn listar(
     Query(q): Query<ListarUsuariosQuery>,
     admin: bool,
 ) -> Result<Json<ListaUsuariosResponse>, ApiError> {
-    let ator = if admin { ator_admin(&ctx)? } else { ator_portal(&ctx)? };
+    let ator = if admin {
+        ator_admin(&ctx)?
+    } else {
+        ator_portal(&ctx)?
+    };
     let itens: Vec<UsuarioDto> = uc
         .listar(
             &ator,
@@ -78,7 +82,11 @@ async fn criar(
     req: CriarUsuarioRequest,
     admin: bool,
 ) -> Result<(StatusCode, Json<UsuarioDto>), ApiError> {
-    let ator = if admin { ator_admin(&ctx)? } else { ator_portal(&ctx)? };
+    let ator = if admin {
+        ator_admin(&ctx)?
+    } else {
+        ator_portal(&ctx)?
+    };
     let criado = uc.criar(
         &ator,
         CriarUsuarioCommand {
@@ -99,7 +107,11 @@ async fn obter(
     id: Uuid,
     admin: bool,
 ) -> Result<Json<UsuarioDto>, ApiError> {
-    let ator = if admin { ator_admin(&ctx)? } else { ator_portal(&ctx)? };
+    let ator = if admin {
+        ator_admin(&ctx)?
+    } else {
+        ator_portal(&ctx)?
+    };
     Ok(Json(uc.obter(&ator, id)?.into()))
 }
 
@@ -110,7 +122,11 @@ async fn atualizar(
     req: AtualizarUsuarioRequest,
     admin: bool,
 ) -> Result<Json<UsuarioDto>, ApiError> {
-    let ator = if admin { ator_admin(&ctx)? } else { ator_portal(&ctx)? };
+    let ator = if admin {
+        ator_admin(&ctx)?
+    } else {
+        ator_portal(&ctx)?
+    };
     let novo = uc.atualizar(
         &ator,
         id,
@@ -130,7 +146,11 @@ async fn senha(
     req: RedefinirSenhaRequest,
     admin: bool,
 ) -> Result<StatusCode, ApiError> {
-    let ator = if admin { ator_admin(&ctx)? } else { ator_portal(&ctx)? };
+    let ator = if admin {
+        ator_admin(&ctx)?
+    } else {
+        ator_portal(&ctx)?
+    };
     uc.redefinir_senha(&ator, id, &req.senha)?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -141,9 +161,9 @@ macro_rules! rotas {
             .route(
                 "/",
                 get(
-                    |s: State<Estado>, c: Extension<RequestContext>, q: Query<ListarUsuariosQuery>| {
-                        listar(s, c, q, $admin)
-                    },
+                    |s: State<Estado>,
+                     c: Extension<RequestContext>,
+                     q: Query<ListarUsuariosQuery>| { listar(s, c, q, $admin) },
                 )
                 .post(
                     |State(s): State<Estado>,
@@ -162,7 +182,9 @@ macro_rules! rotas {
                     |State(s): State<Estado>,
                      Extension(c): Extension<RequestContext>,
                      Path(id): Path<Uuid>,
-                     Json(r): Json<AtualizarUsuarioRequest>| atualizar(s, c, id, r, $admin),
+                     Json(r): Json<AtualizarUsuarioRequest>| {
+                        atualizar(s, c, id, r, $admin)
+                    },
                 ),
             )
             .route(
@@ -171,7 +193,9 @@ macro_rules! rotas {
                     |State(s): State<Estado>,
                      Extension(c): Extension<RequestContext>,
                      Path(id): Path<Uuid>,
-                     Json(r): Json<RedefinirSenhaRequest>| senha(s, c, id, r, $admin),
+                     Json(r): Json<RedefinirSenhaRequest>| {
+                        senha(s, c, id, r, $admin)
+                    },
                 ),
             )
     };

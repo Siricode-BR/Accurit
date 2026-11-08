@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 mod common;
 
-
 use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::http::{Method, Request, StatusCode, header};
@@ -247,7 +246,6 @@ async fn entrar_gestor(app: &Router) -> Value {
     corpo_json(resposta).await
 }
 
-
 const U: &str = "/api/v1/usuarios";
 const A: &str = "/api/v1/admin/usuarios";
 
@@ -255,10 +253,20 @@ fn novo_usuario(email: &str, seed: u64, papel: &str) -> Value {
     json!({"nome": "Fulano de Tal", "email": email, "cpf": cpf_com_dv(seed), "papel": papel, "senha": "outra-senha-123"})
 }
 
-async fn chamar(app: &Router, m: Method, c: &str, corpo: Option<Value>, t: &str) -> (StatusCode, Value) {
+async fn chamar(
+    app: &Router,
+    m: Method,
+    c: &str,
+    corpo: Option<Value>,
+    t: &str,
+) -> (StatusCode, Value) {
     let r = enviar(app, pedido(m, c, corpo, Some(t))).await;
     let s = r.status();
-    let b = if s == StatusCode::NO_CONTENT { Value::Null } else { corpo_json(r).await };
+    let b = if s == StatusCode::NO_CONTENT {
+        Value::Null
+    } else {
+        corpo_json(r).await
+    };
     (s, b)
 }
 
@@ -273,7 +281,14 @@ async fn titular_gerencia_usuarios_do_proprio_escritorio() {
     let t = token_de(&login);
     let tb = token_de(&entrar_portal(&a.app, "beta", "CLIENTE").await);
 
-    let (s, criado) = chamar(&a.app, Method::POST, U, Some(novo_usuario("Novo@Alfa.test", 10, "OPERADOR")), &t).await;
+    let (s, criado) = chamar(
+        &a.app,
+        Method::POST,
+        U,
+        Some(novo_usuario("Novo@Alfa.test", 10, "OPERADOR")),
+        &t,
+    )
+    .await;
     assert_eq!(s, StatusCode::CREATED);
     assert_eq!(criado["email"], "novo@alfa.test");
     assert_eq!(criado["escritorioSlug"], "alfa");
@@ -282,53 +297,152 @@ async fn titular_gerencia_usuarios_do_proprio_escritorio() {
 
     let (_, lista) = chamar(&a.app, Method::GET, U, None, &t).await;
     assert_eq!(lista["total"], 3);
-    let (_, lista) = chamar(&a.app, Method::GET, &format!("{U}?busca=novo%40alfa&ativo=true"), None, &t).await;
+    let (_, lista) = chamar(
+        &a.app,
+        Method::GET,
+        &format!("{U}?busca=novo%40alfa&ativo=true"),
+        None,
+        &t,
+    )
+    .await;
     assert_eq!(lista["total"], 1);
 
     // Isolamento: outro tenant não enxerga nem altera.
     let (s, _) = chamar(&a.app, Method::GET, &format!("{U}/{id}"), None, &tb).await;
     assert_eq!(s, StatusCode::NOT_FOUND);
-    let (s, _) = chamar(&a.app, Method::PATCH, &format!("{U}/{id}"), Some(json!({"ativo": false})), &tb).await;
+    let (s, _) = chamar(
+        &a.app,
+        Method::PATCH,
+        &format!("{U}/{id}"),
+        Some(json!({"ativo": false})),
+        &tb,
+    )
+    .await;
     assert_eq!(s, StatusCode::NOT_FOUND);
     let (_, lb) = chamar(&a.app, Method::GET, U, None, &tb).await;
     assert_eq!(lb["total"], 1);
 
     // E-mail global duplicado (outro escritório) e CPF duplicado no mesmo escritório.
-    let (s, _) = chamar(&a.app, Method::POST, U, Some(novo_usuario("cliente@beta.test", 11, "OPERADOR")), &t).await;
+    let (s, _) = chamar(
+        &a.app,
+        Method::POST,
+        U,
+        Some(novo_usuario("cliente@beta.test", 11, "OPERADOR")),
+        &t,
+    )
+    .await;
     assert_eq!(s, StatusCode::CONFLICT);
-    let (s, _) = chamar(&a.app, Method::POST, U, Some(novo_usuario("x@alfa.test", 10, "OPERADOR")), &t).await;
+    let (s, _) = chamar(
+        &a.app,
+        Method::POST,
+        U,
+        Some(novo_usuario("x@alfa.test", 10, "OPERADOR")),
+        &t,
+    )
+    .await;
     assert_eq!(s, StatusCode::CONFLICT);
     let (s, _) = chamar(&a.app, Method::POST, U, Some(json!({"nome":"X","email":"y@alfa.test","cpf":"11111111111","papel":"OPERADOR","senha":"outra-senha-123"})), &t).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
 
     // Atualização + desativação revoga sessões; login deixa de funcionar.
-    let (s, atu) = chamar(&a.app, Method::PATCH, &format!("{U}/{id}"), Some(json!({"nome": "Renomeado"})), &t).await;
+    let (s, atu) = chamar(
+        &a.app,
+        Method::PATCH,
+        &format!("{U}/{id}"),
+        Some(json!({"nome": "Renomeado"})),
+        &t,
+    )
+    .await;
     assert_eq!(s, StatusCode::OK);
     assert_eq!(atu["nome"], "Renomeado");
     let novo = entrar_portal_email(&a.app, "novo@alfa.test", "outra-senha-123").await;
     assert_eq!(novo, StatusCode::OK);
-    let (s, d) = chamar(&a.app, Method::PATCH, &format!("{U}/{id}"), Some(json!({"ativo": false})), &t).await;
+    let (s, d) = chamar(
+        &a.app,
+        Method::PATCH,
+        &format!("{U}/{id}"),
+        Some(json!({"ativo": false})),
+        &t,
+    )
+    .await;
     assert_eq!(s, StatusCode::OK);
     assert_eq!(d["ativo"], false);
-    assert_ne!(entrar_portal_email(&a.app, "novo@alfa.test", "outra-senha-123").await, StatusCode::OK);
-    assert_eq!(contar(&a.banco, "SELECT count(*) AS total FROM sessoes s JOIN usuarios u ON u.id=s.usuario_id WHERE u.email='novo@alfa.test' AND s.revogada_em IS NULL"), 0);
+    assert_ne!(
+        entrar_portal_email(&a.app, "novo@alfa.test", "outra-senha-123").await,
+        StatusCode::OK
+    );
+    assert_eq!(
+        contar(
+            &a.banco,
+            "SELECT count(*) AS total FROM sessoes s JOIN usuarios u ON u.id=s.usuario_id WHERE u.email='novo@alfa.test' AND s.revogada_em IS NULL"
+        ),
+        0
+    );
 
     // Redefinir senha.
-    let (s, _) = chamar(&a.app, Method::PATCH, &format!("{U}/{id}"), Some(json!({"ativo": true})), &t).await;
+    let (s, _) = chamar(
+        &a.app,
+        Method::PATCH,
+        &format!("{U}/{id}"),
+        Some(json!({"ativo": true})),
+        &t,
+    )
+    .await;
     assert_eq!(s, StatusCode::OK);
-    let (s, _) = chamar(&a.app, Method::POST, &format!("{U}/{id}/senha"), Some(json!({"senha": "curta"})), &t).await;
+    let (s, _) = chamar(
+        &a.app,
+        Method::POST,
+        &format!("{U}/{id}/senha"),
+        Some(json!({"senha": "curta"})),
+        &t,
+    )
+    .await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
-    let (s, _) = chamar(&a.app, Method::POST, &format!("{U}/{id}/senha"), Some(json!({"senha": "senha-nova-456"})), &t).await;
+    let (s, _) = chamar(
+        &a.app,
+        Method::POST,
+        &format!("{U}/{id}/senha"),
+        Some(json!({"senha": "senha-nova-456"})),
+        &t,
+    )
+    .await;
     assert_eq!(s, StatusCode::NO_CONTENT);
-    assert_ne!(entrar_portal_email(&a.app, "novo@alfa.test", "outra-senha-123").await, StatusCode::OK);
-    assert_eq!(entrar_portal_email(&a.app, "novo@alfa.test", "senha-nova-456").await, StatusCode::OK);
+    assert_ne!(
+        entrar_portal_email(&a.app, "novo@alfa.test", "outra-senha-123").await,
+        StatusCode::OK
+    );
+    assert_eq!(
+        entrar_portal_email(&a.app, "novo@alfa.test", "senha-nova-456").await,
+        StatusCode::OK
+    );
 
-    assert!(contar(&a.banco, "SELECT count(*) AS total FROM auditoria_eventos WHERE entidade='usuario' AND usuario_id IS NOT NULL") >= 5);
-    assert_eq!(contar(&a.banco, "SELECT count(*) AS total FROM auditoria_eventos WHERE valor_novo::text ILIKE '%senha-nova%'"), 0);
+    assert!(
+        contar(
+            &a.banco,
+            "SELECT count(*) AS total FROM auditoria_eventos WHERE entidade='usuario' AND usuario_id IS NOT NULL"
+        ) >= 5
+    );
+    assert_eq!(
+        contar(
+            &a.banco,
+            "SELECT count(*) AS total FROM auditoria_eventos WHERE valor_novo::text ILIKE '%senha-nova%'"
+        ),
+        0
+    );
 }
 
 async fn entrar_portal_email(app: &Router, email: &str, senha: &str) -> StatusCode {
-    enviar(app, pedido(Method::POST, "/api/v1/auth/client/login", Some(json!({"email": email, "senha": senha})), None)).await.status()
+    enviar(
+        app,
+        pedido(
+            Method::POST,
+            "/api/v1/auth/client/login",
+            Some(json!({"email": email, "senha": senha})),
+            None,
+        ),
+    )
+    .await
+    .status()
 }
 
 #[tokio::test]
@@ -343,14 +457,42 @@ async fn operador_nao_gerencia_e_titular_tem_travas() {
 
     let (s, _) = chamar(&a.app, Method::GET, U, None, &to).await;
     assert_eq!(s, StatusCode::FORBIDDEN);
-    let (s, _) = chamar(&a.app, Method::POST, U, Some(novo_usuario("z@alfa.test", 20, "OPERADOR")), &to).await;
+    let (s, _) = chamar(
+        &a.app,
+        Method::POST,
+        U,
+        Some(novo_usuario("z@alfa.test", 20, "OPERADOR")),
+        &to,
+    )
+    .await;
     assert_eq!(s, StatusCode::FORBIDDEN);
 
-    let (s, _) = chamar(&a.app, Method::PATCH, &format!("{U}/{meu_id}"), Some(json!({"ativo": false})), &t).await;
+    let (s, _) = chamar(
+        &a.app,
+        Method::PATCH,
+        &format!("{U}/{meu_id}"),
+        Some(json!({"ativo": false})),
+        &t,
+    )
+    .await;
     assert_eq!(s, StatusCode::CONFLICT);
-    let (s, _) = chamar(&a.app, Method::PATCH, &format!("{U}/{meu_id}"), Some(json!({"papel": "OPERADOR"})), &t).await;
+    let (s, _) = chamar(
+        &a.app,
+        Method::PATCH,
+        &format!("{U}/{meu_id}"),
+        Some(json!({"papel": "OPERADOR"})),
+        &t,
+    )
+    .await;
     assert_eq!(s, StatusCode::CONFLICT);
-    let (s, _) = chamar(&a.app, Method::PATCH, &format!("{U}/{meu_id}"), Some(json!({})), &t).await;
+    let (s, _) = chamar(
+        &a.app,
+        Method::PATCH,
+        &format!("{U}/{meu_id}"),
+        Some(json!({})),
+        &t,
+    )
+    .await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
 }
 
@@ -372,7 +514,14 @@ async fn admin_gerencia_usuarios_globalmente() {
     let (_, todos) = chamar(&a.app, Method::GET, A, None, &t).await;
     assert_eq!(todos["total"], 2);
     let esc = id_do_escritorio(&a.banco, "beta").unwrap();
-    let (_, so_beta) = chamar(&a.app, Method::GET, &format!("{A}?escritorioId={esc}"), None, &t).await;
+    let (_, so_beta) = chamar(
+        &a.app,
+        Method::GET,
+        &format!("{A}?escritorioId={esc}"),
+        None,
+        &t,
+    )
+    .await;
     assert_eq!(so_beta["total"], 1);
     assert_eq!(so_beta["itens"][0]["escritorioSlug"], "beta");
 
@@ -386,16 +535,50 @@ async fn admin_gerencia_usuarios_globalmente() {
     assert_eq!(s, StatusCode::CONFLICT);
     let id = criado["id"].as_str().unwrap();
 
-    let (s, d) = chamar(&a.app, Method::PATCH, &format!("{A}/{id}"), Some(json!({"ativo": false, "papel": "OPERADOR"})), &t).await;
+    let (s, d) = chamar(
+        &a.app,
+        Method::PATCH,
+        &format!("{A}/{id}"),
+        Some(json!({"ativo": false, "papel": "OPERADOR"})),
+        &t,
+    )
+    .await;
     assert_eq!(s, StatusCode::OK);
     assert_eq!(d["ativo"], false);
-    let (s, _) = chamar(&a.app, Method::POST, &format!("{A}/{id}/senha"), Some(json!({"senha": "senha-nova-456"})), &t).await;
+    let (s, _) = chamar(
+        &a.app,
+        Method::POST,
+        &format!("{A}/{id}/senha"),
+        Some(json!({"senha": "senha-nova-456"})),
+        &t,
+    )
+    .await;
     assert_eq!(s, StatusCode::NO_CONTENT);
-    assert!(contar(&a.banco, "SELECT count(*) AS total FROM auditoria_eventos WHERE administrador_id IS NOT NULL AND entidade='usuario'") >= 3);
+    assert!(
+        contar(
+            &a.banco,
+            "SELECT count(*) AS total FROM auditoria_eventos WHERE administrador_id IS NOT NULL AND entidade='usuario'"
+        ) >= 3
+    );
 
     // Último titular ativo não pode ser desativado, nem pelo admin.
-    let alfa = chamar(&a.app, Method::GET, &format!("{A}?busca=cliente%40alfa"), None, &t).await.1;
+    let alfa = chamar(
+        &a.app,
+        Method::GET,
+        &format!("{A}?busca=cliente%40alfa"),
+        None,
+        &t,
+    )
+    .await
+    .1;
     let alfa_id = alfa["itens"][0]["id"].as_str().unwrap();
-    let (s, _) = chamar(&a.app, Method::PATCH, &format!("{A}/{alfa_id}"), Some(json!({"ativo": false})), &t).await;
+    let (s, _) = chamar(
+        &a.app,
+        Method::PATCH,
+        &format!("{A}/{alfa_id}"),
+        Some(json!({"ativo": false})),
+        &t,
+    )
+    .await;
     assert_eq!(s, StatusCode::CONFLICT);
 }

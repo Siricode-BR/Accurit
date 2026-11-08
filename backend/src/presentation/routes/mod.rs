@@ -52,7 +52,8 @@ where
     let pool = estado.pool.clone();
     let cliente_repo = ClienteRepositorioDiesel::novo(pool.clone());
     let admin_repo = AdminRepositorioDiesel::novo(pool.clone());
-    let argon2 = std::sync::Arc::new(HashArgon2::novo(&config.auth).expect("argon2 deve inicializar"));
+    let argon2 =
+        std::sync::Arc::new(HashArgon2::novo(&config.auth).expect("argon2 deve inicializar"));
 
     let criar_clientes = CriarClienteUseCase::novo(
         std::sync::Arc::new(cliente_repo.clone()),
@@ -201,10 +202,7 @@ where
 
         api = api.nest(
             "/usuarios",
-            crate::presentation::usuarios::construir_usuarios(
-                gestao_usuarios.clone(),
-                &auth_state,
-            ),
+            crate::presentation::usuarios::construir_usuarios(gestao_usuarios.clone(), &auth_state),
         );
 
         api = api.nest(
@@ -213,23 +211,25 @@ where
                 gestao_usuarios.clone(),
                 &auth_state,
             )
-            .merge(Router::new()
-                .route(
-                    "/escritorios",
-                    post(provisionar_tenant).get(listar_escritorios),
-                )
-                .route(
-                    "/escritorios/{id}/serpro/trial",
-                    axum::routing::patch(alterar_modo_trial_serpro),
-                )
-                .route_layer(axum_middleware::from_fn_with_state(
-                    ExigirAudiencia::novo(
-                        auth_state.tokens.clone(),
-                        crate::domain::auth::Audiencia::Admin,
-                    ),
-                    exigir,
-                ))
-                .with_state(admin_state)),
+            .merge(
+                Router::new()
+                    .route(
+                        "/escritorios",
+                        post(provisionar_tenant).get(listar_escritorios),
+                    )
+                    .route(
+                        "/escritorios/{id}/serpro/trial",
+                        axum::routing::patch(alterar_modo_trial_serpro),
+                    )
+                    .route_layer(axum_middleware::from_fn_with_state(
+                        ExigirAudiencia::novo(
+                            auth_state.tokens.clone(),
+                            crate::domain::auth::Audiencia::Admin,
+                        ),
+                        exigir,
+                    ))
+                    .with_state(admin_state),
+            ),
         );
 
         api = api.nest(
@@ -284,6 +284,20 @@ where
             crate::infrastructure::persistence::integra_contador::IntegraContadorRepositorioDiesel::novo(
                 pool.clone(),
             );
+        // ===== FASE A — procurações persistentes e catálogo configurável =====
+        let cliente_repositorio_integra = std::sync::Arc::new(cliente_repo.clone());
+        let procuracoes_repositorio_integra = std::sync::Arc::new(
+            crate::infrastructure::persistence::integra_contador::ProcuracoesRepositorioDiesel::novo(
+                pool.clone(),
+            ),
+        );
+        let catalogo_integra: std::sync::Arc<
+            dyn crate::application::integra_contador::ports::ProvedorCatalogoIntegra,
+        > = std::sync::Arc::new(
+            crate::infrastructure::persistence::integra_contador::CatalogoServicosIntegraDiesel::novo(
+                pool.clone(),
+            ),
+        );
         let cliente_integra_contador = std::sync::Arc::new(
             crate::infrastructure::integra_contador::ClienteIntegraContadorImpl::novo(
                 http_integra_contador,
@@ -298,9 +312,30 @@ where
                 std::sync::Arc::new(repositorio_integra_contador.clone()),
                 std::sync::Arc::new(repositorio_integra_contador.clone()),
                 std::sync::Arc::new(
-                    crate::infrastructure::persistence::integra_contador::ProcuracaoNaoVerificavel,
+                    crate::infrastructure::persistence::integra_contador::ValidadorProcuracaoDiesel::novo(
+                        procuracoes_repositorio_integra.clone(),
+                        Some(config.serpro.procuracao_cache_ttl_secs),
+                    ),
                 ),
                 config.serpro.operator_header_enabled,
+            )
+            .com_catalogo(Some(catalogo_integra.clone())),
+        );
+        let validar_procuracao_integra = std::sync::Arc::new(
+            crate::application::integra_contador::ValidarProcuracoesUseCase::novo(
+                cliente_repositorio_integra.clone(),
+                std::sync::Arc::new(repositorio_integra_contador.clone()),
+                executar_integra_contador.clone(),
+                procuracoes_repositorio_integra.clone(),
+                Some(config.serpro.procuracao_cache_ttl_secs),
+            ),
+        );
+        let listar_procuracao_integra = std::sync::Arc::new(
+            crate::application::integra_contador::ListarProcuracoesUseCase::novo(
+                cliente_repositorio_integra.clone(),
+                procuracoes_repositorio_integra.clone(),
+                Some(catalogo_integra.clone()),
+                Some(config.serpro.procuracao_cache_ttl_secs),
             ),
         );
 
@@ -378,16 +413,29 @@ where
             crate::presentation::integra_contador::state::EstadoIntegraContador::novo(
                 executar_integra_contador,
                 autenticar_procurador_use_case,
+                validar_procuracao_integra,
+                listar_procuracao_integra,
+                catalogo_integra,
             );
         api = api.nest(
             "/serpro/integra-contador",
             crate::presentation::integra_contador::construir(
-                integra_contador_state,
+                integra_contador_state.clone(),
                 ExigirAudiencia::novo(
                     auth_state.tokens.clone(),
                     crate::domain::auth::Audiencia::Client,
                 ),
                 estado_ambiente.clone(),
+            ),
+        );
+        api = api.nest(
+            "/admin/integra-contador",
+            crate::presentation::integra_contador::construir_admin(
+                integra_contador_state,
+                ExigirAudiencia::novo(
+                    auth_state.tokens.clone(),
+                    crate::domain::auth::Audiencia::Admin,
+                ),
             ),
         );
 
@@ -481,6 +529,92 @@ where
                     crate::domain::auth::Audiencia::Client,
                 ),
                 estado_ambiente,
+            ),
+        );
+
+        // ===== Fase B — Trabalhos agendados e consultas em lote =====
+        let trabalhos_repo = std::sync::Arc::new(
+            crate::infrastructure::persistence::trabalhos::TrabalhosAgendadosDiesel::novo(
+                pool.clone(),
+            ),
+        );
+        let execucoes_repo = std::sync::Arc::new(
+            crate::infrastructure::persistence::trabalhos::ExecucoesTrabalhoDiesel::novo(
+                pool.clone(),
+            ),
+        );
+        let lotes_repo = std::sync::Arc::new(
+            crate::infrastructure::persistence::trabalhos::ConsultasLoteDiesel::novo(pool.clone()),
+        );
+        let itens_lote_repo = std::sync::Arc::new(
+            crate::infrastructure::persistence::trabalhos::ItensConsultaLoteDiesel::novo(
+                pool.clone(),
+            ),
+        );
+
+        let criar_trabalho_uc = std::sync::Arc::new(
+            crate::application::trabalhos::CriarTrabalhoAgendadoUseCase::novo(
+                trabalhos_repo.clone(),
+            ),
+        );
+        let listar_trabalhos_uc = std::sync::Arc::new(
+            crate::application::trabalhos::ListarTrabalhosAgendadosUseCase::novo(
+                trabalhos_repo.clone(),
+            ),
+        );
+        let buscar_trabalho_uc = std::sync::Arc::new(
+            crate::application::trabalhos::BuscarTrabalhoAgendadoUseCase::novo(
+                trabalhos_repo.clone(),
+            ),
+        );
+        let habilitar_desabilitar_trabalho_uc = std::sync::Arc::new(
+            crate::application::trabalhos::HabilitarDesabilitarTrabalhoUseCase::novo(
+                trabalhos_repo.clone(),
+            ),
+        );
+        let listar_execucoes_uc = std::sync::Arc::new(
+            crate::application::trabalhos::ListarExecucoesTrabalhoUseCase::novo(
+                execucoes_repo.clone(),
+            ),
+        );
+        let criar_lote_uc = std::sync::Arc::new(
+            crate::application::trabalhos::CriarConsultaLoteUseCase::novo(
+                lotes_repo.clone(),
+                itens_lote_repo.clone(),
+            ),
+        );
+        let listar_lotes_uc = std::sync::Arc::new(
+            crate::application::trabalhos::ListarConsultasLoteUseCase::novo(lotes_repo.clone()),
+        );
+        let buscar_lote_uc = std::sync::Arc::new(
+            crate::application::trabalhos::BuscarConsultaLoteUseCase::novo(lotes_repo.clone()),
+        );
+        let listar_itens_lote_uc = std::sync::Arc::new(
+            crate::application::trabalhos::ListarItensConsultaLoteUseCase::novo(
+                itens_lote_repo.clone(),
+            ),
+        );
+
+        let estado_trabalhos = crate::presentation::trabalhos::state::EstadoTrabalhos::novo(
+            criar_trabalho_uc,
+            listar_trabalhos_uc,
+            buscar_trabalho_uc,
+            habilitar_desabilitar_trabalho_uc,
+            listar_execucoes_uc,
+            criar_lote_uc,
+            listar_lotes_uc,
+            buscar_lote_uc,
+            listar_itens_lote_uc,
+        );
+
+        api = api.nest(
+            "/trabalhos",
+            crate::presentation::trabalhos::construir(
+                estado_trabalhos,
+                ExigirAudiencia::novo(
+                    auth_state.tokens.clone(),
+                    crate::domain::auth::Audiencia::Client,
+                ),
             ),
         );
     }

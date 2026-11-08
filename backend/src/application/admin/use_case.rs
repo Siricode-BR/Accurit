@@ -64,7 +64,11 @@ impl ProvisionarTenantUseCase {
         // O e-mail identifica o usuário no login, então precisa ser único na plataforma.
         // Verifica antes de criar o escritório para não deixar um tenant órfão.
         let email_titular = comando.email_titular.trim().to_ascii_lowercase();
-        if self.usuario_repo.buscar_por_email(&email_titular)?.is_some() {
+        if self
+            .usuario_repo
+            .buscar_por_email(&email_titular)?
+            .is_some()
+        {
             return Err(ProvisionarError::Repositorio(
                 RepositorioError::UsuarioExistente,
             ));

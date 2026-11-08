@@ -1,6 +1,11 @@
 use serde::{Deserialize, Serialize};
 
+use crate::application::integra_contador::EstadoProcuracaoCliente;
+use crate::application::integra_contador::EstadoProcuracaoServico;
 use crate::application::integra_contador::ResultadoIntegraContador;
+use crate::application::integra_contador::ResultadoValidarProcuracao;
+use crate::application::integra_contador::ports::LinhaCatalogoServico;
+use crate::application::integra_contador::ports::RegistroProcuracao;
 use crate::domain::integra_contador::envelope::{PedidoDados, VerboIntegraContador};
 use crate::domain::integra_contador::servicos::{EstadoCatalogo, ServicoIntegraContador};
 use crate::domain::serpro::ambiente::AmbienteSerpro;
@@ -21,6 +26,183 @@ pub struct RequisicaoExecucao {
 #[serde(rename_all = "camelCase")]
 pub struct RequisicaoConsultaProcuracoes {
     pub documento_contribuinte: String,
+}
+
+// ===== FASE A — procurações persistentes e catálogo configurável =====
+
+/// `POST /procuracoes/validar` (ou `.../revalidar`, que força a consulta).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RequisicaoValidarProcuracao {
+    pub cliente_id: uuid::Uuid,
+}
+
+/// `GET /procuracoes?clienteId=…`
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsultaProcuracoesQuery {
+    pub cliente_id: uuid::Uuid,
+}
+
+/// Registro persistido de procuração (sem o `payload_redigido` — dado
+/// tolerado do SERPRO, auditável internamente, não há por que expor).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProcuracaoRegistroResponse {
+    pub id: uuid::Uuid,
+    pub cliente_id: Option<uuid::Uuid>,
+    pub ambiente: AmbienteSerpro,
+    pub contribuinte_cpf_cnpj: String,
+    pub procurador_cpf_cnpj: String,
+    pub codigo_servico: Option<String>,
+    pub status: String,
+    pub valido_de: Option<chrono::DateTime<chrono::Utc>>,
+    pub valido_ate: Option<chrono::DateTime<chrono::Utc>>,
+    pub verificado_em: chrono::DateTime<chrono::Utc>,
+    pub origem: String,
+}
+
+impl From<ResultadoValidarProcuracao> for ProcuracaoRegistroResponse {
+    fn from(resultado: ResultadoValidarProcuracao) -> Self {
+        Self::de_registro(&resultado.registro)
+    }
+}
+
+impl ProcuracaoRegistroResponse {
+    pub fn de_registro(registro: &RegistroProcuracao) -> Self {
+        Self {
+            id: registro.id,
+            cliente_id: registro.cliente_id,
+            ambiente: registro.ambiente,
+            contribuinte_cpf_cnpj: registro.contribuinte_cpf_cnpj.clone(),
+            procurador_cpf_cnpj: registro.procurador_cpf_cnpj.clone(),
+            codigo_servico: registro.codigo_servico.clone(),
+            status: registro.status.clone(),
+            valido_de: registro.valido_de,
+            valido_ate: registro.valido_ate,
+            verificado_em: registro.verificado_em,
+            origem: registro.origem.clone(),
+        }
+    }
+}
+
+/// `POST /procuracoes/validar` — registro persistido + fonte da resposta.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResultadoValidarProcuracaoResponse {
+    /// `CACHE` (verificação recente, dentro do TTL) ou `SERPRO`.
+    pub fonte: &'static str,
+    pub registro: ProcuracaoRegistroResponse,
+}
+
+impl From<ResultadoValidarProcuracao> for ResultadoValidarProcuracaoResponse {
+    fn from(resultado: ResultadoValidarProcuracao) -> Self {
+        Self {
+            fonte: resultado.fonte,
+            registro: ProcuracaoRegistroResponse::de_registro(&resultado.registro),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EstadoProcuracaoServicoResponse {
+    pub id_sistema: String,
+    pub id_servico: String,
+    pub verbo: VerboIntegraContador,
+    pub habilitado: bool,
+    /// `NAO_EXIGIDA` | `AUTORIZADA` | `CONSULTADA` | `PENDENTE`.
+    pub estado: String,
+}
+
+impl From<EstadoProcuracaoServico> for EstadoProcuracaoServicoResponse {
+    fn from(estado: EstadoProcuracaoServico) -> Self {
+        Self {
+            id_sistema: estado.id_sistema,
+            id_servico: estado.id_servico,
+            verbo: estado.verbo,
+            habilitado: estado.habilitado,
+            estado: estado.estado,
+        }
+    }
+}
+
+/// `GET /procuracoes` — estado consolidado da procuração de um cliente.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EstadoProcuracaoClienteResponse {
+    pub contribuinte_cpf_cnpj: String,
+    pub procurador_cpf_cnpj: String,
+    pub status: Option<String>,
+    pub verificado_em: Option<chrono::DateTime<chrono::Utc>>,
+    pub valido_de: Option<chrono::DateTime<chrono::Utc>>,
+    pub valido_ate: Option<chrono::DateTime<chrono::Utc>>,
+    pub servicos: Vec<EstadoProcuracaoServicoResponse>,
+}
+
+impl From<EstadoProcuracaoCliente> for EstadoProcuracaoClienteResponse {
+    fn from(estado: EstadoProcuracaoCliente) -> Self {
+        Self {
+            contribuinte_cpf_cnpj: estado.contribuinte_cpf_cnpj,
+            procurador_cpf_cnpj: estado.procurador_cpf_cnpj,
+            status: estado.status,
+            verificado_em: estado.verificado_em,
+            valido_de: estado.valido_de,
+            valido_ate: estado.valido_ate,
+            servicos: estado
+                .servicos
+                .into_iter()
+                .map(EstadoProcuracaoServicoResponse::from)
+                .collect(),
+        }
+    }
+}
+
+// ===== FASE A — catálogo configurável (painel admin, ADR-0013) =====
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinhaCatalogoServicoResponse {
+    pub id: uuid::Uuid,
+    pub id_sistema: String,
+    pub id_servico: String,
+    pub verbo: VerboIntegraContador,
+    pub versao_sistema: Option<String>,
+    pub versao_confirmada: bool,
+    pub habilitado: bool,
+    pub apenas_consulta: bool,
+    pub requer_procuracao: bool,
+    pub codigos_procuracao: Vec<String>,
+    pub descricao: String,
+    pub atualizado_em: chrono::DateTime<chrono::Utc>,
+}
+
+impl From<LinhaCatalogoServico> for LinhaCatalogoServicoResponse {
+    fn from(linha: LinhaCatalogoServico) -> Self {
+        Self {
+            id: linha.id,
+            id_sistema: linha.id_sistema,
+            id_servico: linha.id_servico,
+            verbo: linha.verbo,
+            versao_sistema: linha.versao_sistema,
+            versao_confirmada: linha.versao_confirmada,
+            habilitado: linha.habilitado,
+            apenas_consulta: linha.apenas_consulta,
+            requer_procuracao: linha.requer_procuracao,
+            codigos_procuracao: linha.codigos_procuracao,
+            descricao: linha.descricao,
+            atualizado_em: linha.atualizado_em,
+        }
+    }
+}
+
+/// `PATCH /admin/integra-contador/catalogo/{sistema}/{servico}` —
+/// liga/desliga uma linha do catálogo (validada contra o catálogo de
+/// referência do domínio; versão pendente permanece fail-closed).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RequisicaoHabilitarServico {
+    pub habilitado: bool,
 }
 
 /// Requisição de validação de procuração e-CAC de um cliente (modelo

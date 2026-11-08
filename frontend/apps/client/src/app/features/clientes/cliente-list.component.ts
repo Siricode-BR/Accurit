@@ -26,7 +26,7 @@ import {
   AccFilterOption,
 } from '@accurit/ui';
 import { isValidDocument, formatDocument } from '@accurit/shared';
-import { ClienteDto, FiltroClientes } from '@accurit/core';
+import { ClienteDto, FiltroClientes, StatusProcuracaoGeral } from '@accurit/core';
 
 @Component({
   selector: 'app-cliente-list',
@@ -139,8 +139,32 @@ export class ClienteListComponent implements OnInit {
   }
 
   // Status exibido no acc-badge por cliente (ausência = Pendente).
-  statusProcuracaoDe(clienteId: string): 'AUTORIZADA' | 'PENDENTE' {
+  statusProcuracaoDe(clienteId: string): StatusProcuracaoGeral {
     return this.procuracaoService.statusDe(clienteId);
+  }
+
+  badgeStatusProcuracao(status: StatusProcuracaoGeral): 'success' | 'danger' | 'warning' {
+    switch (status) {
+      case 'AUTORIZADA':
+        return 'success';
+      case 'NAO_AUTORIZADA':
+        return 'danger';
+      default:
+        return 'warning';
+    }
+  }
+
+  rotuloStatusProcuracao(status: StatusProcuracaoGeral): string {
+    switch (status) {
+      case 'AUTORIZADA':
+        return 'Autorizada';
+      case 'NAO_AUTORIZADA':
+        return 'Não autorizada';
+      case 'INDETERMINADA':
+        return 'Indeterminada';
+      default:
+        return 'Pendente';
+    }
   }
 
   private marcarValidando(clienteId: string, ativo: boolean): void {

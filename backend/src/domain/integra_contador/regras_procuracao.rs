@@ -188,26 +188,38 @@ impl ValidacaoProcuracao {
     }
 }
 
+/// Sistemas de parcelamento integrados do catálogo oficial (Integra-Parcelamentos).
+pub const SISTEMAS_PARCELAMENTO: [&str; 10] = [
+    "PARCSN",
+    "PARCSN-ESP",
+    "PERTSN",
+    "RELPSN",
+    "PARCMEI",
+    "PARCMEI-ESP",
+    "PERTMEI",
+    "RELPMEI",
+    "PARC-PAEX",
+    "PARC-SIPADE",
+];
+
+/// `true` quando o `idSistema` pertence a um sistema de parcelamento.
+pub fn sistema_de_parcelamento(id_sistema: &str) -> bool {
+    SISTEMAS_PARCELAMENTO.contains(&id_sistema.to_uppercase().as_str())
+}
+
 /// Serviço bloqueado pela allowlist (D4, ADR-0002):
 /// - todos os sistemas de parcelamento (e.g. PARCSN, PARCSN-ESP, PERTSN,
 ///   RELPSN, PARCMEI, PARCMEI-ESP, PERTMEI, RELPMEI, PARC-PAEX, PARC-SIPADE),
 ///   inclusive serviços `Consultar`;
 /// - `SICALC` `Emitir` (`CONSOLIDARGERARDARF51`, `GERARDARFCODBARRA53`);
 /// - `PGMEI / DIVIDAATIVA24` fica `AguardandoDecisao` (separado).
+///
+/// FASE A ([ADR-0013]): a restrição de parcelamentos passa a aplicar-se por
+/// verbo — `Consultar` é viável para atendimento de rotina fiscal; emissores
+/// (`Emitir`) continuam bloqueados. Enxergue `bloqueado_por_verbo` em
+/// `servicos.rs` para a checagem combinada.
 pub fn bloqueado_allowlist(id_sistema: &str, id_servico: &str) -> bool {
-    const SISTEMAS_PARCELAMENTO: [&str; 10] = [
-        "PARCSN",
-        "PARCSN-ESP",
-        "PERTSN",
-        "RELPSN",
-        "PARCMEI",
-        "PARCMEI-ESP",
-        "PERTMEI",
-        "RELPMEI",
-        "PARC-PAEX",
-        "PARC-SIPADE",
-    ];
-    if SISTEMAS_PARCELAMENTO.contains(&id_sistema.to_uppercase().as_str()) {
+    if sistema_de_parcelamento(id_sistema) {
         return true;
     }
     if id_sistema.eq_ignore_ascii_case("SICALC")

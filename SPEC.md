@@ -639,7 +639,51 @@ No modelo de contratação A (ADR-0007), `autorPedidoDados` é o próprio contra
 Autorização não é necessário para as operações normais. O Termo via `ENVIOXMLASSINADO81` só é
 exigido quando o autor do pedido não é o contratante (modelo B ou procurador).
 
+### 6.2 Persistência de procurações e catálogo configurável
+
+As procurações verificadas são persistidas na tabela `procuracoes` (§9.7), isoladas por
+`escritorio_id` e opcionalmente vinculadas a `cliente_id` (`ON DELETE SET NULL`). A coluna
+`codigo_servico` pode ser `NULL` para serviços sem regra de procuração (linhas agregadas); o
+formato de resposta de `OBTERPROCURACAO41` não está documentado oficialmente (item P7), então
+essas linhas guardam o `payload_redigido` JSONB bruto até confirmação do contrato.
+
+**Status persistidos:** `CONCLUIDO → VALIDA`, `FALHA_AUTORIZACAO → NAO_AUTORIZADA`,
+`FALHA_TRANSPORTE`/`INDETERMINADO → INDETERMINADA` (tentativa persistida).
+`ConfiguracaoIncompleta` propaga sem persistir. Chave única:
+`(escritorio_id, ambiente, contribuinte_cpf_cnpj, procurador_cpf_cnpj, codigo_servico)`.
+
+**Fluxo `validar` / `revalidar`:**
+
+- `validar` = fresh-check com TTL (`SERPRO_PROCURACAO_CACHE_TTL_SECS`, padrão 300 s): se há
+  registro válido dentro do TTL, retorna fonte `"CACHE"`; caso contrário chama o SERPRO,
+  persiste (fonte `"SERPRO"`) e retorna o estado.
+- `revalidar` = força nova chamada ao SERPRO, ignorando o TTL de cache.
+- `salvar` = UPDATE-then-INSERT com `RETURNING` (+ `IS NOT DISTINCT FROM`), sem `ON CONFLICT`.
+- `existe_valida` conta via `TotalRow`, com cutoff de TTL computado em Rust.
+
+**UI — status de procuração por serviço:** `NAO_EXIGIDA` / `AUTORIZADA` / `CONSULTADA` /
+`PENDENTE`. Mapeamento: `VALIDA → AUTORIZADA`, `NAO_AUTORIZADA → PENDENTE`,
+`INDETERMINADA → PENDENTE`, ausente → `PENDENTE`.
+
+**Catálogo configurável (`catalogo_servicos_integra`):**
+
+O banco de dados é autoritativo quando um provedor de catálogo está configurado: não há fallback
+para o catálogo estático, de modo que um serviço desabilitado pelo administrador permanece
+inacessível. Fallback estático somente quando o provedor é `None` (testes antigos).
+
+- `resolver`: linha ausente/desabilitada → `ServicoNaoHabilitado`;
+  `versao_sistema` ausente ou divergente → `VersaoNaoConfirmada`.
+- `definir_habilitado` é fail-closed: não habilita quando `versao_confirmada` é `false`.
+- Apenas `OBTERPROCURACAO41` (`versão "1"`, verbo `Consultar`) e
+  `ENVIOXMLASSINADO81` (`versão "1.0"`, verbo `Apoiar`) estão confirmados. `ENVIOXMLASSINADO81`
+  fica com `habilitado=false` (uso interno exclusivo via fluxo `AUTENTICAPROCURADOR`).
+- Serviços adicionais permanecem `AguardandoConfirmacao` até confirmação de `versaoSistema` (P4).
+
+`ContextoIntegraContador` carrega `escritorio_id` para que o validador seja escritório-scoped.
+`ResultadoIntegraContador` expõe `dados_resposta: Option<String>`.
+
 ---
+
 
 ## 7. Assinatura eletrônica, XML e formatação de payload
 
@@ -827,6 +871,63 @@ Contrato da API (Fase 3, a implementar nesta fase):
 - Fallback global de credencial (`SERPRO_CONSUMER_KEY`/`SERPRO_CONSUMER_SECRET`) só desmobiliza
   TRIAL e somente com `APP_ENV=development` ([ADR-0007](docs/ADR/0007-modelo-contratacao-serpro.md), D6).
 - Páginação segue a §10.3 (`page`/`pageSize` com limite máximo e ordenação determinística).
+
+---
+
+## 8.5 Job Runner, Consultas em Lote e Painel de Rotina Fiscal (Fase B)
+
+### 8.5.1 Trabalhos agendados
+
+Um **trabalho agendado** (`trabalhos_agendados`) é uma tarefa fiscal recorrente definida por um
+escritório, com expressão `cron`, produto (`INTEGRA_CONTADOR` ou `DIVIDA_ATIVA`), ambiente
+(`TRIAL` ou `PRODUCAO`) e tipo (`consulta_divida_ativa`, `validar_procuracao`,
+`consulta_integra_contador`). Cada trabalho tem um campo `habilitado` para ligar/desligar a
+execução automática, e `proxima_execucao` / `ultima_execucao` para rastreamento de horários.
+
+O job runner consulta trabalhos devidos (`proxima_execucao <= agora` e `habilitado = TRUE`)
+periodicamente, cria uma execução (`execucoes_trabalho`) com status `executando`, roda o executor
+correspondente ao tipo de trabalho e atualiza a execução com o resultado final.
+
+### 8.5.2 Execuções de trabalho
+
+Cada execução (`execucoes_trabalho`) está vinculada a um trabalho agendado e a um escritório, com
+status (`pendente`, `executando`, `concluido`, `falhou`), timestamps de início e fim, mensagem de
+erro e contadores de registros processados / com erro. Execuções são listáveis por trabalho ou por
+escritório.
+
+### 8.5.3 Consultas em lote
+
+Uma **consulta em lote** (`consultas_em_lote`) é um grupo de consultas fiscais executadas de uma
+só vez, com nome, produto, serviço, verbo opcional e status (`pendente`, `executando`,
+`concluido`, `falhou`, `parcial`). Acompanha `total_itens`, `itens_concluidos` e
+`itens_com_erro` para exibição de progresso.
+
+### 8.5.4 Itens de consulta em lote
+
+Cada **item de lote** (`itens_consulta_lote`) representa um documento individual (CPF/CNPJ com
+tipo `PF`/`PJ`) dentro de um lote, com status (`pendente`, `concluido`, `falhou`), resultado
+redigido (JSONB) e mensagem de erro. Itens são listáveis por lote.
+
+### 8.5.5 Contrato da API (Fase B)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `POST` | `/api/v1/trabalhos` | Cria um trabalho agendado (corpo: `{ nome, tipo, produto, ambiente, cron_expression }`) |
+| `GET` | `/api/v1/trabalhos` | Lista trabalhos agendados do escritório autenticado |
+| `GET` | `/api/v1/trabalhos/{id}` | Busca um trabalho agendado por ID |
+| `PATCH` | `/api/v1/trabalhos/{id}/alternar` | Habilita ou desabilita o trabalho (corpo: `{ habilitado: boolean }`) |
+| `GET` | `/api/v1/execucoes` | Lista execuções do escritório autenticado |
+| `GET` | `/api/v1/execucoes/trabalho/{trabalho_id}` | Lista execuções de um trabalho específico |
+| `POST` | `/api/v1/consultas-lote` | Cria uma consulta em lote com itens (corpo: `{ nome, produto, servico, verbo, documentos: [{ documento, tipo }] }`) |
+| `GET` | `/api/v1/consultas-lote` | Lista consultas em lote do escritório autenticado |
+| `GET` | `/api/v1/consultas-lote/{id}` | Busca uma consulta em lote por ID |
+| `GET` | `/api/v1/consultas-lote/{id}/itens` | Lista itens de uma consulta em lote |
+| `GET` | `/api/v1/trabalhos/tipos` | Lista tipos de trabalho disponíveis |
+| `GET` | `/api/v1/trabalhos/status-execucao` | Lista status de execução disponíveis |
+| `GET` | `/api/v1/trabalhos/status-lote` | Lista status de lote disponíveis |
+
+Todas as rotas exigem autenticação com audiência `client` e isolamento por `escritorio_id`
+(404 para recursos de outro escritório — sem vazar existência).
 
 ---
 
@@ -1036,6 +1137,101 @@ CREATE INDEX idx_consultas_escritorio_estado_criado
 `chave_consulta_hash` guarda SHA-256 da chave consultada; `chave_consulta_mascarada` guarda apenas
 a versão exibível (ex.: `***.***.***-09`). A chave completa nunca é persistida.
 
+### 9.8.1 `trabalhos_agendados` (Fase B)
+
+```sql
+CREATE TABLE trabalhos_agendados (
+    id UUID PRIMARY KEY,
+    escritorio_id UUID NOT NULL REFERENCES escritorios(id) ON DELETE CASCADE,
+    nome VARCHAR(255) NOT NULL,
+    tipo VARCHAR(32) NOT NULL CHECK (tipo IN ('consulta_divida_ativa', 'validar_procuracao', 'consulta_integra_contador')),
+    produto VARCHAR(32) NOT NULL CHECK (produto IN ('INTEGRA_CONTADOR', 'DIVIDA_ATIVA')),
+    ambiente VARCHAR(16) NOT NULL CHECK (ambiente IN ('TRIAL', 'PRODUCAO')),
+    cron_expression VARCHAR(64) NOT NULL,
+    habilitado BOOLEAN NOT NULL DEFAULT TRUE,
+    proxima_execucao TIMESTAMPTZ,
+    ultima_execucao TIMESTAMPTZ,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_trabalhos_agendados_escritorio ON trabalhos_agendados(escritorio_id);
+CREATE INDEX idx_trabalhos_agendados_proxima_execucao
+    ON trabalhos_agendados(proxima_execucao) WHERE habilitado = TRUE;
+```
+
+Define uma tarefa fiscal recorrente para um escritório, com agendamento por expressão `cron`. O
+isolamento é por `escritorio_id` e o índice parcial em `proxima_execucao` (apenas habilitados)
+permite ao job runner buscar trabalhos devidos com eficiência.
+
+### 9.8.2 `execucoes_trabalho` (Fase B)
+
+```sql
+CREATE TABLE execucoes_trabalho (
+    id UUID PRIMARY KEY,
+    trabalho_agendado_id UUID NOT NULL REFERENCES trabalhos_agendados(id) ON DELETE CASCADE,
+    escritorio_id UUID NOT NULL REFERENCES escritorios(id) ON DELETE CASCADE,
+    status VARCHAR(16) NOT NULL CHECK (status IN ('pendente', 'executando', 'concluido', 'falhou')),
+    iniciado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    finalizado_em TIMESTAMPTZ,
+    erro_mensagem TEXT,
+    registros_processados INTEGER NOT NULL DEFAULT 0,
+    registros_com_erro INTEGER NOT NULL DEFAULT 0,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_execucoes_trabalho_escritorio ON execucoes_trabalho(escritorio_id);
+CREATE INDEX idx_execucoes_trabalho_trabalho ON execucoes_trabalho(trabalho_agendado_id, criado_em DESC);
+CREATE INDEX idx_execucoes_trabalho_status ON execucoes_trabalho(status, criado_em DESC);
+```
+
+Uma instância de execução de um trabalho agendado no tempo. Mantém status, timestamps, mensagem de
+erro e contadores de registros processados/com erro.
+
+### 9.8.3 `consultas_em_lote` (Fase B)
+
+```sql
+CREATE TABLE consultas_em_lote (
+    id UUID PRIMARY KEY,
+    escritorio_id UUID NOT NULL REFERENCES escritorios(id) ON DELETE CASCADE,
+    nome VARCHAR(255) NOT NULL,
+    produto VARCHAR(32) NOT NULL CHECK (produto IN ('INTEGRA_CONTADOR', 'DIVIDA_ATIVA')),
+    servico VARCHAR(64) NOT NULL,
+    verbo VARCHAR(16),
+    status VARCHAR(16) NOT NULL CHECK (status IN ('pendente', 'executando', 'concluido', 'falhou', 'parcial')),
+    total_itens INTEGER NOT NULL DEFAULT 0,
+    itens_concluidos INTEGER NOT NULL DEFAULT 0,
+    itens_com_erro INTEGER NOT NULL DEFAULT 0,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    iniciado_em TIMESTAMPTZ,
+    finalizado_em TIMESTAMPTZ
+);
+CREATE INDEX idx_consultas_em_lote_escritorio ON consultas_em_lote(escritorio_id);
+CREATE INDEX idx_consultas_em_lote_status ON consultas_em_lote(status, criado_em DESC);
+```
+
+Grupo de consultas fiscais executadas de uma só vez, com acompanhamento de progresso (total,
+concluídos, com erro).
+
+### 9.8.4 `itens_consulta_lote` (Fase B)
+
+```sql
+CREATE TABLE itens_consulta_lote (
+    id UUID PRIMARY KEY,
+    consulta_lote_id UUID NOT NULL REFERENCES consultas_em_lote(id) ON DELETE CASCADE,
+    documento VARCHAR(14) NOT NULL,
+    tipo VARCHAR(2) NOT NULL CHECK (tipo IN ('PF', 'PJ')),
+    status VARCHAR(16) NOT NULL CHECK (status IN ('pendente', 'concluido', 'falhou')),
+    resultado_redigido JSONB,
+    erro TEXT,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    processado_em TIMESTAMPTZ
+);
+CREATE INDEX idx_itens_consulta_lote_lote ON itens_consulta_lote(consulta_lote_id);
+CREATE INDEX idx_itens_consulta_lote_status ON itens_consulta_lote(status, criado_em DESC);
+```
+
+Item individual de uma consulta em lote: o documento (CPF/CNPJ), o tipo, o status de processamento,
+o resultado redigido (JSONB) e a mensagem de erro, se houver.
+
 ### 9.9 `auditoria_eventos`
 
 ```sql
@@ -1177,6 +1373,11 @@ e a revogação da família operam de forma idêntica a `sessoes`, com os evento
 | `GET` | `/api/v1/divida-ativa/devedores/{cpfCnpj}` | Consulta devedor |
 | `GET` | `/api/v1/divida-ativa/inscricoes/{numero}` | Detalhe da inscrição |
 | `POST` | `/api/v1/integra-contador/{verbo}` | Execução de `apoiar`, `consultar`, `declarar`, `emitir` ou `monitorar` |
+| `GET` | `/api/v1/serpro/integra-contador/procuracoes` | Lista o estado consolidado de procurações do cliente (query `cliente_id`) |
+| `POST` | `/api/v1/serpro/integra-contador/procuracoes/validar` | Valida procuração do cliente junto ao SERPRO (cache TTL, fonte `CACHE`/`SERPRO`) |
+| `POST` | `/api/v1/serpro/integra-contador/procuracoes/revalidar` | Força revalidação imediata ignorando o TTL de cache |
+| `GET` | `/api/v1/serpro/integra-contador/catalogo` | Lista linhas do catálogo de serviços do Integra Contador com status por serviço |
+| `PATCH` | `/api/v1/admin/integra-contador/catalogo` | Habilita/desabilita um serviço no catálogo (ADMIN; fail-closed se `versaoConfirmada` falsa) |
 | `GET` | `/api/v1/procuracoes/{cpfCnpj}` | Situação das procurações do contribuinte |
 | `GET` | `/api/v1/admin/escritorios?page=...&pageSize=...` | Lista paginada de escritórios, apenas metadados (id, slug, nome, modoTrialSerpro, versao, atualizadoEm) — ADMIN |
 | `GET` | `/api/v1/serpro/ambiente` | Ambiente efetivo do escritório do token, `{ ambienteEfetivo, atualizadoEm }` — somente leitura, audiência `client` |

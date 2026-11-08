@@ -52,7 +52,11 @@ impl CriarClienteUseCase {
             validar_opcional_max_len(fantasia, self.politica.max_fantasia_len, "nome_fantasia")?;
         }
         if let Some(ref representante) = comando.representante_nome {
-            validar_opcional_max_len(representante, self.politica.max_nome_len, "representante_nome")?;
+            validar_opcional_max_len(
+                representante,
+                self.politica.max_nome_len,
+                "representante_nome",
+            )?;
         }
         if let Some(ref email) = comando.email {
             validar_opcional_max_len(email, self.politica.max_email_len, "email")?;

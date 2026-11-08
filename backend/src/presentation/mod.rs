@@ -11,4 +11,5 @@ pub mod middleware;
 pub mod routes;
 pub mod serpro;
 pub mod state;
+pub mod trabalhos;
 pub mod usuarios;

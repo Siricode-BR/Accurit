@@ -377,11 +377,9 @@ fn bootstrap_tenant(
         Err(_) => return Err(BootstrapError::Banco),
     };
 
-    let existente = diesel::sql_query(
-        "SELECT id FROM usuarios WHERE lower(email) = lower($1)",
-    )
-    .bind::<Text, _>(&opcoes.email)
-    .get_result::<IdRow>(&mut conexao);
+    let existente = diesel::sql_query("SELECT id FROM usuarios WHERE lower(email) = lower($1)")
+        .bind::<Text, _>(&opcoes.email)
+        .get_result::<IdRow>(&mut conexao);
 
     match existente {
         Ok(_) => return Err(BootstrapError::UsuarioExistente),

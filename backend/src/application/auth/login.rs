@@ -1,4 +1,4 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 
 use chrono::{Duration, Utc};
 use serde_json::json;
@@ -8,8 +8,7 @@ use crate::domain::auth::Sessao;
 
 use super::error::AuthError;
 use super::models::{
-    LoginCommand, PoliticaAuth, SessaoEmitida, UsuarioPublico, normalizar_email,
-    truncar_user_agent,
+    LoginCommand, PoliticaAuth, SessaoEmitida, UsuarioPublico, normalizar_email, truncar_user_agent,
 };
 use super::ports::{
     AuditoriaRepositorio, EventoAuditoria, RefreshTokenService, SenhaService, SessaoRepositorio,
@@ -53,9 +52,9 @@ impl LoginUsuario {
         let email = normalizar_email(&comando.email);
 
         let Some(usuario) = self.usuarios.buscar_por_email(&email)? else {
-            // Executa o hash mesmo sem usuário para igualar o tempo de resposta e não
-            // revelar se o e-mail existe. Sem auditoria: não há tenant para atribuir o
-            // evento e tentativas anônimas poderiam inflar a tabela.
+            // Executa o hash mesmo sem usuÃ¡rio para igualar o tempo de resposta e nÃ£o
+            // revelar se o e-mail existe. Sem auditoria: nÃ£o hÃ¡ tenant para atribuir o
+            // evento e tentativas anÃ´nimas poderiam inflar a tabela.
             let _ = self
                 .senha
                 .verificar(&comando.senha, self.senha.hash_ficticio());
@@ -128,7 +127,7 @@ impl LoginUsuario {
 
         let sessao = Sessao {
             id: Uuid::now_v7(),
-            escritorio_id: escritorio_id,
+            escritorio_id,
             usuario_id: usuario.id,
             audiencia: comando.audiencia,
             familia_id: Uuid::now_v7(),
