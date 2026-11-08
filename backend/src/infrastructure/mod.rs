@@ -6,3 +6,4 @@ pub mod integra_contador;
 pub mod observability;
 pub mod persistence;
 pub mod serpro;
+pub mod guias;

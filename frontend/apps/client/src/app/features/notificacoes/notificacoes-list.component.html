@@ -1,0 +1,95 @@
+<div class="page-container">
+  <div class="page-header">
+    <h1 class="page-title">Central de Notificações</h1>
+    <p class="page-subtitle">
+      Acompanhe alertas de rotina fiscal, pendências e vencimentos do escritório.
+    </p>
+    <div class="page-acoes">
+      <span
+        class="contagem-badge"
+        [class.alerta]="contagemNaoLidas() > 0"
+      >
+        {{ contagemNaoLidas() }} não lida{{ contagemNaoLidas() !== 1 ? 's' : '' }}
+      </span>
+      <button
+        acc-button
+        variant="outline"
+        size="sm"
+        (click)="recarregar()"
+      >
+        Recarregar
+      </button>
+      <button
+        acc-button
+        variant="primary"
+        size="sm"
+        [disabled]="carregando()"
+        (click)="marcarTodasComoLidas()"
+      >
+        Marcar todas como lidas
+      </button>
+    </div>
+  </div>
+
+  @if (erro(); as mensagemErro) {
+    <div class="alert-error" role="alert">{{ mensagemErro }}</div>
+  }
+
+  @if (carregando() && notificacoes().length === 0) {
+    <div class="loading-state" aria-hidden="true">
+      <acc-spinner size="lg"></acc-spinner>
+      <p>Carregando notificações...</p>
+    </div>
+  } @else if (notificacoes().length === 0) {
+    <div class="empty-state">
+      <p>Nenhuma notificação encontrada.</p>
+    </div>
+  } @else {
+    <acc-card>
+      <table class="acc-table">
+        <thead>
+          <tr>
+            <th>Título</th>
+            <th>Tipo</th>
+            <th>Canal</th>
+            <th>Criado em</th>
+            <th>Status</th>
+            <th>Ação</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (notificacao of notificacoes(); track notificacao.id) {
+            <tr
+              [class.nao-lida]="!notificacao.lida"
+            >
+              <td>
+                <strong>{{ notificacao.titulo }}</strong>
+                <p class="detalhe">{{ notificacao.corpo }}</p>
+              </td>
+              <td>{{ rotuloTipo(notificacao.tipo) }}</td>
+              <td>{{ rotuloCanal(notificacao.canal) }}</td>
+              <td>{{ notificacao.criadoEm }}</td>
+              <td>
+                <acc-badge [status]="notificacao.lida ? 'success' : 'warning'">
+                  {{ notificacao.lida ? 'Lida' : 'Não lida' }}
+                </acc-badge>
+              </td>
+              <td>
+                @if (!notificacao.lida) {
+                  <button
+                    acc-button
+                    variant="outline"
+                    size="sm"
+                    (click)="$event.stopPropagation(); marcarComoLida(notificacao.id)"
+                  >
+                    Marcar como lida
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </acc-card>
+  }
+</div>

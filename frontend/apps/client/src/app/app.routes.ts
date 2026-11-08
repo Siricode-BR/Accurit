@@ -130,5 +130,31 @@ export const routes: Routes = [
         (m) => m.ConsultaLoteDetalhesComponent,
       ),
   },
+  // Fase C — Notificações.
+  {
+    path: 'notificacoes',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/notificacoes/notificacoes-list.component').then(
+        (m) => m.NotificacoesListComponent,
+      ),
+  },
+  // Fase D — Emissão de guias.
+  {
+    path: 'guias',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/guias/guias-list.component').then(
+        (m) => m.GuiasListComponent,
+      ),
+  },
+  {
+    path: 'guias/novo',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/guias/guia-emitir.component').then(
+        (m) => m.GuiaEmitirComponent,
+      ),
+  },
   { path: '**', redirectTo: 'dashboard' },
 ];

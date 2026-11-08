@@ -617,6 +617,135 @@ where
                 ),
             ),
         );
+
+        // ===== Fase C — Notificações =====
+        let notificacoes_repo = std::sync::Arc::new(
+            crate::infrastructure::persistence::notificacoes::NotificacoesDiesel::novo(
+                pool.clone(),
+            ),
+        );
+        let preferencias_notificacao_repo = std::sync::Arc::new(
+            crate::infrastructure::persistence::notificacoes::PreferenciasNotificacaoDiesel::novo(
+                pool.clone(),
+            ),
+        );
+        let templates_notificacao_repo = std::sync::Arc::new(
+            crate::infrastructure::persistence::notificacoes::TemplatesNotificacaoDiesel::novo(
+                pool.clone(),
+            ),
+        );
+
+        let criar_notificacao_uc = std::sync::Arc::new(
+            crate::application::notificacoes::CriarNotificacaoUseCase::novo(
+                notificacoes_repo.clone(),
+            ),
+        );
+        let listar_notificacoes_uc = std::sync::Arc::new(
+            crate::application::notificacoes::ListarNotificacoesUseCase::novo(
+                notificacoes_repo.clone(),
+            ),
+        );
+        let contar_nao_lidas_uc = std::sync::Arc::new(
+            crate::application::notificacoes::ContarNotificacoesNaoLidasUseCase::novo(
+                notificacoes_repo.clone(),
+            ),
+        );
+        let marcar_como_lida_uc = std::sync::Arc::new(
+            crate::application::notificacoes::MarcarNotificacaoLidaUseCase::novo(
+                notificacoes_repo.clone(),
+            ),
+        );
+        let marcar_todas_como_lidas_uc = std::sync::Arc::new(
+            crate::application::notificacoes::MarcarTodasNotificacoesLidasUseCase::novo(
+                notificacoes_repo.clone(),
+            ),
+        );
+        let buscar_preferencia_uc = std::sync::Arc::new(
+            crate::application::notificacoes::BuscarPreferenciaUseCase::novo(
+                preferencias_notificacao_repo.clone(),
+            ),
+        );
+        let criar_ou_atualizar_preferencia_uc = std::sync::Arc::new(
+            crate::application::notificacoes::CriarOuAtualizarPreferenciaUseCase::novo(
+                preferencias_notificacao_repo.clone(),
+            ),
+        );
+        let listar_templates_uc = std::sync::Arc::new(
+            crate::application::notificacoes::ListarTemplatesNotificacaoUseCase::novo(
+                templates_notificacao_repo.clone(),
+            ),
+        );
+
+        let estado_notificacoes = crate::presentation::notificacoes::state::EstadoNotificacoes::novo(
+            criar_notificacao_uc,
+            listar_notificacoes_uc,
+            contar_nao_lidas_uc,
+            marcar_como_lida_uc,
+            marcar_todas_como_lidas_uc,
+            buscar_preferencia_uc,
+            criar_ou_atualizar_preferencia_uc,
+            listar_templates_uc,
+        );
+
+        api = api.nest(
+            "/notificacoes",
+            crate::presentation::notificacoes::construir(
+                estado_notificacoes,
+                ExigirAudiencia::novo(
+                    auth_state.tokens.clone(),
+                    crate::domain::auth::Audiencia::Client,
+                ),
+            ),
+        );
+
+        // ===== Fase D — Emissão de guias =====
+        let guias_emissao_repo = std::sync::Arc::new(
+            crate::infrastructure::persistence::guias::GuiasEmissaoDiesel::novo(
+                pool.clone(),
+            ),
+        );
+
+        let emitir_guia_uc = std::sync::Arc::new(
+            crate::application::guias::EmitirGuiaUseCase::novo(
+                guias_emissao_repo.clone(),
+                std::sync::Arc::new(
+                    crate::infrastructure::guias::ProvedorEmissaoGuiaNaoImplementado,
+                ),
+            ),
+        );
+        let listar_guias_uc = std::sync::Arc::new(
+            crate::application::guias::ListarGuiasUseCase::novo(
+                guias_emissao_repo.clone(),
+            ),
+        );
+        let buscar_guia_uc = std::sync::Arc::new(
+            crate::application::guias::BuscarGuiaUseCase::novo(
+                guias_emissao_repo.clone(),
+            ),
+        );
+        let baixar_guia_uc = std::sync::Arc::new(
+            crate::application::guias::BaixarGuiaUseCase::novo(
+                guias_emissao_repo.clone(),
+            ),
+        );
+
+        let estado_guias = crate::presentation::guias::state::EstadoGuias::novo(
+            emitir_guia_uc,
+            listar_guias_uc,
+            buscar_guia_uc,
+            baixar_guia_uc,
+        );
+
+        api = api.nest(
+            "/guias",
+            crate::presentation::guias::construir(
+                estado_guias,
+                ExigirAudiencia::novo(
+                    auth_state.tokens.clone(),
+                    crate::domain::auth::Audiencia::Client,
+                ),
+            ),
+        );
     }
 
     let api = api

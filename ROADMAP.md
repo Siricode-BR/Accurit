@@ -245,6 +245,10 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 
 A **FASE B (job runner, consultas em lote e painel de rotina fiscal) foi concluída**: domínio de trabalhos agendados (`trabalhos_agendados`), execuções (`execucoes_trabalho`), consultas em lote (`consultas_em_lote`) e itens (`itens_consulta_lote`) com migrations; repositórios Diesel isolados por `escritorio_id`; use cases para criar/listar/buscar trabalhos, habilitar/desabilitar, criar lotes, listar itens; handlers e rotas REST sob `/trabalhos` e `/consultas-lote`; testes unitários e de integração verdes; `cargo fmt`, `cargo clippy -D warnings` e `schema-tool` válidos.
 
+A **FASE C (alertas e notificações) foi concluída**: tabela `notificacoes`, `preferencias_notificacao` e `templates_notificacao` com migrations; repositórios Diesel isolados por `escritorio_id`; use cases para criar/listar/marcar como lida/contar não lidas/preferências/templates; handlers e rotas REST sob `/notificacoes`, `/preferencias-notificacao` e `/templates-notificacao`; frontend com central de notificações, marcar como lida, preferências por canal (in-app/e-mail/whatsapp); testes unitários e de integração verdes; `cargo fmt`, `cargo clippy -D warnings` e `schema-tool` válidos.
+
+A **FASE D (emissão de guias e documentos) foi concluída**: ADR-0014 autorizando emissão de guias DAS/DARF via Integra Contador (verbo `Emitir`) com idempotência e auditoria; Dúvida Ativa permanece consultiva; tabela `guias_emissao` com chave de idempotência; repositório Diesel; use case de emissão com verificação de idempotência; handlers e rotas REST sob `/guias` e `/guias/{id}/baixar`; frontend com tela de emissão e histórico de emissões; testes unitários e de integração verdes; `cargo fmt`, `cargo clippy -D warnings` e `schema-tool` válidos.
+
 ---
 
 ## Fase 6 — Qualidade, CI/CD e produção

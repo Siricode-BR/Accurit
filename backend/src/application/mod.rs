@@ -8,4 +8,6 @@ pub mod ports;
 pub mod saude;
 pub mod serpro;
 pub mod trabalhos;
+pub mod notificacoes;
+pub mod guias;
 pub mod usuarios;

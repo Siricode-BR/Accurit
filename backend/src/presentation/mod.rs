@@ -12,4 +12,6 @@ pub mod routes;
 pub mod serpro;
 pub mod state;
 pub mod trabalhos;
+pub mod notificacoes;
+pub mod guias;
 pub mod usuarios;

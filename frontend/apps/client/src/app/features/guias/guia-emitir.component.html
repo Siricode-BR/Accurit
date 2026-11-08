@@ -1,0 +1,113 @@
+<div class="page-container">
+  <div class="page-header">
+    <h1 class="page-title">Emitir Guia</h1>
+    <p class="page-subtitle">
+      Emita uma guia DAS ou DARF pelo Integra Contador.
+    </p>
+    <button
+      acc-button
+      variant="outline"
+      size="sm"
+      (click)="voltar()"
+    >
+      Voltar
+    </button>
+  </div>
+
+  @if (erro(); as mensagemErro) {
+    <div class="alert-error" role="alert">{{ mensagemErro }}</div>
+  }
+
+  <acc-card>
+    <form [formGroup]="form" (ngSubmit)="emitir()">
+      <div class="form-grid">
+        <div class="form-campo">
+          <label class="form-label">ID do Cliente</label>
+          <input
+            id="clienteId"
+            type="text"
+            formControlName="clienteId"
+            class="input"
+            placeholder="UUID do cliente"
+          />
+          @if (form.get('clienteId')?.invalid && form.get('clienteId')?.touched) {
+            <small class="campo-erro">ID do cliente é obrigatório.</small>
+          }
+        </div>
+
+        <div class="form-campo">
+          <label class="form-label">Tipo de Guia</label>
+          <select id="tipoGuia" formControlName="tipoGuia" class="input input--select">
+            @for (tipo of tiposGuia; track tipo.valor) {
+              <option [value]="tipo.valor">{{ tipo.label }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="form-campo">
+          <label class="form-label">Competência</label>
+          <input
+            id="competencia"
+            type="text"
+            formControlName="competencia"
+            class="input"
+            placeholder="YYYY-MM"
+          />
+          @if (form.get('competencia')?.invalid && form.get('competencia')?.touched) {
+            <small class="campo-erro">Competência no formato YYYY-MM.</small>
+          }
+        </div>
+
+        <div class="form-campo">
+          <label class="form-label">Valor Total</label>
+          <input
+            id="valorTotal"
+            type="number"
+            formControlName="valorTotal"
+            class="input"
+            step="0.01"
+            min="0"
+          />
+        </div>
+
+        <div class="form-campo form-campo--full">
+          <label class="form-label">Chave de Idempotência</label>
+          <input
+            id="idempotenciaChave"
+            type="text"
+            formControlName="idempotenciaChave"
+            class="input"
+            placeholder="Chave única para evitar emissões duplicadas"
+          />
+          <small class="campo-ajuda">
+            Mesma chave emite a mesma guia apenas uma vez.
+          </small>
+          @if (form.get('idempotenciaChave')?.invalid && form.get('idempotenciaChave')?.touched) {
+            <small class="campo-erro">Chave de idempotência é obrigatória.</small>
+          }
+        </div>
+      </div>
+
+      <div class="form-acoes">
+        <button
+          acc-button
+          variant="outline"
+          size="md"
+          type="button"
+          (click)="voltar()"
+        >
+          Cancelar
+        </button>
+        <button
+          acc-button
+          variant="primary"
+          size="md"
+          type="submit"
+          [disabled]="form.invalid || carregando()"
+        >
+          {{ carregando() ? 'Emitindo...' : 'Emitir guia' }}
+        </button>
+      </div>
+    </form>
+  </acc-card>
+</div>

@@ -6,3 +6,5 @@ pub mod integra_contador;
 pub mod serpro;
 pub mod tenancy;
 pub mod trabalhos;
+pub mod notificacoes;
+pub mod guias;

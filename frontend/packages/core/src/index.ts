@@ -6,4 +6,6 @@ export * from './tenant/tenant';
 export * from './divida-ativa/divida-ativa';
 export * from './serpro/serpro';
 export * from './trabalhos/trabalhos';
+export * from './notificacoes/notificacoes';
+export * from './guias/guias';
 export * from './usuario/usuario';

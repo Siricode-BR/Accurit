@@ -7,4 +7,6 @@ pub mod pool;
 pub mod saude;
 pub mod schema;
 pub mod trabalhos;
+pub mod notificacoes;
+pub mod guias;
 pub mod usuarios;

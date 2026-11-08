@@ -1,0 +1,84 @@
+<div class="page-container">
+  <div class="page-header">
+    <h1 class="page-title">Emissão de Guias</h1>
+    <p class="page-subtitle">
+      Emita e baixe guias DAS e DARF pelo Integra Contador.
+    </p>
+    <button
+      acc-button
+      variant="primary"
+      size="md"
+      [disabled]="carregando()"
+      (click)="abrirEmissao()"
+    >
+      Emitir nova guia
+    </button>
+  </div>
+
+  @if (erro(); as mensagemErro) {
+    <div class="alert-error" role="alert">{{ mensagemErro }}</div>
+  }
+
+  @if (carregando() && guias().length === 0) {
+    <div class="loading-state" aria-hidden="true">
+      <acc-spinner size="lg"></acc-spinner>
+      <p>Carregando guias...</p>
+    </div>
+  } @else if (guias().length === 0) {
+    <div class="empty-state">
+      <p>Nenhuma guia emitida.</p>
+      <button
+        acc-button
+        variant="primary"
+        size="md"
+        (click)="abrirEmissao()"
+      >
+        Emitir primeira guia
+      </button>
+    </div>
+  } @else {
+    <acc-card>
+      <table class="acc-table">
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Tipo</th>
+            <th>Competência</th>
+            <th>Valor Total</th>
+            <th>Status</th>
+            <th>Criado em</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (guia of guias(); track guia.id) {
+            <tr>
+              <td>{{ guia.clienteId }}</td>
+              <td>{{ rotuloTipo(guia.tipoGuia) }}</td>
+              <td>{{ guia.competencia }}</td>
+              <td class="valor">{{ guia.valorTotal | currency:'BRL':'symbol':'1.2-2' }}</td>
+              <td>
+                <acc-badge [status]="badgeStatus(guia.status)">
+                  {{ rotuloStatus(guia.status) }}
+                </acc-badge>
+              </td>
+              <td>{{ guia.criadoEm }}</td>
+              <td>
+                @if (guia.status === 'emitida' && guia.pdfUrl) {
+                  <button
+                    acc-button
+                    variant="outline"
+                    size="sm"
+                    (click)="$event.stopPropagation(); baixarGuia(guia.id)"
+                  >
+                    Baixar PDF
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </acc-card>
+  }
+</div>

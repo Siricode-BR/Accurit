@@ -220,6 +220,27 @@ diesel::table! {
 }
 
 diesel::table! {
+    guias_emissao (id) {
+        id -> Uuid,
+        usuario_id -> Uuid,
+        escritorio_id -> Uuid,
+        cliente_id -> Uuid,
+        #[max_length = 16]
+        tipo_guia -> Varchar,
+        #[max_length = 7]
+        competencia -> Varchar,
+        valor_total -> Numeric,
+        pdf_url -> Nullable<Text>,
+        #[max_length = 16]
+        status -> Varchar,
+        #[max_length = 64]
+        idempotencia_chave -> Varchar,
+        criado_em -> Timestamptz,
+        atualizado_em -> Timestamptz,
+    }
+}
+
+diesel::table! {
     idempotencia_operacoes (id) {
         id -> Uuid,
         escritorio_id -> Uuid,
@@ -260,6 +281,40 @@ diesel::table! {
         erro -> Nullable<Text>,
         criado_em -> Timestamptz,
         processado_em -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
+    notificacoes (id) {
+        id -> Uuid,
+        usuario_id -> Uuid,
+        escritorio_id -> Uuid,
+        #[max_length = 16]
+        canal -> Varchar,
+        #[max_length = 32]
+        tipo -> Varchar,
+        #[max_length = 255]
+        titulo -> Varchar,
+        corpo -> Text,
+        lida -> Bool,
+        lida_em -> Nullable<Timestamptz>,
+        #[max_length = 32]
+        referencia_tipo -> Nullable<Varchar>,
+        referencia_id -> Nullable<Uuid>,
+        criado_em -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    preferencias_notificacao (id) {
+        id -> Uuid,
+        usuario_id -> Uuid,
+        canal_email -> Bool,
+        canal_whatsapp -> Bool,
+        canal_in_app -> Bool,
+        tipos_ativados -> Jsonb,
+        criado_em -> Timestamptz,
+        atualizado_em -> Timestamptz,
     }
 }
 
@@ -317,6 +372,22 @@ diesel::table! {
         revogada_em -> Nullable<Timestamptz>,
         ip -> Nullable<Inet>,
         user_agent -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    templates_notificacao (id) {
+        id -> Uuid,
+        #[max_length = 32]
+        tipo -> Varchar,
+        #[max_length = 255]
+        assunto -> Varchar,
+        corpo_texto -> Text,
+        corpo_html -> Nullable<Text>,
+        variaveis -> Jsonb,
+        ativo -> Bool,
+        criado_em -> Timestamptz,
+        atualizado_em -> Timestamptz,
     }
 }
 
@@ -391,8 +462,14 @@ diesel::joinable!(consultas_fiscais -> escritorios (escritorio_id));
 diesel::joinable!(credenciais_serpro -> escritorios (escritorio_id));
 diesel::joinable!(execucoes_trabalho -> escritorios (escritorio_id));
 diesel::joinable!(execucoes_trabalho -> trabalhos_agendados (trabalho_agendado_id));
+diesel::joinable!(guias_emissao -> clientes (cliente_id));
+diesel::joinable!(guias_emissao -> escritorios (escritorio_id));
+diesel::joinable!(guias_emissao -> usuarios (usuario_id));
 diesel::joinable!(idempotencia_operacoes -> escritorios (escritorio_id));
 diesel::joinable!(itens_consulta_lote -> consultas_em_lote (consulta_lote_id));
+diesel::joinable!(notificacoes -> escritorios (escritorio_id));
+diesel::joinable!(notificacoes -> usuarios (usuario_id));
+diesel::joinable!(preferencias_notificacao -> usuarios (usuario_id));
 diesel::joinable!(procuracoes -> clientes (cliente_id));
 diesel::joinable!(procuracoes -> escritorios (escritorio_id));
 diesel::joinable!(sessoes -> escritorios (escritorio_id));
@@ -415,11 +492,15 @@ diesel::allow_tables_to_appear_in_same_query!(
     credenciais_serpro,
     escritorios,
     execucoes_trabalho,
+    guias_emissao,
     idempotencia_operacoes,
     itens_consulta_lote,
+    notificacoes,
+    preferencias_notificacao,
     procuracoes,
     sessoes,
     sessoes_admin,
+    templates_notificacao,
     tokens_serpro,
     trabalhos_agendados,
     usuarios,

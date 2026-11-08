@@ -929,6 +929,75 @@ redigido (JSONB) e mensagem de erro. Itens são listáveis por lote.
 Todas as rotas exigem autenticação com audiência `client` e isolamento por `escritorio_id`
 (404 para recursos de outro escritório — sem vazar existência).
 
+### 8.6 Alertas e Notificações (Fase C)
+
+Um sistema de notificações permite ao escritório acompanhar alertas de rotina fiscal, com
+isolamento por `escritorio_id` e canais configuráveis (in-app, e-mail, WhatsApp).
+
+#### 8.6.1 Tabelas
+
+- `notificacoes`: cada notificação tem `usuario_id`, `escritorio_id`, `canal`, `tipo`,
+  `titulo`, `corpo`, `lida`, `lida_em`, `referencia_tipo`, `referencia_id` e `criado_em`.
+- `preferencias_notificacao`: preferências por usuário com `canal_email`, `canal_whatsapp`,
+  `canal_in_app` e `tipos_ativados` (JSONB).
+- `templates_notificacao`: templates por tipo de notificação com `assunto`, `corpo_texto`,
+  `corpo_html`, `variaveis` e `ativo`.
+
+#### 8.6.2 Gatilhos
+
+Os seguintes gatilhos geram notificações automaticamente:
+
+- Nova pendência na Dívida Ativa (`pendencia_divida_ativa`);
+- Mensagem na Caixa Postal (`mensagem_caixa_postal`);
+- Procuração a vencer em 30/15/7 dias (`procuracao_vencendo`);
+- Certificado A1 a vencer em 30/15/7 dias (`certificado_a1_vencendo`);
+- DAS próxima do vencimento (`das_vencendo`);
+- Falha de rotina (`falha_rotina`).
+
+#### 8.6.3 Contrato da API (Fase C)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `POST` | `/api/v1/notificacoes` | Cria uma notificação |
+| `GET` | `/api/v1/notificacoes` | Lista notificações do usuário |
+| `GET` | `/api/v1/notificacoes/contagem-nao-lidas` | Conta notificações não lidas |
+| `PATCH` | `/api/v1/notificacoes/{id}/ler` | Marca uma notificação como lida |
+| `POST` | `/api/v1/notificacoes/marcar-todas-lidas` | Marca todas como lidas |
+| `GET` | `/api/v1/preferencias-notificacao` | Busca preferências do usuário |
+| `POST` | `/api/v1/preferencias-notificacao` | Cria/atualiza preferências |
+| `GET` | `/api/v1/templates-notificacao` | Lista templates ativos |
+
+---
+
+### 8.7 Emissão de Guias e Documentos (Fase D)
+
+A emissão de guias fiscais (DAS e DARF) é autorizada pelo Integra Contador via verbo `Emitir`,
+conforme [ADR-0014](docs/ADR/0014-emissao-guias-integra-contador.md). A Dúvida Ativa permanece
+exclusivamente consultiva (não há emissão de guias de Dívida Ativa).
+
+#### 8.7.1 Tabela `guias_emissao`
+
+Cada emissão tem `usuario_id`, `escritorio_id`, `cliente_id`, `tipo_guia` (`DAS`/`DARF`),
+`competencia` (`YYYY-MM`), `valor_total`, `pdf_url`, `status` (`solicitada`/`emitida`/
+`baixada`/`falhou`), `idempotencia_chave` e timestamps.
+
+#### 8.7.2 Idempotência
+
+Cada emissão gera uma chave de idempotência derivada de
+`(escritorio_id, cliente_id, tipo_guia, competencia)`. Tentativas repetidas com a mesma chave
+retornam a mesma guia previamente emitida, sem nova chamada ao SERPRO.
+
+#### 8.7.3 Contrato da API (Fase D)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `POST` | `/api/v1/guias` | Emite uma guia (corpo: `{ clienteId, tipoGuia, competencia, valorTotal, idempotenciaChave }`) |
+| `GET` | `/api/v1/guias` | Lista guias do usuário autenticado |
+| `GET` | `/api/v1/guias/{id}` | Busca uma guia por ID |
+| `POST` | `/api/v1/guias/{id}/baixar` | Marca guia como baixada |
+
+Todas as rotas exigem autenticação com audiência `client` e isolamento por `escritorio_id`.
+
 ---
 
 ## 9. Modelo de dados — PostgreSQL 16
@@ -1231,6 +1300,111 @@ CREATE INDEX idx_itens_consulta_lote_status ON itens_consulta_lote(status, criad
 
 Item individual de uma consulta em lote: o documento (CPF/CNPJ), o tipo, o status de processamento,
 o resultado redigido (JSONB) e a mensagem de erro, se houver.
+
+### 9.8.5 `notificacoes` (Fase C)
+
+```sql
+CREATE TABLE notificacoes (
+    id UUID PRIMARY KEY,
+    usuario_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    escritorio_id UUID NOT NULL REFERENCES escritorios(id) ON DELETE CASCADE,
+    canal VARCHAR(16) NOT NULL CHECK (canal IN ('in_app', 'email', 'whatsapp')),
+    tipo VARCHAR(32) NOT NULL CHECK (tipo IN (
+        'pendencia_divida_ativa',
+        'mensagem_caixa_postal',
+        'procuracao_vencendo',
+        'certificado_a1_vencendo',
+        'das_vencendo',
+        'falha_rotina'
+    )),
+    titulo VARCHAR(255) NOT NULL,
+    corpo TEXT NOT NULL,
+    lida BOOLEAN NOT NULL DEFAULT FALSE,
+    lida_em TIMESTAMPTZ,
+    referencia_tipo VARCHAR(32),
+    referencia_id UUID,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_notificacoes_usuario_id ON notificacoes(usuario_id);
+CREATE INDEX idx_notificacoes_usuario_nao_lida ON notificacoes(usuario_id, lida) WHERE lida = FALSE;
+CREATE INDEX idx_notificacoes_escritorio_id ON notificacoes(escritorio_id);
+CREATE INDEX idx_notificacoes_criado_em ON notificacoes(criado_em DESC);
+```
+
+Notificação de alerta de rotina fiscal para um usuário, com isolamento por escritório e canais
+configuráveis (in-app, e-mail, WhatsApp).
+
+### 9.8.6 `preferencias_notificacao` (Fase C)
+
+```sql
+CREATE TABLE preferencias_notificacao (
+    id UUID PRIMARY KEY,
+    usuario_id UUID NOT NULL UNIQUE REFERENCES usuarios(id) ON DELETE CASCADE,
+    canal_email BOOLEAN NOT NULL DEFAULT TRUE,
+    canal_whatsapp BOOLEAN NOT NULL DEFAULT FALSE,
+    canal_in_app BOOLEAN NOT NULL DEFAULT TRUE,
+    tipos_ativados JSONB NOT NULL DEFAULT '[]'::jsonb,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_preferencias_notificacao_usuario_id ON preferencias_notificacao(usuario_id);
+```
+
+Preferências de notificação por usuário, com canais habilitados e tipos de notificação ativados.
+
+### 9.8.7 `templates_notificacao` (Fase C)
+
+```sql
+CREATE TABLE templates_notificacao (
+    id UUID PRIMARY KEY,
+    tipo VARCHAR(32) NOT NULL UNIQUE CHECK (tipo IN (
+        'pendencia_divida_ativa',
+        'mensagem_caixa_postal',
+        'procuracao_vencendo',
+        'certificado_a1_vencendo',
+        'das_vencendo',
+        'falha_rotina'
+    )),
+    assunto VARCHAR(255) NOT NULL,
+    corpo_texto TEXT NOT NULL,
+    corpo_html TEXT,
+    variaveis JSONB NOT NULL DEFAULT '[]'::jsonb,
+    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_templates_notificacao_tipo ON templates_notificacao(tipo);
+```
+
+Templates de notificação por tipo, com assunto, corpo de texto/HTML e variáveis.
+
+### 9.8.8 `guias_emissao` (Fase D)
+
+```sql
+CREATE TABLE guias_emissao (
+    id UUID PRIMARY KEY,
+    usuario_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    escritorio_id UUID NOT NULL REFERENCES escritorios(id) ON DELETE CASCADE,
+    cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+    tipo_guia VARCHAR(16) NOT NULL CHECK (tipo_guia IN ('DAS', 'DARF')),
+    competencia VARCHAR(7) NOT NULL CHECK (competencia ~ '^\d{4}-\d{2}$'),
+    valor_total NUMERIC(14, 2) NOT NULL,
+    pdf_url TEXT,
+    status VARCHAR(16) NOT NULL CHECK (status IN ('solicitada', 'emitida', 'baixada', 'falhou')),
+    idempotencia_chave VARCHAR(64) NOT NULL,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (idempotencia_chave)
+);
+CREATE INDEX idx_guias_emissao_usuario_id ON guias_emissao(usuario_id);
+CREATE INDEX idx_guias_emissao_escritorio_id ON guias_emissao(escritorio_id);
+CREATE INDEX idx_guias_emissao_cliente_id ON guias_emissao(cliente_id);
+CREATE INDEX idx_guias_emissao_competencia ON guias_emissao(competencia);
+CREATE INDEX idx_guias_emissao_idempotencia ON guias_emissao(idempotencia_chave);
+```
+
+Emissão de guias fiscais (DAS/DARF) com idempotência, isolamento por escritório e armazenamento de
+PDF.
 
 ### 9.9 `auditoria_eventos`
 
