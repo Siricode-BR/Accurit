@@ -79,6 +79,7 @@ pub async fn listar_clientes(
         escritorio_id,
         filtro,
         paginacao,
+        apenas_ids: None,
     };
 
     let listagem = listar_use_case.executar(comando).await?;
@@ -217,6 +218,9 @@ pub fn erro_para_resposta(erro: crate::application::clientes::ClienteError) -> R
             ApiError::validacao(msg).resposta("")
         }
         crate::application::clientes::ClienteError::AcessoNegado => {
+            ApiError::proibido().resposta("")
+        }
+        crate::application::clientes::ClienteError::FuncaoSemEscrita => {
             ApiError::proibido().resposta("")
         }
     }

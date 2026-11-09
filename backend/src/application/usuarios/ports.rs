@@ -83,6 +83,19 @@ pub struct FiltroUsuarios {
     pub escritorio_id: Option<Uuid>,
     pub busca: Option<String>,
     pub ativo: Option<bool>,
+    /// Fase E: paginação no servidor; `None` mantém o comportamento legado
+    /// (todas as linhas, sem contagem).
+    pub pagina: Option<i64>,
+    pub tamanho: Option<i64>,
+}
+
+/// Listagem paginada de usuários (Fase E).
+#[derive(Debug, Clone)]
+pub struct ListagemUsuarios {
+    pub itens: Vec<UsuarioDetalhe>,
+    pub total: i64,
+    pub pagina: i64,
+    pub tamanho: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -114,6 +127,12 @@ pub struct EventoAuditoriaUsuario {
 
 pub trait UsuarioGestaoRepositorio: Send + Sync {
     fn listar(&self, filtro: &FiltroUsuarios) -> Result<Vec<UsuarioDetalhe>, RepositorioError>;
+
+    /// Fase E — listagem com contagem e LIMIT/OFFSET no servidor.
+    fn listar_paginado(
+        &self,
+        filtro: &FiltroUsuarios,
+    ) -> Result<ListagemUsuarios, RepositorioError>;
 
     /// Com `escritorio_id`, só encontra usuários desse escritório (isolamento de tenant).
     fn obter(

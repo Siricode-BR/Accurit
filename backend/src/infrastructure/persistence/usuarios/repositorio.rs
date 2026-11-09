@@ -4,8 +4,8 @@ use ipnet::IpNet;
 use uuid::Uuid;
 
 use crate::application::usuarios::{
-    AlteracaoUsuario, EventoAuditoriaUsuario, FiltroUsuarios, OrigemAtor, RepositorioError,
-    UsuarioDetalhe, UsuarioGestaoNovo, UsuarioGestaoRepositorio,
+    AlteracaoUsuario, EventoAuditoriaUsuario, FiltroUsuarios, ListagemUsuarios, OrigemAtor,
+    RepositorioError, UsuarioDetalhe, UsuarioGestaoNovo, UsuarioGestaoRepositorio,
 };
 use crate::domain::auth::Papel;
 use crate::infrastructure::persistence::pool::DbPool;
@@ -119,6 +119,72 @@ impl UsuarioGestaoRepositorio for UsuarioGestaoRepositorioDiesel {
             .into_iter()
             .map(para_detalhe)
             .collect()
+    }
+
+    fn listar_paginado(
+        &self,
+        filtro: &FiltroUsuarios,
+    ) -> Result<ListagemUsuarios, RepositorioError> {
+        let mut conexao = self.conexao()?;
+        let mut consulta = base!().into_boxed();
+        if let Some(esc) = filtro.escritorio_id {
+            consulta = consulta.filter(usuarios::escritorio_id.eq(esc));
+        }
+        if let Some(ativo) = filtro.ativo {
+            consulta = consulta.filter(usuarios::ativo.eq(ativo));
+        }
+        if let Some(busca) = &filtro.busca {
+            let padrao = format!("%{}%", escapar_like(busca));
+            consulta = consulta.filter(
+                usuarios::nome
+                    .ilike(padrao.clone())
+                    .or(usuarios::email.ilike(padrao.clone()))
+                    .or(usuarios::cpf.like(padrao)),
+            );
+        }
+
+        // Total de linhas no mesmo filtro (JOIN removeu, conta direto na tabela).
+        let mut contagem = usuarios::table.into_boxed();
+        if let Some(esc) = filtro.escritorio_id {
+            contagem = contagem.filter(usuarios::escritorio_id.eq(esc));
+        }
+        if let Some(ativo) = filtro.ativo {
+            contagem = contagem.filter(usuarios::ativo.eq(ativo));
+        }
+        if let Some(busca) = &filtro.busca {
+            let padrao = format!("%{}%", escapar_like(busca));
+            contagem = contagem.filter(
+                usuarios::nome
+                    .ilike(padrao.clone())
+                    .or(usuarios::email.ilike(padrao.clone()))
+                    .or(usuarios::cpf.like(padrao)),
+            );
+        }
+        let total: i64 = contagem
+            .count()
+            .first(&mut conexao)
+            .map_err(|_| RepositorioError::Dados)?;
+
+        let tamanho = filtro.tamanho.unwrap_or(20).clamp(1, 100);
+        let pagina = filtro.pagina.unwrap_or(1).max(1);
+        let offset = (pagina - 1) * tamanho;
+
+        let itens: Vec<UsuarioDetalhe> = consulta
+            .order((usuarios::nome.asc(), usuarios::email.asc()))
+            .limit(tamanho)
+            .offset(offset)
+            .load::<Linha>(&mut conexao)
+            .map_err(|_| RepositorioError::Dados)?
+            .into_iter()
+            .map(para_detalhe)
+            .collect::<Result<Vec<UsuarioDetalhe>, RepositorioError>>()?;
+
+        Ok(ListagemUsuarios {
+            itens,
+            total,
+            pagina,
+            tamanho,
+        })
     }
 
     fn obter(

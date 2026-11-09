@@ -4,7 +4,11 @@ use serde_json::Value;
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::domain::clientes::{Cliente, CpfCnpjInvalido, FiltroClientes, Paginacao, TipoCliente};
+use crate::domain::clientes::{
+    AtualizarCarteiraCliente, CarteiraCliente, Cliente, ClienteFilial, ClienteTag, CpfCnpjInvalido,
+    FiltroClientes, FuncaoUsuario, NovaClienteTag, NovoClienteFilial, NovoSocioContato, Paginacao,
+    SocioContato, TipoCliente,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum RepositorioError {
@@ -30,6 +34,8 @@ pub enum ClienteError {
     Validacao(String),
     #[error("acesso negado: cliente pertence a outro escrit\u{00f3}rio")]
     AcessoNegado,
+    #[error("acesso negado: fun\u{00e7}\u{00e3}o sem permiss\u{00e3}o de escrita")]
+    FuncaoSemEscrita,
 }
 
 impl From<String> for ClienteError {
@@ -107,6 +113,7 @@ pub trait ClienteRepositorio: Send + Sync {
         escritorio_id: Uuid,
         filtro: FiltroClientes,
         paginacao: Paginacao,
+        apenas_ids: Option<&[Uuid]>,
     ) -> Result<ListagemClientes, RepositorioError>;
 
     fn atualizar(&self, escritorio_id: Uuid, cliente: &Cliente) -> Result<(), RepositorioError>;
@@ -140,6 +147,9 @@ pub struct ListarClientesCommand {
     pub escritorio_id: Uuid,
     pub filtro: FiltroClientes,
     pub paginacao: Paginacao,
+    /// Restrição de carteira do usuário (Fase E): `Some(ids)` devolve só
+    /// esses clientes; `None` é carteira completa.
+    pub apenas_ids: Option<Vec<Uuid>>,
 }
 
 #[derive(Debug, Clone)]
@@ -168,6 +178,157 @@ pub struct ExcluirClienteCommand {
 
 pub trait AuditoriaClienteRepositorio: Send + Sync {
     fn registrar(&self, evento: &EventoAuditoriaCliente) -> Result<(), RepositorioError>;
+}
+
+// ===== Fase E — Gestão de carteira =====
+
+/// Repositório de sócios/contatos, filiais, tags e carteira por cliente.
+pub trait RepositorioCarteiraClientes: Send + Sync {
+    // Sócios e contatos
+    fn criar_socio_contato(&self, novo: &NovoSocioContato) -> Result<SocioContato, RepositorioError>;
+    fn listar_socios_contatos(
+        &self,
+        escritorio_id: Uuid,
+        cliente_id: Uuid,
+    ) -> Result<Vec<SocioContato>, RepositorioError>;
+    fn remover_socio_contato(
+        &self,
+        escritorio_id: Uuid,
+        cliente_id: Uuid,
+        id: Uuid,
+    ) -> Result<bool, RepositorioError>;
+
+    // Filiais
+    fn criar_filial(
+        &self,
+        novo: &NovoClienteFilial,
+    ) -> Result<ClienteFilial, RepositorioError>;
+    fn listar_filiais(
+        &self,
+        escritorio_id: Uuid,
+        cliente_id: Uuid,
+    ) -> Result<Vec<ClienteFilial>, RepositorioError>;
+    fn remover_filial(
+        &self,
+        escritorio_id: Uuid,
+        cliente_id: Uuid,
+        id: Uuid,
+    ) -> Result<bool, RepositorioError>;
+
+    // Tags
+    fn criar_tag(&self, nova: &NovaClienteTag) -> Result<ClienteTag, RepositorioError>;
+    fn listar_tags(&self, escritorio_id: Uuid) -> Result<Vec<ClienteTag>, RepositorioError>;
+    fn tags_do_cliente(
+        &self,
+        escritorio_id: Uuid,
+        cliente_id: Uuid,
+    ) -> Result<Vec<ClienteTag>, RepositorioError>;
+    fn vincular_tag(
+        &self,
+        escritorio_id: Uuid,
+        cliente_id: Uuid,
+        tag_id: Uuid,
+    ) -> Result<(), RepositorioError>;
+    fn desvincular_tag(
+        &self,
+        escritorio_id: Uuid,
+        cliente_id: Uuid,
+        tag_id: Uuid,
+    ) -> Result<bool, RepositorioError>;
+    /// Clientes do escritório que possuem uma dada tag (filtro da listagem).
+    fn clientes_com_tag(
+        &self,
+        escritorio_id: Uuid,
+        tag_id: Uuid,
+    ) -> Result<Vec<Uuid>, RepositorioError>;
+
+    // Carteira (responsável/observações)
+    fn carteira_do_cliente(
+        &self,
+        escritorio_id: Uuid,
+        cliente_id: Uuid,
+    ) -> Result<Option<CarteiraCliente>, RepositorioError>;
+    fn definir_carteira(
+        &self,
+        cliente_id: Uuid,
+        escritorio_id: Uuid,
+        atualizacao: &AtualizarCarteiraCliente,
+    ) -> Result<CarteiraCliente, RepositorioError>;
+}
+
+/// Repositório de funções e vínculos de carteira por usuário (Fase E, item 3).
+pub trait RepositorioAcessoUsuarios: Send + Sync {
+    /// Função efetiva: linha em `funcoes_usuarios` ou derivada do papel.
+    fn funcao_efetiva(
+        &self,
+        escritorio_id: Uuid,
+        usuario_id: Uuid,
+        papel: crate::domain::auth::Papel,
+    ) -> Result<FuncaoUsuario, RepositorioError>;
+    /// Função declarada (a linha bruta em `funcoes_usuarios`, se houver).
+    fn funcao_declarada(
+        &self,
+        escritorio_id: Uuid,
+        usuario_id: Uuid,
+    ) -> Result<Option<FuncaoUsuario>, RepositorioError>;
+    /// Vínculos de carteira: lista vazia quando o usuário não tem nenhum
+    /// vínculo (acesso completo).
+    fn carteira_do_usuario(
+        &self,
+        escritorio_id: Uuid,
+        usuario_id: Uuid,
+    ) -> Result<Vec<Uuid>, RepositorioError>;
+    /// Define a função declarada (upsert).
+    fn definir_funcao(
+        &self,
+        escritorio_id: Uuid,
+        usuario_id: Uuid,
+        funcao: FuncaoUsuario,
+    ) -> Result<(), RepositorioError>;
+    /// Substitui os vínculos de carteira do usuário pela lista informada.
+    fn definir_carteira_usuario(
+        &self,
+        escritorio_id: Uuid,
+        usuario_id: Uuid,
+        ids: &[Uuid],
+    ) -> Result<(), RepositorioError>;
+}
+
+#[derive(Debug, Clone)]
+pub struct NovoSocioContatoCommand {
+    pub escritorio_id: Uuid,
+    pub cliente_id: Uuid,
+    pub papel: PapelSocioContatoDomain,
+    pub nome: String,
+    pub documento: Option<String>,
+    pub email: Option<String>,
+    pub telefone: Option<String>,
+    pub representante_principal: bool,
+    pub usuario_id: Uuid,
+    pub ip: Option<IpAddr>,
+}
+
+pub type PapelSocioContatoDomain = crate::domain::clientes::PapelSocioContato;
+
+#[derive(Debug, Clone)]
+pub struct NovoClienteFilialCommand {
+    pub escritorio_id: Uuid,
+    pub cliente_id: Uuid,
+    pub cnpj: String,
+    pub nome_unidade: Option<String>,
+    pub endereco: Option<String>,
+    pub telefone: Option<String>,
+    pub usuario_id: Uuid,
+    pub ip: Option<IpAddr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct NovaClienteTagCommand {
+    pub escritorio_id: Uuid,
+    pub nome: String,
+    pub cor: Option<String>,
+    pub usuario_id: Uuid,
+    pub ip: Option<IpAddr>,
 }
 
 #[derive(Debug, Clone)]

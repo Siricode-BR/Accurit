@@ -1,10 +1,9 @@
-//! Repositório Diesel de preferências de notificação.
+﻿//! RepositÃ³rio Diesel de preferÃªncias de notificaÃ§Ã£o.
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use diesel::sql_types::{Bool, Text, Timestamptz, Uuid as SqlUuid};
-use serde_json::Value;
+use diesel::sql_types::{Bool, Timestamptz, Uuid as SqlUuid};
 use uuid::Uuid;
 
 use crate::domain::notificacoes::entidades::{
@@ -24,6 +23,7 @@ impl PreferenciasNotificacaoDiesel {
         Self { pool }
     }
 
+    #[allow(dead_code)]
     fn conexao(
         &self,
     ) -> Result<
@@ -32,7 +32,7 @@ impl PreferenciasNotificacaoDiesel {
     > {
         self.pool
             .get()
-            .map_err(|_| ErroNotificacao::Persistencia("pool indisponível".into()))
+            .map_err(|_| ErroNotificacao::Persistencia("pool indispon\u{00ed}vel".into()))
     }
 }
 
@@ -96,7 +96,7 @@ impl RepositorioPreferenciasNotificacao for PreferenciasNotificacaoDiesel {
             .bind::<SqlUuid, _>(usuario_id)
             .get_result::<PreferenciaRow>(&mut conexao)
             .optional()
-            .map_err(|_| ErroNotificacao::Persistencia("buscar preferências".into()))?
+            .map_err(|_| ErroNotificacao::Persistencia("buscar preferÃªncias".into()))?
             .map(|row| row.para_entidade())
             .ok_or(ErroNotificacao::PreferenciaNaoEncontrada)?;
             Ok(Some(linha))
@@ -138,7 +138,7 @@ impl RepositorioPreferenciasNotificacao for PreferenciasNotificacaoDiesel {
             .bind::<Bool, _>(novo.canal_in_app)
             .bind::<diesel::sql_types::Jsonb, _>(tipos_json)
             .get_result::<PreferenciaRow>(&mut conexao)
-            .map_err(|_| ErroNotificacao::Persistencia("criar/atualizar preferências".into()))?
+            .map_err(|_| ErroNotificacao::Persistencia("criar/atualizar preferÃªncias".into()))?
             .para_entidade();
             Ok(linha)
         })

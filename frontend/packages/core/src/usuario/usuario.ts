@@ -1,6 +1,9 @@
 /** Papéis de usuário da plataforma do escritório (ADMIN é exclusivo do backoffice). */
 export type PapelUsuario = 'CLIENTE' | 'OPERADOR';
 
+/** Função granular na carteira do escritório (Fase E). */
+export type FuncaoUsuario = 'GESTOR' | 'ANALISTA_FISCAL' | 'OPERADOR_LEITURA';
+
 export interface UsuarioDto {
   id: string;
   escritorioId: string;
@@ -18,6 +21,8 @@ export interface UsuarioDto {
 export interface ListagemUsuariosDto {
   itens: UsuarioDto[];
   total: number;
+  pagina: number;
+  tamanho: number;
 }
 
 export interface CriarUsuarioRequestDto {
@@ -41,4 +46,20 @@ export interface AtualizarUsuarioRequestDto {
 
 export interface RedefinirSenhaUsuarioRequestDto {
   senha: string;
+}
+
+// ===== Fase E — função e carteira do usuário =====
+
+export interface AcessoUsuarioDto {
+  funcao: FuncaoUsuario;
+  podeAdministrarUsuarios: boolean;
+  clientesPermitidos?: string[] | null;
+}
+
+export interface DefinirAcessoRequestDto {
+  funcao: FuncaoUsuario;
+}
+
+export interface DefinirCarteiraRequestDto {
+  clientes: string[];
 }

@@ -3,7 +3,10 @@
     <div>
       <h1 class="page-title">Usuários</h1>
       <p class="page-subtitle">
-        Quem acessa o portal do seu escritório: {{ usuarioService.total() }} usuários cadastrados
+        Quem acessa o portal do seu escritório:
+        {{ usuarioService.total() }} usuário
+        {{ usuarioService.total() !== 1 ? 's' : '' }}
+        cadastrados
       </p>
     </div>
     <button type="button" acc-cta icon="user-plus" (click)="novo()">Novo usuário</button>
@@ -24,9 +27,8 @@
         class="filtros__busca"
         placeholder="Buscar por nome, e-mail ou CPF"
         ariaLabel="Buscar usuários"
-        [value]="termoBusca()"
         [documentMask]="true"
-        (valueChange)="termoBusca.set($event)"
+        (valueChange)="termoBusca.set($event); buscar()"
       />
       <button type="button" class="btn-recarregar" title="Recarregar lista" aria-label="Recarregar lista"
         [disabled]="usuarioService.carregando()" (click)="recarregar()">
@@ -40,7 +42,8 @@
       [value]="filtroAtivo()" (valueChange)="aplicarFiltro($event)" />
 
     <p class="filtros__resumo" aria-live="polite">
-      Exibindo {{ usuariosExibidos().length }} de {{ usuarioService.usuarios().length }} usuários
+      Página {{ usuarioService.pagina() }} de {{ usuarioService.totalPaginas() }} ·
+      Exibindo {{ usuarioService.usuarios().length }} de {{ usuarioService.total() }} usuários
     </p>
   </section>
 
@@ -77,7 +80,7 @@
             </tr>
           </thead>
           <tbody>
-            @for (u of usuariosExibidos(); track u.id) {
+            @for (u of usuarioService.usuarios(); track u.id) {
               <tr class="linha-clicavel" tabindex="0" (click)="editar(u)" (keydown.enter)="editar(u)">
                 <td>
                   <strong>{{ u.nome }}</strong>
@@ -100,6 +103,12 @@
                   <div class="acoes-linha">
                     <button acc-button variant="ghost" size="sm"
                       (click)="$event.stopPropagation(); senha(u)">Redefinir senha</button>
+                    @if (podeGerenciarAcesso() && !ehVoce(u)) {
+                      <button acc-button variant="outline" size="sm"
+                        (click)="$event.stopPropagation(); abrirModalAcesso(u)">
+                        Acesso
+                      </button>
+                    }
                     @if (!ehVoce(u)) {
                       <button acc-button variant="outline" size="sm"
                         [loading]="alterando().has(u.id)" [disabled]="alterando().has(u.id)"
@@ -117,6 +126,30 @@
             }
           </tbody>
         </table>
+      </div>
+
+      <div class="paginacao" aria-label="Paginação dos usuários">
+        <button
+          acc-button
+          variant="ghost"
+          size="sm"
+          [disabled]="usuarioService.pagina() === 1"
+          (click)="anterior()"
+        >
+          ← Anterior
+        </button>
+        <span class="paginacao-info">
+          Página {{ usuarioService.pagina() }} de {{ usuarioService.totalPaginas() }}
+        </span>
+        <button
+          acc-button
+          variant="ghost"
+          size="sm"
+          [disabled]="usuarioService.pagina() >= usuarioService.totalPaginas()"
+          (click)="proxima()"
+        >
+          Próxima →
+        </button>
       </div>
     </acc-card>
   }
@@ -138,5 +171,59 @@
 @if (redefinindoSenha(); as u) {
   <acc-modal title="Redefinir senha" [subtitle]="u.nome" (fechar)="redefinindoSenha.set(null)">
     <app-usuario-senha [usuario]="u" (concluido)="aoRedefinirSenha()" (cancelado)="redefinindoSenha.set(null)" />
+  </acc-modal>
+}
+
+<!-- ===== Modal: função e carteira do usuário (Fase E) ===== -->
+@if (acessoEdicao(); as acesso) {
+  <acc-modal
+    title="Acesso do usuário"
+    [subtitle]="acesso.usuarioId"
+    size="lg"
+    (fechar)="fecharModalAcesso()"
+  >
+    <div class="form-linha">
+      <label class="label">Função na carteira</label>
+      <select
+        class="input input--select"
+        [value]="acesso.funcao"
+        (change)="
+          selecionarFuncao(textoDo($event))
+        "
+      >
+        <option value="GESTOR">Gestor</option>
+        <option value="ANALISTA_FISCAL">Analista fiscal</option>
+        <option value="OPERADOR_LEITURA">Operador (somente leitura)</option>
+      </select>
+      <p class="label-hint">
+        Define o que o usuário pode fazer na carteira de clientes do escritório.
+      </p>
+    </div>
+    <div class="form-linha">
+      <label class="label">Clientes da carteira</label>
+      <div class="carteira-grid">
+        @for (c of clienteService.clientes(); track c.id) {
+          <label class="carteira-item">
+            <input
+              type="checkbox"
+              [checked]="clienteSelecionado(c.id)"
+              (change)="alternarCarteira(c.id)"
+            />
+            {{ c.nomeRazaoSocial }}
+            <span class="carteira-doc">{{ formatarDocCliente(c.cpfCnpj) }}</span>
+          </label>
+        } @empty {
+          <span class="texto-muto">Carregando clientes…</span>
+        }
+      </div>
+    </div>
+    <div class="form-acoes">
+      <button acc-button variant="outline" size="sm" (click)="fecharModalAcesso()">
+        Cancelar
+      </button>
+      <button acc-button variant="primary" size="sm" (click)="salvarAcesso()">
+        Salvar acesso
+      </button>
+    </div>
   </acc-modal>
 }

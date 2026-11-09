@@ -87,6 +87,48 @@ where
         consultas_cliente_repo,
     );
 
+    // ===== Fase E — gestão de carteira =====
+    let carteira_repo = std::sync::Arc::new(
+        crate::infrastructure::persistence::clientes::CarteiraClientesRepositorioDiesel::novo(
+            pool.clone(),
+        ),
+    );
+    let cliente_repo_trait: std::sync::Arc<dyn crate::application::clientes::ClienteRepositorio> =
+        std::sync::Arc::new(cliente_repo.clone());
+    let auditoria_clientes: std::sync::Arc<
+        dyn crate::application::clientes::AuditoriaClienteRepositorio,
+    > = std::sync::Arc::new(cliente_repo.clone());
+    let verificar_acesso = crate::application::clientes::VerificarAcessoUseCase::novo(
+        carteira_repo.clone() as std::sync::Arc<dyn crate::application::clientes::RepositorioAcessoUsuarios>,
+    );
+    let gestao_socios = crate::application::clientes::GestaoSociosContatosUseCase::novo(
+        cliente_repo_trait.clone(),
+        carteira_repo.clone(),
+        auditoria_clientes.clone(),
+    );
+    let gestao_filiais = crate::application::clientes::GestaoFiliaisUseCase::novo(
+        cliente_repo_trait.clone(),
+        carteira_repo.clone(),
+        auditoria_clientes.clone(),
+    );
+    let gestao_tags = crate::application::clientes::GestaoClienteTagsUseCase::novo(
+        carteira_repo.clone(),
+        auditoria_clientes.clone(),
+    );
+    let gestao_carteira_cliente = crate::application::clientes::CarteiraClienteUseCase::novo(
+        cliente_repo_trait,
+        carteira_repo.clone(),
+        auditoria_clientes,
+    );
+    let importar_clientes = crate::application::clientes::ImportarClientesUseCase::novo(
+        std::sync::Arc::new(cliente_repo.clone()),
+        std::sync::Arc::new(cliente_repo.clone()),
+    );
+    let gestao_acesso_usuarios =
+        crate::application::clientes::GestaoAcessoUsuariosUseCase::novo(
+            carteira_repo.clone() as std::sync::Arc<dyn crate::application::clientes::RepositorioAcessoUsuarios>,
+        );
+
     let provisionar_tenant_uc = ProvisionarTenantUseCase::novo(
         std::sync::Arc::new(admin_repo.clone()),
         std::sync::Arc::new(admin_repo.clone()),
@@ -196,19 +238,32 @@ where
                 excluir_clientes,
                 listar_consultas_cliente,
                 situacao_fiscal_cliente,
+                verificar_acesso.clone(),
+                gestao_socios,
+                gestao_filiais,
+                gestao_tags,
+                gestao_carteira_cliente,
+                importar_clientes,
                 auth_state.clone(),
             ),
         );
 
         api = api.nest(
             "/usuarios",
-            crate::presentation::usuarios::construir_usuarios(gestao_usuarios.clone(), &auth_state),
+            crate::presentation::usuarios::construir_usuarios(
+                gestao_usuarios.clone(),
+                gestao_acesso_usuarios.clone(),
+                verificar_acesso.clone(),
+                &auth_state,
+            ),
         );
 
         api = api.nest(
             "/admin",
             crate::presentation::usuarios::construir_usuarios_admin(
                 gestao_usuarios.clone(),
+                gestao_acesso_usuarios.clone(),
+                verificar_acesso.clone(),
                 &auth_state,
             )
             .merge(

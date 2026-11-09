@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::domain::guias::entidades::GuiaEmissao;
-use crate::domain::guias::enums::{StatusGuia, TipoGuia};
 
 /// Requisição para emitir uma guia.
 #[derive(Debug, Deserialize)]

@@ -7,8 +7,9 @@ use crate::application::admin::{
     ProvisionarError, validar_cpf, validar_email, validar_nome, validar_senha,
 };
 use crate::application::usuarios::ports::{
-    AlteracaoUsuario, Ator, EventoAuditoriaUsuario, FiltroUsuarios, OrigemAtor, RepositorioError,
-    UsuarioDetalhe, UsuarioError, UsuarioGestaoNovo, UsuarioGestaoRepositorio,
+    AlteracaoUsuario, Ator, EventoAuditoriaUsuario, FiltroUsuarios, ListagemUsuarios,
+    OrigemAtor, RepositorioError, UsuarioDetalhe, UsuarioError, UsuarioGestaoNovo,
+    UsuarioGestaoRepositorio,
 };
 use crate::domain::auth::Papel;
 use crate::infrastructure::auth::HashArgon2;
@@ -88,6 +89,33 @@ impl GestaoUsuariosUseCase {
             .map(|b| b.trim().to_owned())
             .filter(|b| !b.is_empty());
         Ok(self.repo.listar(&filtro)?)
+    }
+
+    /// Fase E — listagem paginada no servidor (página/tamanho normalizados).
+    pub fn listar_paginado(
+        &self,
+        ator: &Ator,
+        mut filtro: FiltroUsuarios,
+    ) -> Result<ListagemUsuarios, UsuarioError> {
+        if let Some(escopo) = ator.escopo() {
+            filtro.escritorio_id = Some(escopo);
+        }
+        filtro.busca = filtro
+            .busca
+            .map(|b| b.trim().to_owned())
+            .filter(|b| !b.is_empty());
+
+        const TAMANHO_PADRAO: i64 = 20;
+        const TAMANHO_MAXIMO: i64 = 100;
+        let tamanho = filtro
+            .tamanho
+            .unwrap_or(TAMANHO_PADRAO)
+            .clamp(1, TAMANHO_MAXIMO);
+        let pagina = filtro.pagina.unwrap_or(1).max(1);
+        filtro.pagina = Some(pagina);
+        filtro.tamanho = Some(tamanho);
+
+        Ok(self.repo.listar_paginado(&filtro)?)
     }
 
     pub fn obter(&self, ator: &Ator, id: Uuid) -> Result<UsuarioDetalhe, UsuarioError> {

@@ -5,9 +5,6 @@ use axum::http::StatusCode;
 use axum::Json;
 use uuid::Uuid;
 
-use crate::application::guias::{
-    BaixarGuiaUseCase, BuscarGuiaUseCase, EmitirGuiaUseCase, ListarGuiasUseCase,
-};
 use crate::domain::guias::enums::TipoGuia;
 use crate::domain::guias::erros::ErroGuia;
 use crate::presentation::auth::RequestContext;

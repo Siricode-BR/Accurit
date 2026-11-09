@@ -998,6 +998,86 @@ retornam a mesma guia previamente emitida, sem nova chamada ao SERPRO.
 
 Todas as rotas exigem autenticação com audiência `client` e isolamento por `escritorio_id`.
 
+### 8.8 Gestão de Carteira (Fase E)
+
+A carteira de clientes define quais clientes um usuário do escritório pode ver e quais pode
+alterar, além da função granular (`GESTOR`, `ANALISTA_FISCAL`, `OPERADOR_LEITURA`) e de dados
+complementares de cada cliente (sócios/contatos, filiais/unidades, tags, responsável interno e
+observações).
+
+#### 8.8.1 Tabelas
+
+`carteira_clientes` armazena, por cliente do escritório, o `responsavel_usuario_id` e
+`observacoes` (texto livre, até 2000 caracteres):
+
+```sql
+CREATE TABLE carteira_clientes (
+    cliente_id UUID PRIMARY KEY,
+    escritorio_id UUID NOT NULL,
+    responsavel_usuario_id UUID,
+    observacoes TEXT,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+`socio_contatos` guarda vários sócios/contatos por cliente (`papel` = `SOCIO`/`CONTATO`),
+com opcional `cpf_cnpj` (CPF/CNPJ validado), e-mail, telefone e booleano
+`representante_principal` (único por cliente via índice parcial). `cliente_filiais` guarda
+CNPJ, nome da unidade, endereço e telefone por cliente. `cliente_tags` guarda tags do
+escritório (nome único por escritório, case-insensitive) e `cliente_tags_vinculos` vincula
+tags a clientes (idempotente).
+
+`funcoes_usuarios` declara a função do usuário no escritório (`GESTOR`/`ANALISTA_FISCAL`/
+`OPERADOR_LEITURA`); ausência de linha deriva do `papel` (`CLIENTE` → `GESTOR`,
+`OPERADOR` → `ANALISTA_FISCAL`). `carteira_usuarios` restringe, por usuário, a quais
+`cliente_id` ele acessa; ausência de vínculos significa carteira completa do escritório.
+
+#### 8.8.2 Regras de negócio
+
+- Somente usuários com função que permite escrita (`GESTOR` ou `ANALISTA_FISCAL`) criam,
+  editam ou removem sócios/contatos, filiais e vínculos de tag. `OPERADOR_LEITURA` é apenas
+  leitura.
+- A lista de clientes (`GET /clientes`) respeita a carteira do usuário: usuários sem
+  vínculos em `carteira_usuarios` veem todos os clientes do escritório; usuários com vínculos
+  veem apenas os clientes vinculados.
+- A leitura de um cliente específico (`GET /clientes/{id}`, consultas, situação fiscal)
+  responde `404` quando o cliente está fora da carteira — não vaza existência (mesmo padrão
+  de IDOR das demais rotas).
+- A gestão de função e carteira de usuários (`PUT /usuarios/{id}/acesso`,
+  `PUT /usuarios/{id}/carteira`) exige papel `CLIENTE` e função `GESTOR`.
+
+#### 8.8.3 Contrato da API (Fase E)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/api/v1/clientes/{id}/socios-contatos` | Lista sócios/contatos do cliente |
+| `POST` | `/api/v1/clientes/{id}/socios-contatos` | Cadastra sócio/contato |
+| `DELETE` | `/api/v1/clientes/{id}/socios-contatos/{socioId}` | Remove sócio/contato |
+| `GET` | `/api/v1/clientes/{id}/filiais` | Lista filiais/unidades do cliente |
+| `POST` | `/api/v1/clientes/{id}/filiais` | Cadastra filial/unidade |
+| `DELETE` | `/api/v1/clientes/{id}/filiais/{filialId}` | Remove filial/unidade |
+| `GET` | `/api/v1/clientes/tags` | Lista tags do escritório |
+| `POST` | `/api/v1/clientes/tags` | Cadastra tag do escritório |
+| `GET` | `/api/v1/clientes/{id}/tags` | Lista tags do cliente |
+| `POST` | `/api/v1/clientes/{id}/tags` | Vincula tag ao cliente (idempotente) |
+| `DELETE` | `/api/v1/clientes/{id}/tags/{tagId}` | Desvincula tag do cliente |
+| `GET` | `/api/v1/clientes/{id}/carteira` | Responsável e observações do cliente na carteira |
+| `PUT` | `/api/v1/clientes/{id}/carteira` | Define responsável/observações (upsert) |
+| `POST` | `/api/v1/clientes/importar` | Prévia da importação (CSV/XLSX), sem persistir |
+| `POST` | `/api/v1/clientes/importar/confirmar` | Confirma e cria clientes válidos não duplicados |
+| `GET` | `/api/v1/clientes/meu-acesso` | Função e carteira do usuário autenticado |
+| `GET` | `/api/v1/usuarios/{id}/acesso` | Função e carteira de um usuário (gestor) |
+| `PUT` | `/api/v1/usuarios/{id}/acesso` | Define função de um usuário (gestor) |
+| `PUT` | `/api/v1/usuarios/{id}/carteira` | Define vínculos de carteira de um usuário (gestor) |
+
+A importação aceita corpo `{ formato: "CSV"\|"XLSX", conteudoBase64 }`, limita 1000 linhas,
+valida CPF/CNPJ e domínio de cada linha e devolve prévia com erros por linha; a confirmação
+reprocessa o arquivo e ignora silenciosamente clientes duplicados (mesmo CPF/CNPJ no
+escritório).
+
+Todas as rotas exigem autenticação com audiência `client` e isolamento por `escritorio_id`.
+
 ---
 
 ## 9. Modelo de dados — PostgreSQL 16
@@ -1521,6 +1601,134 @@ e a revogação da família operam de forma idêntica a `sessoes`, com os evento
 (`AUTH_LOGIN_SUCESSO`, `AUTH_LOGIN_FALHA`, `AUTH_LOGOUT`, `AUTH_REFRESH_REUSO` gravados com
 `escritorio_id NULL`).
 
+### 9.14 `socio_contatos` (Fase E)
+
+Vários sócios/contatos por cliente. `papel` = `SOCIO` (PJ) ou `CONTATO` (PF/PJ); `cpf_cnpj`
+opcional, validado com dígitos verificadores (11 ou 14 dígitos); `representante_principal` é
+único por cliente via índice parcial.
+
+```sql
+CREATE TABLE socio_contatos (
+    id UUID PRIMARY KEY,
+    escritorio_id UUID NOT NULL REFERENCES escritorios(id) ON DELETE CASCADE,
+    cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+    papel VARCHAR(8) NOT NULL CHECK (papel IN ('SOCIO', 'CONTATO')),
+    nome TEXT NOT NULL,
+    cpf_cnpj VARCHAR(14) CHECK (cpf_cnpj ~ '^[0-9]{11}$' OR cpf_cnpj ~ '^[0-9]{14}$'),
+    email TEXT,
+    telefone TEXT,
+    representante_principal BOOLEAN NOT NULL DEFAULT FALSE,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_socio_contatos_cliente ON socio_contatos(cliente_id);
+CREATE INDEX idx_socio_contatos_escritorio ON socio_contatos(escritorio_id);
+CREATE UNIQUE INDEX uq_representante_principal
+    ON socio_contatos(cliente_id) WHERE representante_principal = TRUE;
+```
+
+### 9.15 `cliente_filiais` (Fase E)
+
+Filiais/unidades de um cliente. `cnpj` único por cliente.
+
+```sql
+CREATE TABLE cliente_filiais (
+    id UUID PRIMARY KEY,
+    escritorio_id UUID NOT NULL REFERENCES escritorios(id) ON DELETE CASCADE,
+    cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+    cnpj VARCHAR(14) NOT NULL CHECK (cnpj ~ '^[0-9]{14}$'),
+    nome_unidade TEXT,
+    endereco TEXT,
+    telefone TEXT,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_cliente_filiais_cliente ON cliente_filiais(cliente_id);
+CREATE INDEX idx_cliente_filiais_escritorio ON cliente_filiais(escritorio_id);
+CREATE UNIQUE INDEX uq_cliente_filiais_cliente_cnpj ON cliente_filiais(cliente_id, cnpj);
+```
+
+### 9.16 `cliente_tags` e `cliente_tags_vinculos` (Fase E)
+
+Tags do escritório (nome único por escritório, case-insensitive) e seus vínculos com clientes
+(idempotente).
+
+```sql
+CREATE TABLE cliente_tags (
+    id UUID PRIMARY KEY,
+    escritorio_id UUID NOT NULL REFERENCES escritorios(id) ON DELETE CASCADE,
+    nome VARCHAR(64) NOT NULL,
+    cor VARCHAR(16),
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_cliente_tags_escritorio ON cliente_tags(escritorio_id);
+CREATE UNIQUE INDEX uq_cliente_tags_nome ON cliente_tags(escritorio_id, lower(nome));
+
+CREATE TABLE cliente_tags_vinculos (
+    id UUID PRIMARY KEY,
+    escritorio_id UUID NOT NULL REFERENCES escritorios(id) ON DELETE CASCADE,
+    tag_id UUID NOT NULL REFERENCES cliente_tags(id) ON DELETE CASCADE,
+    cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (tag_id, cliente_id)
+);
+CREATE INDEX idx_cliente_tags_vinculos_cliente ON cliente_tags_vinculos(cliente_id);
+CREATE INDEX idx_cliente_tags_vinculos_tag ON cliente_tags_vinculos(tag_id);
+```
+
+### 9.17 `carteira_clientes` (Fase E)
+
+Uma linha por cliente: responsável interno (`responsavel_usuario_id`, opcional) e
+observações (texto livre).
+
+```sql
+CREATE TABLE carteira_clientes (
+    cliente_id UUID PRIMARY KEY REFERENCES clientes(id) ON DELETE CASCADE,
+    escritorio_id UUID NOT NULL REFERENCES escritorios(id) ON DELETE CASCADE,
+    responsavel_usuario_id UUID REFERENCES usuarios(id) ON DELETE SET NULL,
+    observacoes TEXT,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_carteira_clientes_escritorio ON carteira_clientes(escritorio_id);
+CREATE INDEX idx_carteira_clientes_responsavel ON carteira_clientes(responsavel_usuario_id);
+```
+
+### 9.18 `funcoes_usuarios` (Fase E)
+
+Função granular do usuário dentro do escritório. A linha é opcional: sem registro, a função
+deriva do papel (`CLIENTE` → `GESTOR`, `OPERADOR` → `ANALISTA_FISCAL`).
+
+```sql
+CREATE TABLE funcoes_usuarios (
+    usuario_id UUID PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
+    escritorio_id UUID NOT NULL REFERENCES escritorios(id) ON DELETE CASCADE,
+    funcao VARCHAR(24) NOT NULL CHECK (funcao IN ('GESTOR', 'ANALISTA_FISCAL', 'OPERADOR_LEITURA')),
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_funcoes_usuarios_escritorio ON funcoes_usuarios(escritorio_id);
+```
+
+### 9.19 `carteira_usuarios` (Fase E)
+
+Vínculos explícitos de carteira por usuário. Com vínculos, o usuário enxerga apenas esses
+clientes do escritório; sem vínculos, enxerga toda a carteira do escritório.
+
+```sql
+CREATE TABLE carteira_usuarios (
+    id UUID PRIMARY KEY,
+    escritorio_id UUID NOT NULL REFERENCES escritorios(id) ON DELETE CASCADE,
+    usuario_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (usuario_id, cliente_id)
+);
+CREATE INDEX idx_carteira_usuarios_usuario ON carteira_usuarios(usuario_id);
+CREATE INDEX idx_carteira_usuarios_cliente ON carteira_usuarios(cliente_id);
+```
+
 ---
 
 ## 10. API interna e filtros de clientes
@@ -1556,7 +1764,7 @@ e a revogação da família operam de forma idêntica a `sessoes`, com os evento
 | `GET` | `/api/v1/admin/escritorios?page=...&pageSize=...` | Lista paginada de escritórios, apenas metadados (id, slug, nome, modoTrialSerpro, versao, atualizadoEm) — ADMIN |
 | `GET` | `/api/v1/serpro/ambiente` | Ambiente efetivo do escritório do token, `{ ambienteEfetivo, atualizadoEm }` — somente leitura, audiência `client` |
 | `PATCH` | `/api/v1/admin/escritorios/{id}/serpro/trial` | Alternância do modo Trial pelo gestor de tenants — corpo `{ modoTrialSerpro, versao }` (concorrência otimista; `409` em divergência; credencial/certificado ausentes → `400`) |
-| `GET` | `/api/v1/usuarios?busca=&ativo=` | Lista usuários do escritório do token (`{ itens, total }`) — apenas titular `CLIENTE`; `OPERADOR` → `403` |
+| `GET` | `/api/v1/usuarios?busca=&ativo=&pagina=&tamanho=` | Lista paginada de usuários do escritório do token (`{ itens, total, pagina, tamanho }`) — busca por nome/e-mail/CPF no servidor; apenas titular `CLIENTE`; `OPERADOR` → `403` |
 | `POST` | `/api/v1/usuarios` | Cria usuário — corpo `{ nome, email, cpf, papel (CLIENTE\|OPERADOR), senha }`; `201`; e-mail único na plataforma e CPF único no escritório (`409`) |
 | `GET` / `PATCH` | `/api/v1/usuarios/{id}` | Detalhe / atualização `{ nome?, papel?, ativo? }`; outro escritório → `404`; não pode desativar a si mesmo nem remover/desativar o último titular ativo (`409`) |
 | `POST` | `/api/v1/usuarios/{id}/senha` | Redefine a senha (`204`); revoga sessões e zera bloqueio |

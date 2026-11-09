@@ -12,8 +12,19 @@ import {
   ClienteDto,
   EstadoConsultaFiscal,
   EstadoProcuracaoClienteDto,
+  SocioContatoDto,
+  CreateSocioContatoRequestDto,
+  PapelSocioContato,
+  FilialDto,
+  CreateFilialRequestDto,
+  ClienteTagDto,
+  CreateTagRequestDto,
+  CarteiraClienteDto,
+  AtualizarCarteiraRequestDto,
+  AcessoUsuarioDto,
+  FuncaoUsuario,
 } from '@accurit/core';
-import { sanitizeDocument } from '@accurit/shared';
+import { sanitizeDocument, isValidDocument } from '@accurit/shared';
 import { ProcuracaoService } from '../../data/procuracao.service';
 import { mensagemDeErro } from '../../core/http/mensagem-erro';
 import { ClienteService } from '../../data/cliente.service';
@@ -30,15 +41,18 @@ import {
   AccBackButtonComponent,
   AccPageHeaderComponent,
   AccTab,
+  AccSelectComponent,
+  AccModalComponent,
 } from '@accurit/ui';
 import { AbaId, EstadoCliente, LeituraEstado } from './cliente-detalhes.types';
 
-/** Abas por `?aba=`; "Unidades" é placeholder da fase seguinte (FASE 2). */
+/** Abas por `?aba=`; a aba "unidades" foi substituída pelas abas reais da Fase E. */
 const ABAS: readonly AccTab[] = [
   { id: 'visao-geral', label: 'Visão geral' },
   { id: 'consultas', label: 'Consultas' },
   { id: 'contatos', label: 'Contatos' },
-  { id: 'unidades', label: 'Unidades', emBreve: true },
+  { id: 'socios-contatos', label: 'Sócios e contatos' },
+  { id: 'filiais', label: 'Filiais' },
 ];
 
 const ABAS_VALIDAS: readonly string[] = ABAS.map((t) => t.id);
@@ -135,6 +149,8 @@ function formatarData(value: string | null | undefined): string {
     AccBadgeComponent,
     AccBackButtonComponent,
     AccPageHeaderComponent,
+    AccSelectComponent,
+    AccModalComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './cliente-detalhes.page.html',
@@ -173,6 +189,60 @@ export class ClienteDetalhesPage implements OnInit {
 
   protected readonly podeEditar = computed(() => this.sessao.user()?.role === 'OPERADOR');
 
+  /** Escrita em itens de carteira (sócios, filiais, tags, responsável/observações). */
+  protected readonly podeGravarCarteira = computed(() => {
+    const role = this.sessao.user()?.role;
+    return role !== 'LEITURA';
+  });
+
+  /** Função efetiva do usuário logado na carteira (lida do backend por requisição). */
+  protected readonly acesso = signal<AcessoUsuarioDto | null>(null);
+
+  protected readonly sociosContatos = signal<SocioContatoDto[]>([]);
+  protected readonly filiais = signal<FilialDto[]>([]);
+  protected readonly tagsCliente = signal<ClienteTagDto[]>([]);
+  protected readonly tagsEscritorio = signal<ClienteTagDto[]>([]);
+  protected readonly carteira = signal<CarteiraClienteDto | null>(null);
+
+  protected readonly carregandoSocios = signal(false);
+  protected readonly carregandoFiliais = signal(false);
+  protected readonly carregandoTags = signal(false);
+  protected readonly carregandoCarteira = signal(false);
+
+  protected readonly modalSocioAberto = signal(false);
+  protected readonly socioForm = signal<{
+    papel: string;
+    nome: string;
+    documento: string;
+    email: string;
+    telefone: string;
+    representantePrincipal: boolean;
+  }>({
+    papel: 'SOCIO',
+    nome: '',
+    documento: '',
+    email: '',
+    telefone: '',
+    representantePrincipal: false,
+  });
+
+  protected readonly modalFilialAberto = signal(false);
+  protected readonly filialForm = signal<{
+    cnpj: string;
+    nomeUnidade: string;
+    endereco: string;
+    telefone: string;
+  }>({ cnpj: '', nomeUnidade: '', endereco: '', telefone: '' });
+
+  protected readonly modalTagsAberto = signal(false);
+  protected readonly tagVinculada = signal<ReadonlySet<string>>(new Set());
+
+  protected readonly modalCarteiraAberto = signal(false);
+  protected readonly carteiraForm = signal<{
+    responsavelUsuarioId: string;
+    observacoes: string;
+  }>({ responsavelUsuarioId: '', observacoes: '' });
+
   protected readonly temPaginaAnterior = computed(() => this.consultas.pagina() > 1);
   protected readonly temProximaPagina = computed(
     () => this.consultas.pagina() * this.consultas.tamanho() < this.consultas.total(),
@@ -199,9 +269,284 @@ export class ClienteDetalhesPage implements OnInit {
     }
 
     await this.carregarCliente(id);
+    await this.carregarItensCarteira(id);
     // Dados do cliente prontos: histórico, situação fiscal e procurações persistentes
     await this.consultas.carregar(id);
     this.carregarProcuracao(id);
+  }
+
+  // ===== Fase E — carregamento de carteira =====
+
+  private async carregarItensCarteira(id: string): Promise<void> {
+    try {
+      await Promise.all([
+        this.carregarSociosContatos(id),
+        this.carregarFiliais(id),
+        this.carregarTags(id),
+        this.carregarCarteira(id),
+        this.carregarMeuAcesso(),
+      ]);
+    } catch {
+      // Itens opcionais da carteira: não bloqueiam a ficha do cliente.
+    }
+  }
+
+  private async carregarSociosContatos(id: string): Promise<void> {
+    this.carregandoSocios.set(true);
+    try {
+      this.sociosContatos.set(await this.clienteService.listarSociosContatos(id));
+    } finally {
+      this.carregandoSocios.set(false);
+    }
+  }
+
+  private async carregarFiliais(id: string): Promise<void> {
+    this.carregandoFiliais.set(true);
+    try {
+      this.filiais.set(await this.clienteService.listarFiliais(id));
+    } finally {
+      this.carregandoFiliais.set(false);
+    }
+  }
+
+  private async carregarTags(id: string): Promise<void> {
+    this.carregandoTags.set(true);
+    try {
+      await Promise.all([
+        this.clienteService.listarTagsDoCliente(id).then((t) => this.tagsCliente.set(t)),
+        this.clienteService.listarTags().then((t) => this.tagsEscritorio.set(t)),
+      ]);
+    } finally {
+      this.carregandoTags.set(false);
+    }
+  }
+
+  private async carregarCarteira(id: string): Promise<void> {
+    this.carregandoCarteira.set(true);
+    try {
+      this.carteira.set(await this.clienteService.obterCarteira(id));
+    } catch {
+      this.carteira.set(null);
+    } finally {
+      this.carregandoCarteira.set(false);
+    }
+  }
+
+  private async carregarMeuAcesso(): Promise<void> {
+    try {
+      this.acesso.set(await this.clienteService.meuAcesso());
+    } catch {
+      this.acesso.set(null);
+    }
+  }
+
+  // ===== Fase E — sócios e contatos =====
+
+  protected rotuloPapelSocio(papel: PapelSocioContato): string {
+    return papel === 'SOCIO' ? 'Sócio' : 'Contato';
+  }
+
+  protected abrirNovoSocio(): void {
+    if (!this.podeGravarCarteira()) return;
+    this.socioForm.set({
+      papel: 'SOCIO',
+      nome: '',
+      documento: '',
+      email: '',
+      telefone: '',
+      representantePrincipal: false,
+    });
+    this.modalSocioAberto.set(true);
+  }
+
+  protected fecharModalSocio(): void {
+    this.modalSocioAberto.set(false);
+  }
+
+  protected async salvarSocio(): Promise<void> {
+    const id = this.idCliente;
+    if (!id) return;
+    const doc = this.socioForm().documento.replace(/\D/g, '');
+    if (doc && !isValidDocument(doc)) {
+      // Validação prévia de CPF/CNPJ no front.
+      return;
+    }
+    try {
+      await this.clienteService.criarSocioContato(id, {
+        papel: this.socioForm().papel as PapelSocioContato,
+        nome: this.socioForm().nome.trim(),
+        documento: this.socioForm().documento.trim() || undefined,
+        email: this.socioForm().email.trim() || undefined,
+        telefone: this.socioForm().telefone.trim() || undefined,
+        representantePrincipal: this.socioForm().representantePrincipal,
+      });
+      this.fecharModalSocio();
+      await this.carregarSociosContatos(id);
+    } catch (e) {
+      // Erro tratado pelo serviço (estado `erro` não exposto aqui); recarrega para consistência.
+      await this.carregarSociosContatos(id);
+    }
+  }
+
+  protected async removerSocio(socioId: string): Promise<void> {
+    if (!this.podeGravarCarteira()) return;
+    const id = this.idCliente;
+    if (!id || !confirm('Remover este sócio/contato?')) return;
+    try {
+      await this.clienteService.removerSocioContato(id, socioId);
+      await this.carregarSociosContatos(id);
+    } catch {
+      await this.carregarSociosContatos(id);
+    }
+  }
+
+  // ===== Fase E — filiais =====
+
+  protected abrirNovaFilial(): void {
+    if (!this.podeGravarCarteira()) return;
+    this.filialForm.set({ cnpj: '', nomeUnidade: '', endereco: '', telefone: '' });
+    this.modalFilialAberto.set(true);
+  }
+
+  protected fecharModalFilial(): void {
+    this.modalFilialAberto.set(false);
+  }
+
+  protected async salvarFilial(): Promise<void> {
+    const id = this.idCliente;
+    if (!id) return;
+    const cnpj = this.filialForm().cnpj.replace(/\D/g, '');
+    if (!cnpj || !isValidDocument(cnpj)) return;
+    try {
+      await this.clienteService.criarFilial(id, {
+        cnpj,
+        nomeUnidade: this.filialForm().nomeUnidade.trim() || undefined,
+        endereco: this.filialForm().endereco.trim() || undefined,
+        telefone: this.filialForm().telefone.trim() || undefined,
+      });
+      this.fecharModalFilial();
+      await this.carregarFiliais(id);
+    } catch {
+      await this.carregarFiliais(id);
+    }
+  }
+
+  protected async removerFilial(filialId: string): Promise<void> {
+    if (!this.podeGravarCarteira()) return;
+    const id = this.idCliente;
+    if (!id || !confirm('Remover esta filial/unidade?')) return;
+    try {
+      await this.clienteService.removerFilial(id, filialId);
+      await this.carregarFiliais(id);
+    } catch {
+      await this.carregarFiliais(id);
+    }
+  }
+
+  // ===== Fase E — tags =====
+
+  protected async abrirModalTags(): Promise<void> {
+    if (!this.podeGravarCarteira()) return;
+    const id = this.idCliente;
+    if (!id) return;
+    await this.carregarTags(id);
+    const vinculados = new Set(this.tagsCliente().map((t) => t.id));
+    this.tagVinculada.set(vinculados);
+    this.modalTagsAberto.set(true);
+  }
+
+  protected fecharModalTags(): void {
+    this.modalTagsAberto.set(false);
+  }
+
+  protected estaVinculada(tagId: string): boolean {
+    return this.tagVinculada().has(tagId);
+  }
+
+  protected async alternarTag(tagId: string): Promise<void> {
+    const id = this.idCliente;
+    if (!id || !this.podeGravarCarteira()) return;
+    const vinculada = this.estaVinculada(tagId);
+    try {
+      if (vinculada) {
+        await this.clienteService.desvincularTag(id, tagId);
+      } else {
+        await this.clienteService.vincularTag(id, tagId);
+      }
+      this.tagVinculada.update((s) => {
+        const p = new Set(s);
+        vinculada ? p.delete(tagId) : p.add(tagId);
+        return p;
+      });
+      await this.carregarTags(id);
+    } catch {
+      await this.carregarTags(id);
+    }
+  }
+
+  // ===== Fase E — carteira (responsável e observações) =====
+
+  protected abrirModalCarteira(): void {
+    if (!this.podeGravarCarteira()) return;
+    const c = this.carteira();
+    this.carteiraForm.set({
+      responsavelUsuarioId: c?.responsavelUsuarioId ?? '',
+      observacoes: c?.observacoes ?? '',
+    });
+    this.modalCarteiraAberto.set(true);
+  }
+
+  protected fecharModalCarteira(): void {
+    this.modalCarteiraAberto.set(false);
+  }
+
+  protected async salvarCarteira(): Promise<void> {
+    const id = this.idCliente;
+    if (!id) return;
+    try {
+      await this.clienteService.definirCarteira(id, {
+        responsavelUsuarioId: this.carteiraForm().responsavelUsuarioId.trim() || null,
+        observacoes: this.carteiraForm().observacoes.trim() || null,
+      });
+      this.fecharModalCarteira();
+      await this.carregarCarteira(id);
+    } catch {
+      await this.carregarCarteira(id);
+    }
+  }
+
+  protected documentoSocio(documento?: string | null): string {
+    if (!documento) return '—';
+    const d = documento.replace(/\D/g, '');
+    if (d.length === 11) {
+      return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    }
+    if (d.length === 14) {
+      return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+    }
+    return documento;
+  }
+
+  protected telefoneSocio(telefone?: string | null): string {
+    if (!telefone) return '—';
+    const d = sanitizeDocument(telefone) ?? telefone;
+    if (d.length === 10) {
+      return d.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+    }
+    if (d.length === 11) {
+      return d.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+    }
+    return telefone;
+  }
+
+  /** Valor de um campo de formulário disparador do evento (contorna tipagem de `EventTarget`). */
+  protected textoDo(evento: Event): string {
+    return ((evento.target as HTMLInputElement)?.value) ?? '';
+  }
+
+  /** Estado de um checkbox disparador do evento. */
+  protected marcadoDo(evento: Event): boolean {
+    return ((evento.target as HTMLInputElement)?.checked) ?? false;
   }
 
   /** Cartões genéricos por serviço federal (Situação fiscal da visão geral). */

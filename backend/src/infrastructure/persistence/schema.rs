@@ -34,6 +34,27 @@ diesel::table! {
 }
 
 diesel::table! {
+    carteira_clientes (cliente_id) {
+        cliente_id -> Uuid,
+        escritorio_id -> Uuid,
+        responsavel_usuario_id -> Nullable<Uuid>,
+        observacoes -> Nullable<Text>,
+        criado_em -> Timestamptz,
+        atualizado_em -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    carteira_usuarios (id) {
+        id -> Uuid,
+        escritorio_id -> Uuid,
+        usuario_id -> Uuid,
+        cliente_id -> Uuid,
+        criado_em -> Timestamptz,
+    }
+}
+
+diesel::table! {
     catalogo_servicos_integra (id) {
         id -> Uuid,
         #[max_length = 32]
@@ -97,6 +118,44 @@ diesel::table! {
         #[max_length = 64]
         request_id -> Nullable<Varchar>,
         bilhetavel -> Bool,
+        criado_em -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    cliente_filiais (id) {
+        id -> Uuid,
+        escritorio_id -> Uuid,
+        cliente_id -> Uuid,
+        #[max_length = 14]
+        cnpj -> Varchar,
+        nome_unidade -> Nullable<Text>,
+        endereco -> Nullable<Text>,
+        telefone -> Nullable<Text>,
+        criado_em -> Timestamptz,
+        atualizado_em -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    cliente_tags (id) {
+        id -> Uuid,
+        escritorio_id -> Uuid,
+        #[max_length = 64]
+        nome -> Varchar,
+        #[max_length = 16]
+        cor -> Nullable<Varchar>,
+        criado_em -> Timestamptz,
+        atualizado_em -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    cliente_tags_vinculos (id) {
+        id -> Uuid,
+        escritorio_id -> Uuid,
+        tag_id -> Uuid,
+        cliente_id -> Uuid,
         criado_em -> Timestamptz,
     }
 }
@@ -216,6 +275,17 @@ diesel::table! {
         registros_processados -> Int4,
         registros_com_erro -> Int4,
         criado_em -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    funcoes_usuarios (usuario_id) {
+        usuario_id -> Uuid,
+        escritorio_id -> Uuid,
+        #[max_length = 24]
+        funcao -> Varchar,
+        criado_em -> Timestamptz,
+        atualizado_em -> Timestamptz,
     }
 }
 
@@ -376,6 +446,24 @@ diesel::table! {
 }
 
 diesel::table! {
+    socio_contatos (id) {
+        id -> Uuid,
+        escritorio_id -> Uuid,
+        cliente_id -> Uuid,
+        #[max_length = 8]
+        papel -> Varchar,
+        nome -> Text,
+        #[max_length = 14]
+        cpf_cnpj -> Nullable<Varchar>,
+        email -> Nullable<Text>,
+        telefone -> Nullable<Text>,
+        representante_principal -> Bool,
+        criado_em -> Timestamptz,
+        atualizado_em -> Timestamptz,
+    }
+}
+
+diesel::table! {
     templates_notificacao (id) {
         id -> Uuid,
         #[max_length = 32]
@@ -453,8 +541,20 @@ diesel::table! {
 }
 
 diesel::joinable!(auditoria_eventos -> escritorios (escritorio_id));
+diesel::joinable!(carteira_clientes -> clientes (cliente_id));
+diesel::joinable!(carteira_clientes -> escritorios (escritorio_id));
+diesel::joinable!(carteira_clientes -> usuarios (responsavel_usuario_id));
+diesel::joinable!(carteira_usuarios -> clientes (cliente_id));
+diesel::joinable!(carteira_usuarios -> escritorios (escritorio_id));
+diesel::joinable!(carteira_usuarios -> usuarios (usuario_id));
 diesel::joinable!(certificados_a1 -> escritorios (escritorio_id));
 diesel::joinable!(chamadas_operacionais -> escritorios (escritorio_id));
+diesel::joinable!(cliente_filiais -> clientes (cliente_id));
+diesel::joinable!(cliente_filiais -> escritorios (escritorio_id));
+diesel::joinable!(cliente_tags -> escritorios (escritorio_id));
+diesel::joinable!(cliente_tags_vinculos -> cliente_tags (tag_id));
+diesel::joinable!(cliente_tags_vinculos -> clientes (cliente_id));
+diesel::joinable!(cliente_tags_vinculos -> escritorios (escritorio_id));
 diesel::joinable!(clientes -> escritorios (escritorio_id));
 diesel::joinable!(consultas_em_lote -> escritorios (escritorio_id));
 diesel::joinable!(consultas_fiscais -> clientes (cliente_id));
@@ -462,6 +562,8 @@ diesel::joinable!(consultas_fiscais -> escritorios (escritorio_id));
 diesel::joinable!(credenciais_serpro -> escritorios (escritorio_id));
 diesel::joinable!(execucoes_trabalho -> escritorios (escritorio_id));
 diesel::joinable!(execucoes_trabalho -> trabalhos_agendados (trabalho_agendado_id));
+diesel::joinable!(funcoes_usuarios -> escritorios (escritorio_id));
+diesel::joinable!(funcoes_usuarios -> usuarios (usuario_id));
 diesel::joinable!(guias_emissao -> clientes (cliente_id));
 diesel::joinable!(guias_emissao -> escritorios (escritorio_id));
 diesel::joinable!(guias_emissao -> usuarios (usuario_id));
@@ -475,6 +577,8 @@ diesel::joinable!(procuracoes -> escritorios (escritorio_id));
 diesel::joinable!(sessoes -> escritorios (escritorio_id));
 diesel::joinable!(sessoes -> usuarios (usuario_id));
 diesel::joinable!(sessoes_admin -> administradores (administrador_id));
+diesel::joinable!(socio_contatos -> clientes (cliente_id));
+diesel::joinable!(socio_contatos -> escritorios (escritorio_id));
 diesel::joinable!(tokens_serpro -> clientes (cliente_id));
 diesel::joinable!(tokens_serpro -> escritorios (escritorio_id));
 diesel::joinable!(trabalhos_agendados -> escritorios (escritorio_id));
@@ -483,15 +587,21 @@ diesel::joinable!(usuarios -> escritorios (escritorio_id));
 diesel::allow_tables_to_appear_in_same_query!(
     administradores,
     auditoria_eventos,
+    carteira_clientes,
+    carteira_usuarios,
     catalogo_servicos_integra,
     certificados_a1,
     chamadas_operacionais,
+    cliente_filiais,
+    cliente_tags,
+    cliente_tags_vinculos,
     clientes,
     consultas_em_lote,
     consultas_fiscais,
     credenciais_serpro,
     escritorios,
     execucoes_trabalho,
+    funcoes_usuarios,
     guias_emissao,
     idempotencia_operacoes,
     itens_consulta_lote,
@@ -500,6 +610,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     procuracoes,
     sessoes,
     sessoes_admin,
+    socio_contatos,
     templates_notificacao,
     tokens_serpro,
     trabalhos_agendados,

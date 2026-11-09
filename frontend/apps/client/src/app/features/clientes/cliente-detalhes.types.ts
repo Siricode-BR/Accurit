@@ -2,7 +2,12 @@
 export type EstadoCliente = 'carregando' | 'pronto' | 'naoEncontrado' | 'erro';
 
 /** Abas aceitas em `?aba=`. */
-export type AbaId = 'visao-geral' | 'consultas' | 'contatos' | 'unidades';
+export type AbaId =
+  | 'visao-geral'
+  | 'consultas'
+  | 'contatos'
+  | 'socios-contatos'
+  | 'filiais';
 
 export interface LeituraEstado {
   /** rótulo curto do cartão/badge em pt-BR */

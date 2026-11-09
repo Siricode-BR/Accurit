@@ -20,6 +20,7 @@ import { GuiasService } from '../../data/guias.service';
 import {
   AccButtonComponent,
   AccSpinnerComponent,
+  AccCardComponent,
 } from '@accurit/ui';
 
 @Component({
@@ -31,6 +32,7 @@ import {
     ReactiveFormsModule,
     AccButtonComponent,
     AccSpinnerComponent,
+    AccCardComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './guia-emitir.component.html',

@@ -1,11 +1,25 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import {
   ClienteDto,
   ListagemClientesDto,
   FiltroClientes,
   CreateClienteRequestDto,
   UpdateClienteRequestDto,
+  SocioContatoDto,
+  CreateSocioContatoRequestDto,
+  FilialDto,
+  CreateFilialRequestDto,
+  ClienteTagDto,
+  CreateTagRequestDto,
+  VincularTagRequestDto,
+  CarteiraClienteDto,
+  AtualizarCarteiraRequestDto,
+  AnaliseImportacaoDto,
+  RelatorioImportacaoDto,
+  ImportacaoRequestDto,
+  AcessoUsuarioDto,
 } from '@accurit/core';
 import { sanitizeDocument } from '@accurit/shared';
 
@@ -169,6 +183,127 @@ export class ClienteService {
         },
       });
     });
+  }
+
+  // ===== Fase E — sócios e contatos =====
+
+  listarSociosContatos(clienteId: string): Promise<SocioContatoDto[]> {
+    return firstValueFrom(
+      this.http.get<SocioContatoDto[]>(`${this.baseUrl}/${clienteId}/socios-contatos`),
+    );
+  }
+
+  criarSocioContato(
+    clienteId: string,
+    payload: CreateSocioContatoRequestDto,
+  ): Promise<SocioContatoDto> {
+    return firstValueFrom(
+      this.http.post<SocioContatoDto>(
+        `${this.baseUrl}/${clienteId}/socios-contatos`,
+        payload,
+      ),
+    );
+  }
+
+  removerSocioContato(clienteId: string, socioId: string): Promise<void> {
+    return firstValueFrom(
+      this.http.delete<void>(
+        `${this.baseUrl}/${clienteId}/socios-contatos/${socioId}`,
+      ),
+    );
+  }
+
+  // ===== Fase E — filiais =====
+
+  listarFiliais(clienteId: string): Promise<FilialDto[]> {
+    return firstValueFrom(
+      this.http.get<FilialDto[]>(`${this.baseUrl}/${clienteId}/filiais`),
+    );
+  }
+
+  criarFilial(clienteId: string, payload: CreateFilialRequestDto): Promise<FilialDto> {
+    return firstValueFrom(
+      this.http.post<FilialDto>(`${this.baseUrl}/${clienteId}/filiais`, payload),
+    );
+  }
+
+  removerFilial(clienteId: string, filialId: string): Promise<void> {
+    return firstValueFrom(
+      this.http.delete<void>(`${this.baseUrl}/${clienteId}/filiais/${filialId}`),
+    );
+  }
+
+  // ===== Fase E — tags =====
+
+  listarTags(): Promise<ClienteTagDto[]> {
+    return firstValueFrom(this.http.get<ClienteTagDto[]>(`${this.baseUrl}/tags`));
+  }
+
+  criarTag(payload: CreateTagRequestDto): Promise<ClienteTagDto> {
+    return firstValueFrom(this.http.post<ClienteTagDto>(`${this.baseUrl}/tags`, payload));
+  }
+
+  listarTagsDoCliente(clienteId: string): Promise<ClienteTagDto[]> {
+    return firstValueFrom(
+      this.http.get<ClienteTagDto[]>(`${this.baseUrl}/${clienteId}/tags`),
+    );
+  }
+
+  vincularTag(clienteId: string, tagId: string): Promise<void> {
+    return firstValueFrom(
+      this.http.post<void>(`${this.baseUrl}/${clienteId}/tags`, { tagId }),
+    );
+  }
+
+  desvincularTag(clienteId: string, tagId: string): Promise<void> {
+    return firstValueFrom(
+      this.http.delete<void>(`${this.baseUrl}/${clienteId}/tags/${tagId}`),
+    );
+  }
+
+  // ===== Fase E — carteira (responsável e observações) =====
+
+  obterCarteira(clienteId: string): Promise<CarteiraClienteDto> {
+    return firstValueFrom(
+      this.http.get<CarteiraClienteDto>(`${this.baseUrl}/${clienteId}/carteira`),
+    );
+  }
+
+  definirCarteira(
+    clienteId: string,
+    payload: AtualizarCarteiraRequestDto,
+  ): Promise<CarteiraClienteDto> {
+    return firstValueFrom(
+      this.http.put<CarteiraClienteDto>(
+        `${this.baseUrl}/${clienteId}/carteira`,
+        payload,
+      ),
+    );
+  }
+
+  // ===== Fase E — importação em massa =====
+
+  importarAnalise(payload: ImportacaoRequestDto): Promise<AnaliseImportacaoDto> {
+    return firstValueFrom(
+      this.http.post<AnaliseImportacaoDto>(`${this.baseUrl}/importar`, payload),
+    );
+  }
+
+  importarConfirmar(
+    payload: ImportacaoRequestDto,
+  ): Promise<RelatorioImportacaoDto> {
+    return firstValueFrom(
+      this.http.post<RelatorioImportacaoDto>(
+        `${this.baseUrl}/importar/confirmar`,
+        payload,
+      ),
+    );
+  }
+
+  // ===== Fase E — acesso do usuário logado =====
+
+  meuAcesso(): Promise<AcessoUsuarioDto> {
+    return firstValueFrom(this.http.get<AcessoUsuarioDto>(`${this.baseUrl}/meu-acesso`));
   }
 }
 

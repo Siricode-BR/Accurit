@@ -1,4 +1,4 @@
-//! Repositório Diesel de notificações.
+﻿//! RepositÃ³rio Diesel de notificaÃ§Ãµes.
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -26,6 +26,7 @@ impl NotificacoesDiesel {
         Self { pool }
     }
 
+    #[allow(dead_code)]
     fn conexao(
         &self,
     ) -> Result<
@@ -34,7 +35,7 @@ impl NotificacoesDiesel {
     > {
         self.pool
             .get()
-            .map_err(|_| ErroNotificacao::Persistencia("pool indisponível".into()))
+            .map_err(|_| ErroNotificacao::Persistencia("pool indispon\u{00ed}vel".into()))
     }
 }
 
@@ -73,7 +74,7 @@ impl NotificacaoRow {
             "in_app" => CanalNotificacao::InApp,
             "email" => CanalNotificacao::Email,
             "whatsapp" => CanalNotificacao::WhatsApp,
-            _ => return Err(ErroNotificacao::Persistencia("canal inválido".into())),
+            _ => return Err(ErroNotificacao::Persistencia("canal invÃ¡lido".into())),
         };
         let tipo = match self.tipo.as_str() {
             "pendencia_divida_ativa" => TipoNotificacao::PendenciaDividaAtiva,
@@ -82,7 +83,7 @@ impl NotificacaoRow {
             "certificado_a1_vencendo" => TipoNotificacao::CertificadoA1Vencendo,
             "das_vencendo" => TipoNotificacao::DasVencendo,
             "falha_rotina" => TipoNotificacao::FalhaRotina,
-            _ => return Err(ErroNotificacao::Persistencia("tipo inválido".into())),
+            _ => return Err(ErroNotificacao::Persistencia("tipo invÃ¡lido".into())),
         };
         Ok(Notificacao {
             id: self.id,
@@ -131,7 +132,7 @@ impl RepositorioNotificacoes for NotificacoesDiesel {
             .bind::<Nullable<Text>, _>(novo.referencia_tipo)
             .bind::<Nullable<SqlUuid>, _>(novo.referencia_id)
             .get_result::<NotificacaoRow>(&mut conexao)
-            .map_err(|_| ErroNotificacao::Persistencia("inserir notificação".into()))?
+            .map_err(|_| ErroNotificacao::Persistencia("inserir notificaÃ§Ã£o".into()))?
             .para_entidade();
             linha
         })
@@ -157,7 +158,7 @@ impl RepositorioNotificacoes for NotificacoesDiesel {
             .bind::<SqlUuid, _>(id)
             .get_result::<NotificacaoRow>(&mut conexao)
             .optional()
-            .map_err(|_| ErroNotificacao::Persistencia("buscar notificação".into()))?
+            .map_err(|_| ErroNotificacao::Persistencia("buscar notificaÃ§Ã£o".into()))?
             .map(|row| row.para_entidade())
             .transpose();
             linha
@@ -196,7 +197,7 @@ impl RepositorioNotificacoes for NotificacoesDiesel {
                 .bind::<SqlUuid, _>(usuario_id)
                 .bind::<diesel::sql_types::BigInt, _>(limite)
                 .load::<NotificacaoRow>(&mut conexao)
-                .map_err(|_| ErroNotificacao::Persistencia("listar notificações".into()))?
+                .map_err(|_| ErroNotificacao::Persistencia("listar notificaÃ§Ãµes".into()))?
                 .into_iter()
                 .map(|row| row.para_entidade())
                 .collect::<Result<Vec<_>, _>>()?;
@@ -236,7 +237,7 @@ impl RepositorioNotificacoes for NotificacoesDiesel {
                 .bind::<SqlUuid, _>(escritorio_id)
                 .bind::<diesel::sql_types::BigInt, _>(limite)
                 .load::<NotificacaoRow>(&mut conexao)
-                .map_err(|_| ErroNotificacao::Persistencia("listar notificações por escritório".into()))?
+                .map_err(|_| ErroNotificacao::Persistencia("listar notificaÃ§Ãµes por escritÃ³rio".into()))?
                 .into_iter()
                 .map(|row| row.para_entidade())
                 .collect::<Result<Vec<_>, _>>()?;
@@ -309,7 +310,7 @@ impl RepositorioNotificacoes for NotificacoesDiesel {
             )
             .bind::<SqlUuid, _>(usuario_id)
             .get_result::<Contagem>(&mut conexao)
-            .map_err(|_| ErroNotificacao::Persistencia("contar não lidas".into()))?
+            .map_err(|_| ErroNotificacao::Persistencia("contar nÃ£o lidas".into()))?
             .total;
             Ok(total)
         })

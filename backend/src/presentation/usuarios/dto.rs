@@ -51,9 +51,12 @@ impl From<UsuarioDetalhe> for UsuarioDto {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ListaUsuariosResponse {
     pub itens: Vec<UsuarioDto>,
-    pub total: usize,
+    pub total: i64,
+    pub pagina: i64,
+    pub tamanho: i64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -62,6 +65,30 @@ pub struct ListarUsuariosQuery {
     pub escritorio_id: Option<Uuid>,
     pub busca: Option<String>,
     pub ativo: Option<bool>,
+    pub pagina: Option<i64>,
+    pub tamanho: Option<i64>,
+}
+
+// ===== Fase E — função e carteira do usuário =====
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcessoUsuarioDto {
+    pub funcao: String,
+    pub pode_administrar_usuarios: bool,
+    pub clientes_permitidos: Option<Vec<Uuid>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DefinirAcessoRequest {
+    pub funcao: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DefinirCarteiraRequest {
+    pub clientes: Vec<Uuid>,
 }
 
 #[derive(Debug, Deserialize)]

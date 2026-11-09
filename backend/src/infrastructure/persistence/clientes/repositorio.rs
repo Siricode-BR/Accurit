@@ -102,16 +102,31 @@ impl ClienteRepositorio for ClienteRepositorioDiesel {
         escritorio_id_alvo: Uuid,
         filtro: FiltroClientes,
         paginacao: Paginacao,
+        apenas_ids: Option<&[Uuid]>,
     ) -> Result<ListagemClientes, RepositorioError> {
         use crate::infrastructure::persistence::schema::clientes::dsl::*;
 
         let mut conexao = self.conexao()?;
 
+        // Restrição de carteira: lista vazia devolve página vazia.
+        if let Some(ids) = apenas_ids && ids.is_empty() {
+            return Ok(ListagemClientes {
+                itens: Vec::new(),
+                total: 0,
+                pagina: paginacao.pagina,
+                tamanho: paginacao.tamanho,
+            });
+        }
+
         let base_query = || {
-            crate::infrastructure::persistence::schema::clientes::table
+            let mut q = crate::infrastructure::persistence::schema::clientes::table
                 .filter(escritorio_id.eq(escritorio_id_alvo))
                 .select(ClienteRow::as_select())
-                .into_boxed()
+                .into_boxed();
+            if let Some(ids) = apenas_ids {
+                q = q.filter(id.eq_any(ids.to_vec()));
+            }
+            q
         };
 
         let query_for_count = match filtro {

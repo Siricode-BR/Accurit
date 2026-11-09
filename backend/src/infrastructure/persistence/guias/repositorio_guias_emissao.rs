@@ -1,10 +1,9 @@
-//! Repositório Diesel de emissões de guia.
+﻿//! RepositÃ³rio Diesel de emissÃµes de guia.
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel::sql_types::{Text, Timestamptz, Uuid as SqlUuid};
-use diesel::sql_query;
 use uuid::Uuid;
 
 use crate::domain::guias::entidades::{GuiaEmissao, NovoGuiaEmissao};
@@ -23,6 +22,7 @@ impl GuiasEmissaoDiesel {
         Self { pool }
     }
 
+    #[allow(dead_code)]
     fn conexao(
         &self,
     ) -> Result<
@@ -31,7 +31,7 @@ impl GuiasEmissaoDiesel {
     > {
         self.pool
             .get()
-            .map_err(|_| ErroGuia::Persistencia("pool indisponível".into()))
+            .map_err(|_| ErroGuia::Persistencia("pool indispon\u{00ed}vel".into()))
     }
 }
 
@@ -69,14 +69,14 @@ impl GuiaRow {
         let tipo_guia = match self.tipo_guia.as_str() {
             "DAS" => TipoGuia::Das,
             "DARF" => TipoGuia::Darf,
-            _ => return Err(ErroGuia::Persistencia("tipo de guia inválido".into())),
+            _ => return Err(ErroGuia::Persistencia("tipo de guia invÃ¡lido".into())),
         };
         let status = match self.status.as_str() {
             "solicitada" => StatusGuia::Solicitada,
             "emitida" => StatusGuia::Emitida,
             "baixada" => StatusGuia::Baixada,
             "falhou" => StatusGuia::Falhou,
-            _ => return Err(ErroGuia::Persistencia("status inválido".into())),
+            _ => return Err(ErroGuia::Persistencia("status invÃ¡lido".into())),
         };
         let valor_total: f64 = self.valor_total.parse().unwrap_or(0.0);
         Ok(GuiaEmissao {
@@ -182,7 +182,7 @@ impl RepositorioGuiasEmissao for GuiasEmissaoDiesel {
             .bind::<Text, _>(chave_owned)
             .get_result::<GuiaRow>(&mut conexao)
             .optional()
-            .map_err(|_| ErroGuia::Persistencia("buscar guia por idempotência".into()))?
+            .map_err(|_| ErroGuia::Persistencia("buscar guia por idempotÃªncia".into()))?
             .map(|row| row.para_entidade())
             .transpose();
             linha
@@ -213,7 +213,7 @@ impl RepositorioGuiasEmissao for GuiasEmissaoDiesel {
             .bind::<SqlUuid, _>(usuario_id)
             .bind::<diesel::sql_types::BigInt, _>(limite)
             .load::<GuiaRow>(&mut conexao)
-            .map_err(|_| ErroGuia::Persistencia("listar guias por usuário".into()))?
+            .map_err(|_| ErroGuia::Persistencia("listar guias por usuÃ¡rio".into()))?
             .into_iter()
             .map(|row| row.para_entidade())
             .collect::<Result<Vec<_>, _>>()?;
@@ -245,7 +245,7 @@ impl RepositorioGuiasEmissao for GuiasEmissaoDiesel {
             .bind::<SqlUuid, _>(escritorio_id)
             .bind::<diesel::sql_types::BigInt, _>(limite)
             .load::<GuiaRow>(&mut conexao)
-            .map_err(|_| ErroGuia::Persistencia("listar guias por escritório".into()))?
+            .map_err(|_| ErroGuia::Persistencia("listar guias por escritÃ³rio".into()))?
             .into_iter()
             .map(|row| row.para_entidade())
             .collect::<Result<Vec<_>, _>>()?;

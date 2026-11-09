@@ -322,3 +322,159 @@ mod tests_consultas {
         assert_eq!(paginacao.tamanho, 2);
     }
 }
+
+// ===== Fase E — Gestão de carteira =====
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SocioContatoRequest {
+    pub papel: String,
+    pub nome: String,
+    pub documento: Option<String>,
+    pub email: Option<String>,
+    pub telefone: Option<String>,
+    pub representante_principal: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SocioContatoResponse {
+    pub id: Uuid,
+    pub cliente_id: Uuid,
+    pub papel: String,
+    pub nome: String,
+    pub documento: Option<String>,
+    pub email: Option<String>,
+    pub telefone: Option<String>,
+    pub representante_principal: bool,
+    pub criado_em: chrono::DateTime<chrono::Utc>,
+    pub atualizado_em: chrono::DateTime<chrono::Utc>,
+}
+
+impl From<crate::domain::clientes::SocioContato> for SocioContatoResponse {
+    fn from(entidade: crate::domain::clientes::SocioContato) -> Self {
+        Self {
+            id: entidade.id,
+            cliente_id: entidade.cliente_id,
+            papel: entidade.papel.como_str().to_owned(),
+            nome: entidade.nome,
+            documento: entidade.documento.map(|d| d.como_str().to_owned()),
+            email: entidade.email,
+            telefone: entidade.telefone,
+            representante_principal: entidade.representante_principal,
+            criado_em: entidade.criado_em,
+            atualizado_em: entidade.atualizado_em,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FilialRequest {
+    pub cnpj: String,
+    pub nome_unidade: Option<String>,
+    pub endereco: Option<String>,
+    pub telefone: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FilialResponse {
+    pub id: Uuid,
+    pub cliente_id: Uuid,
+    pub cnpj: String,
+    pub nome_unidade: Option<String>,
+    pub endereco: Option<String>,
+    pub telefone: Option<String>,
+    pub criado_em: chrono::DateTime<chrono::Utc>,
+    pub atualizado_em: chrono::DateTime<chrono::Utc>,
+}
+
+impl From<crate::domain::clientes::ClienteFilial> for FilialResponse {
+    fn from(entidade: crate::domain::clientes::ClienteFilial) -> Self {
+        Self {
+            id: entidade.id,
+            cliente_id: entidade.cliente_id,
+            cnpj: entidade.cnpj.como_str().to_owned(),
+            nome_unidade: entidade.nome_unidade,
+            endereco: entidade.endereco,
+            telefone: entidade.telefone,
+            criado_em: entidade.criado_em,
+            atualizado_em: entidade.atualizado_em,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CriarTagRequest {
+    pub nome: String,
+    pub cor: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagResponse {
+    pub id: Uuid,
+    pub nome: String,
+    pub cor: Option<String>,
+    pub criado_em: chrono::DateTime<chrono::Utc>,
+}
+
+impl From<crate::domain::clientes::ClienteTag> for TagResponse {
+    fn from(tag: crate::domain::clientes::ClienteTag) -> Self {
+        Self {
+            id: tag.id,
+            nome: tag.nome,
+            cor: tag.cor,
+            criado_em: tag.criado_em,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VincularTagRequest {
+    pub tag_id: Uuid,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AtualizarCarteiraRequest {
+    pub responsavel_usuario_id: Option<Uuid>,
+    #[serde(default)]
+    pub limpar_responsavel: bool,
+    pub observacoes: Option<String>,
+    #[serde(default)]
+    pub limpar_observacoes: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CarteiraClienteResponse {
+    pub cliente_id: Uuid,
+    pub responsavel_usuario_id: Option<Uuid>,
+    pub observacoes: Option<String>,
+    pub criado_em: chrono::DateTime<chrono::Utc>,
+    pub atualizado_em: chrono::DateTime<chrono::Utc>,
+}
+
+impl From<crate::domain::clientes::CarteiraCliente> for CarteiraClienteResponse {
+    fn from(carteira: crate::domain::clientes::CarteiraCliente) -> Self {
+        Self {
+            cliente_id: carteira.cliente_id,
+            responsavel_usuario_id: carteira.responsavel_usuario_id,
+            observacoes: carteira.observacoes,
+            criado_em: carteira.criado_em,
+            atualizado_em: carteira.atualizado_em,
+        }
+    }
+}
+
+/// Prévia da importação: o corpo é lido como base64 (CSV ou XLSX).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportacaoRequest {
+    pub formato: String,
+    pub conteudo_base64: String,
+}

@@ -197,6 +197,91 @@
         </div>
       </section>
 
+      <!-- ===== Cartão: carteira do cliente (Fase E) ===== -->
+      <section class="section">
+        <div class="dado-card-grid">
+          <acc-card class="dado-card">
+            <h2 class="section-title">Carteira do cliente</h2>
+            <dl class="dado-lista">
+              <div class="dado-item">
+                <dt>Responsável interno</dt>
+                <dd>
+                  @if (carteira(); as ct) {
+                    {{ ct.responsavelUsuarioId ?? '—' }}
+                  } @else {
+                    —
+                  }
+                  @if (podeGravarCarteira()) {
+                    <button
+                      acc-button
+                      variant="ghost"
+                      size="sm"
+                      (click)="abrirModalCarteira()"
+                    >
+                      Editar
+                    </button>
+                  }
+                </dd>
+              </div>
+              <div class="dado-item">
+                <dt>Observações</dt>
+                <dd>
+                  @if (carteira(); as ct) {
+                    {{ ct.observacoes ?? 'Sem observações cadastradas.' }}
+                  } @else {
+                    —
+                  }
+                  @if (podeGravarCarteira()) {
+                    <button
+                      acc-button
+                      variant="ghost"
+                      size="sm"
+                      (click)="abrirModalCarteira()"
+                    >
+                      Editar
+                    </button>
+                  }
+                </dd>
+              </div>
+              <div class="dado-item">
+                <dt>Tags do cliente</dt>
+                <dd>
+                  @if (tagsCliente().length > 0) {
+                    <ul class="tags-lista">
+                      @for (tag of tagsCliente(); track tag.id) {
+                        <li class="tag-item">{{ tag.nome }}</li>
+                      }
+                    </ul>
+                    @if (podeGravarCarteira()) {
+                      <button
+                        acc-button
+                        variant="outline"
+                        size="sm"
+                        (click)="abrirModalTags()"
+                      >
+                        Gerenciar tags
+                      </button>
+                    }
+                  } @else {
+                    <span class="texto-muto">Sem tags.</span>
+                    @if (podeGravarCarteira()) {
+                      <button
+                        acc-button
+                        variant="outline"
+                        size="sm"
+                        (click)="abrirModalTags()"
+                      >
+                        Gerenciar tags
+                      </button>
+                    }
+                  }
+                </dd>
+              </div>
+            </dl>
+          </acc-card>
+        </div>
+      </section>
+
       <section class="section">
         <div class="section-header">
           <h2 class="section-title">SituaÃ§Ã£o fiscal</h2>
@@ -393,14 +478,413 @@
       </section>
     }
 
-    <!-- ===== Aba: Unidades (fase seguinte) ===== -->
-    @if (abaSincronizada() === 'unidades') {
+    <!-- ===== Aba: Sócios e contatos (Fase E) ===== -->
+    @if (abaSincronizada() === 'socios-contatos') {
       <section class="section">
-        <acc-empty-state
-          title="GestÃ£o de unidades em breve"
-          descricao="Os endereÃ§os deste cliente serÃ£o organizados aqui. Configure agora os contatos da matriz."
-        />
+        <div class="section-header">
+          <h2 class="section-title">Sócios e contatos</h2>
+          @if (podeGravarCarteira()) {
+            <button
+              acc-button
+              variant="primary"
+              size="sm"
+              (click)="abrirNovoSocio()"
+              [disabled]="carregandoSocios()"
+            >
+              Novo sócio ou contato
+            </button>
+          }
+        </div>
+        @if (carregandoSocios()) {
+          <div class="lista-vazia" aria-hidden="true">
+            <acc-skeleton variante="linha" altura="3rem" largura="100%" />
+          </div>
+        } @else if (sociosContatos().length === 0) {
+          <acc-empty-state
+            title="Sem sócios ou contatos"
+            descricao="Cadastre os sócios e contatos deste cliente."
+          />
+        } @else {
+          <table class="acc-table">
+            <thead>
+              <tr>
+                <th>Papel</th>
+                <th>Nome</th>
+                <th>Documento</th>
+                <th>E-mail</th>
+                <th>Telefone</th>
+                <th>Rep. principal</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (s of sociosContatos(); track s.id) {
+                <tr>
+                  <td>{{ rotuloPapelSocio(s.papel) }}</td>
+                  <td><strong>{{ s.nome }}</strong></td>
+                  <td>{{ documentoSocio(s.documento) }}</td>
+                  <td>{{ s.email ?? '—' }}</td>
+                  <td>{{ telefoneSocio(s.telefone) }}</td>
+                  <td>
+                    <acc-badge
+                      [status]="s.representantePrincipal ? 'success' : 'neutral'"
+                    >
+                      {{ s.representantePrincipal ? 'Sim' : 'Não' }}
+                    </acc-badge>
+                  </td>
+                  <td>
+                    @if (podeGravarCarteira()) {
+                      <button
+                        acc-button
+                        variant="ghost"
+                        size="sm"
+                        (click)="$event.stopPropagation(); removerSocio(s.id)"
+                      >
+                        Remover
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </section>
+    }
+
+    <!-- ===== Aba: Filiais (Fase E) ===== -->
+    @if (abaSincronizada() === 'filiais') {
+      <section class="section">
+        <div class="section-header">
+          <h2 class="section-title">Filiais / unidades</h2>
+          @if (podeGravarCarteira()) {
+            <button
+              acc-button
+              variant="primary"
+              size="sm"
+              (click)="abrirNovaFilial()"
+              [disabled]="carregandoFiliais()"
+            >
+              Nova filial
+            </button>
+          }
+        </div>
+        @if (carregandoFiliais()) {
+          <div class="lista-vazia" aria-hidden="true">
+            <acc-skeleton variante="linha" altura="3rem" largura="100%" />
+          </div>
+        } @else if (filiais().length === 0) {
+          <acc-empty-state
+            title="Sem filiais cadastradas"
+            descricao="Cadastre as filiais ou unidades deste cliente."
+          />
+        } @else {
+          <table class="acc-table">
+            <thead>
+              <tr>
+                <th>CNPJ</th>
+                <th>Nome da unidade</th>
+                <th>Endereço</th>
+                <th>Telefone</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (f of filiais(); track f.id) {
+                <tr>
+                  <td>{{ aplicarMascara(f.cnpj) }}</td>
+                  <td>{{ f.nomeUnidade ?? '—' }}</td>
+                  <td>{{ f.endereco ?? '—' }}</td>
+                  <td>{{ formatarTelefone(f.telefone ?? '') }}</td>
+                  <td>
+                    @if (podeGravarCarteira()) {
+                      <button
+                        acc-button
+                        variant="ghost"
+                        size="sm"
+                        (click)="$event.stopPropagation(); removerFilial(f.id)"
+                      >
+                        Remover
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
       </section>
     }
   }
 </div>
+
+<!-- ===== Modal: novo sócio/contato (Fase E) ===== -->
+@if (modalSocioAberto()) {
+  <acc-modal title="Novo sócio ou contato" (fechar)="fecharModalSocio()" size="lg">
+    <div class="form-linha">
+      <label class="label" for="socio-papel">Papel</label>
+      <acc-select
+        id="socio-papel"
+        [label]="'Papel'"
+        [options]="[
+          { value: 'SOCIO', label: 'Sócio' },
+          { value: 'CONTATO', label: 'Contato' }
+        ]"
+        [value]="socioForm().papel"
+        (valueChange)="
+          socioForm.set({ ...socioForm(), papel: $event })
+        "
+      ></acc-select>
+    </div>
+    <div class="form-linha">
+      <label class="label" for="socio-nome">Nome completo</label>
+      <input
+        id="socio-nome"
+        class="input"
+        type="text"
+        placeholder="Nome completo"
+        [value]="socioForm().nome"
+        (input)="
+          socioForm.set({
+            ...socioForm(),
+            nome: textoDo($event) ?? '',
+          })
+        "
+      />
+    </div>
+    <div class="form-linha">
+      <label class="label" for="socio-documento">CPF / CNPJ</label>
+      <input
+        id="socio-documento"
+        class="input"
+        type="text"
+        placeholder="Somente números"
+        [value]="socioForm().documento"
+        (input)="
+          socioForm.set({
+            ...socioForm(),
+            documento: textoDo($event) ?? '',
+          })
+        "
+      />
+    </div>
+    <div class="form-linha">
+      <label class="label" for="socio-email">E-mail</label>
+      <input
+        id="socio-email"
+        class="input"
+        type="email"
+        placeholder="e-mail"
+        [value]="socioForm().email"
+        (input)="
+          socioForm.set({
+            ...socioForm(),
+            email: textoDo($event) ?? '',
+          })
+        "
+      />
+    </div>
+    <div class="form-linha">
+      <label class="label" for="socio-telefone">Telefone</label>
+      <input
+        id="socio-telefone"
+        class="input"
+        type="tel"
+        placeholder="Telefone"
+        [value]="socioForm().telefone"
+        (input)="
+          socioForm.set({
+            ...socioForm(),
+            telefone: textoDo($event) ?? '',
+          })
+        "
+      />
+    </div>
+    <div class="form-linha">
+      <label class="label" for="socio-representante">Representante principal</label>
+      <input
+        id="socio-representante"
+        type="checkbox"
+        [checked]="socioForm().representantePrincipal"
+        (change)="
+          socioForm.set({
+            ...socioForm(),
+            representantePrincipal: marcadoDo($event),
+          })
+        "
+      />
+      <span class="label-hint">
+        Somente um sócio pode ser representante principal por cliente.
+      </span>
+    </div>
+    <div class="form-acoes">
+      <button acc-button variant="outline" size="sm" (click)="fecharModalSocio()">
+        Cancelar
+      </button>
+      <button
+        acc-button
+        variant="primary"
+        size="sm"
+        (click)="salvarSocio()"
+        [disabled]="!socioForm().nome.trim()"
+      >
+        Salvar
+      </button>
+    </div>
+  </acc-modal>
+}
+
+<!-- ===== Modal: nova filial (Fase E) ===== -->
+@if (modalFilialAberto()) {
+  <acc-modal title="Nova filial / unidade" (fechar)="fecharModalFilial()" size="lg">
+    <div class="form-linha">
+      <label class="label" for="filial-cnpj">CNPJ da filial</label>
+      <input
+        id="filial-cnpj"
+        class="input"
+        type="text"
+        placeholder="Somente números"
+        [value]="filialForm().cnpj"
+        (input)="
+          filialForm.set({ ...filialForm(), cnpj: textoDo($event) ?? '' })
+        "
+      />
+    </div>
+    <div class="form-linha">
+      <label class="label" for="filial-nome-unidade">Nome da unidade</label>
+      <input
+        id="filial-nome-unidade"
+        class="input"
+        type="text"
+        placeholder="Ex: Matriz - Centro"
+        [value]="filialForm().nomeUnidade"
+        (input)="
+          filialForm.set({
+            ...filialForm(),
+            nomeUnidade: textoDo($event) ?? '',
+          })
+        "
+      />
+    </div>
+    <div class="form-linha">
+      <label class="label" for="filial-endereco">Endereço</label>
+      <input
+        id="filial-endereco"
+        class="input"
+        type="text"
+        placeholder="Endereço da unidade"
+        [value]="filialForm().endereco"
+        (input)="
+          filialForm.set({
+            ...filialForm(),
+            endereco: textoDo($event) ?? '',
+          })
+        "
+      />
+    </div>
+    <div class="form-linha">
+      <label class="label" for="filial-telefone">Telefone</label>
+      <input
+        id="filial-telefone"
+        class="input"
+        type="tel"
+        placeholder="Telefone"
+        [value]="filialForm().telefone"
+        (input)="
+          filialForm.set({
+            ...filialForm(),
+            telefone: textoDo($event) ?? '',
+          })
+        "
+      />
+    </div>
+    <div class="form-acoes">
+      <button acc-button variant="outline" size="sm" (click)="fecharModalFilial()">
+        Cancelar
+      </button>
+      <button
+        acc-button
+        variant="primary"
+        size="sm"
+        (click)="salvarFilial()"
+        [disabled]="!filialForm().cnpj.replace(/\D/g, '')"
+      >
+        Salvar
+      </button>
+    </div>
+  </acc-modal>
+}
+
+<!-- ===== Modal: gerenciar tags (Fase E) ===== -->
+@if (modalTagsAberto()) {
+  <acc-modal title="Tags do cliente" (fechar)="fecharModalTags()" size="lg">
+    <p class="modal-hint">
+      Selecione as tags do escritório que se aplicam a este cliente.
+    </p>
+    <div class="tags-grid">
+      @for (tag of tagsEscritorio(); track tag.id) {
+        <label class="tag-label">
+          <input
+            type="checkbox"
+            [checked]="estaVinculada(tag.id)"
+            (change)="alternarTag(tag.id)"
+          />
+          {{ tag.nome }}
+        </label>
+      } @empty {
+        <span class="texto-muto">O escritório ainda não tem tags cadastradas.</span>
+      }
+    </div>
+    <div class="form-acoes">
+      <button acc-button variant="outline" size="sm" (click)="fecharModalTags()">
+        Fechar
+      </button>
+    </div>
+  </acc-modal>
+}
+
+<!-- ===== Modal: carteira — responsável e observações (Fase E) ===== -->
+@if (modalCarteiraAberto()) {
+  <acc-modal title="Carteira do cliente" (fechar)="fecharModalCarteira()" size="lg">
+    <div class="form-linha">
+      <label class="label" for="carteira-responsavel">Responsável interno (ID do usuário)</label>
+      <input
+        id="carteira-responsavel"
+        class="input"
+        type="text"
+        placeholder="ID do usuário responsável"
+        [value]="carteiraForm().responsavelUsuarioId"
+        (input)="
+          carteiraForm.set({
+            ...carteiraForm(),
+            responsavelUsuarioId: textoDo($event) ?? '',
+          })
+        "
+      />
+    </div>
+    <div class="form-linha">
+      <label class="label" for="carteira-observacoes">Observações</label>
+      <textarea
+        id="carteira-observacoes"
+        class="input"
+        rows="4"
+        placeholder="Observações sobre este cliente na carteira"
+        [value]="carteiraForm().observacoes"
+        (input)="
+          carteiraForm.set({
+            ...carteiraForm(),
+            observacoes: textoDo($event) ?? '',
+          })
+        "
+      ></textarea>
+    </div>
+    <div class="form-acoes">
+      <button acc-button variant="outline" size="sm" (click)="fecharModalCarteira()">
+        Cancelar
+      </button>
+      <button acc-button variant="primary" size="sm" (click)="salvarCarteira()">
+        Salvar
+      </button>
+    </div>
+  </acc-modal>
+}

@@ -264,6 +264,7 @@ impl From<ClienteError> for ApiError {
             },
             ClienteError::Validacao(msg) => Self::validacao(msg),
             ClienteError::AcessoNegado => Self::proibido(),
+            ClienteError::FuncaoSemEscrita => Self::proibido(),
         }
     }
 }

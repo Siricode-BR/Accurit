@@ -5,12 +5,6 @@ use axum::http::StatusCode;
 use axum::Json;
 use uuid::Uuid;
 
-use crate::application::notificacoes::{
-    BuscarPreferenciaUseCase, ContarNotificacoesNaoLidasUseCase,
-    CriarNotificacaoUseCase, CriarOuAtualizarPreferenciaUseCase,
-    ListarNotificacoesUseCase, ListarTemplatesNotificacaoUseCase,
-    MarcarNotificacaoLidaUseCase, MarcarTodasNotificacoesLidasUseCase,
-};
 use crate::domain::notificacoes::enums::{CanalNotificacao, TipoNotificacao};
 use crate::domain::notificacoes::erros::ErroNotificacao;
 use crate::presentation::auth::RequestContext;

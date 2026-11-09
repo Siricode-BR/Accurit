@@ -20,6 +20,7 @@ import { TrabalhosService } from '../../data/trabalhos.service';
 import {
   AccButtonComponent,
   AccSpinnerComponent,
+  AccCardComponent,
 } from '@accurit/ui';
 
 const TIPOS_TRABALHO: { valor: TipoTrabalho; label: string }[] = [
@@ -42,6 +43,7 @@ const AMBIENTES: { valor: string; label: string }[] = [
     ReactiveFormsModule,
     AccButtonComponent,
     AccSpinnerComponent,
+    AccCardComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './trabalho-criar.component.html',

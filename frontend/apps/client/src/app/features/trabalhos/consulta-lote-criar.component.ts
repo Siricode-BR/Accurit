@@ -19,6 +19,7 @@ import { TrabalhosService } from '../../data/trabalhos.service';
 import {
   AccButtonComponent,
   AccSpinnerComponent,
+  AccCardComponent,
 } from '@accurit/ui';
 
 const PRODUTOS: { valor: string; label: string }[] = [
@@ -49,6 +50,7 @@ const VERBOS: { valor: string; label: string }[] = [
     ReactiveFormsModule,
     AccButtonComponent,
     AccSpinnerComponent,
+    AccCardComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './consulta-lote-criar.component.html',

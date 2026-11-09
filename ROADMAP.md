@@ -16,6 +16,17 @@ com testes. A Fase 2B (backoffice de tenants, clientes, certificados e procuraç
 clientes/provisionamento existem, mas pendem remediação de qualidade (`cargo fmt --check` e
 `clippy -D warnings` violados no último commit), testes HTTP de IDOR/isolamento multi-tenant e o
 frontend (telas de `/admin` e `/app`); certificados A1 cifrados e procurações não foram iniciados.
+A **FASE E (Gestão de carteira)** está concluída: tabelas `socio_contatos`, `cliente_filiais`,
+`cliente_tags`, `cliente_tags_vinculos`, `carteira_clientes`, `funcoes_usuarios` e
+`carteira_usuarios` (apenas `CREATE TABLE`, sem `ALTER`); domínio, casos de uso e repositórios Diesel
+de sócios/contatos, filiais, tags e carteira; função efetiva do usuário (`funcoes_usuarios` com
+derivação do papel) e restrição de carteira lidos por requisição; handlers, rotas e guards sob
+`/clientes` (`/{id}/socios-contatos`, `/{id}/filiais`, `/tags`, `/{id}/tags`, `/{id}/carteira`,
+`/importar`, `/importar/confirmar`, `/meu-acesso`) e `/usuarios/{id}/acesso` + `/usuarios/{id}/carteira`;
+frontend com abas Sócios/Contatos e Filiais na ficha do cliente, responsável e observações na visão
+geral, tela de importação com prévia/confirmação e relatório de erros, gestão de função/carteira de
+usuários, UI gating por função e paginação/busca no servidor de usuários; testes unitários e de
+integração verdes; `cargo fmt`, `cargo clippy -D warnings` e `schema-tool` válidos.
 
 A **FASE 5A (procurações persistentes + catálogo configurável do Integra Contador) foi concluída**:
 tabela `procuracoes` com `cliente_id` e isolamento por `escritorio_id`, `catalogo_servicos_integra`
@@ -248,6 +259,8 @@ A **FASE B (job runner, consultas em lote e painel de rotina fiscal) foi conclu�
 A **FASE C (alertas e notificações) foi concluída**: tabela `notificacoes`, `preferencias_notificacao` e `templates_notificacao` com migrations; repositórios Diesel isolados por `escritorio_id`; use cases para criar/listar/marcar como lida/contar não lidas/preferências/templates; handlers e rotas REST sob `/notificacoes`, `/preferencias-notificacao` e `/templates-notificacao`; frontend com central de notificações, marcar como lida, preferências por canal (in-app/e-mail/whatsapp); testes unitários e de integração verdes; `cargo fmt`, `cargo clippy -D warnings` e `schema-tool` válidos.
 
 A **FASE D (emissão de guias e documentos) foi concluída**: ADR-0014 autorizando emissão de guias DAS/DARF via Integra Contador (verbo `Emitir`) com idempotência e auditoria; Dúvida Ativa permanece consultiva; tabela `guias_emissao` com chave de idempotência; repositório Diesel; use case de emissão com verificação de idempotência; handlers e rotas REST sob `/guias` e `/guias/{id}/baixar`; frontend com tela de emissão e histórico de emissões; testes unitários e de integração verdes; `cargo fmt`, `cargo clippy -D warnings` e `schema-tool` válidos.
+
+A **FASE E (Gestão de carteira) foi concluída**: sócios/contatos com representante principal, filiais/unidades, tags, responsável interno e observações por cliente; importação em massa CSV/XLSX com prévia, validação de CPF/CNPJ e relatório de erros; permissões granulares por função (gestor/analista/operador leitura) e carteira de clientes, com guards no backend e frontend; usuários do escritório com paginação e busca no servidor.
 
 ---
 

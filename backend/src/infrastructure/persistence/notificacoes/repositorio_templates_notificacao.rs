@@ -1,15 +1,12 @@
-//! Repositório Diesel de templates de notificação.
+﻿//! RepositÃ³rio Diesel de templates de notificaÃ§Ã£o.
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel::sql_types::{Bool, Text, Timestamptz, Uuid as SqlUuid};
-use serde_json::Value;
 use uuid::Uuid;
 
-use crate::domain::notificacoes::entidades::{
-    TemplateNotificacao, NovoTemplateNotificacao,
-};
+use crate::domain::notificacoes::entidades::TemplateNotificacao;
 use crate::domain::notificacoes::enums::TipoNotificacao;
 use crate::domain::notificacoes::erros::ErroNotificacao;
 use crate::domain::notificacoes::ports::RepositorioTemplatesNotificacao;
@@ -25,6 +22,7 @@ impl TemplatesNotificacaoDiesel {
         Self { pool }
     }
 
+    #[allow(dead_code)]
     fn conexao(
         &self,
     ) -> Result<
@@ -33,7 +31,7 @@ impl TemplatesNotificacaoDiesel {
     > {
         self.pool
             .get()
-            .map_err(|_| ErroNotificacao::Persistencia("pool indisponível".into()))
+            .map_err(|_| ErroNotificacao::Persistencia("pool indispon\u{00ed}vel".into()))
     }
 }
 
@@ -73,7 +71,7 @@ impl TemplateRow {
             "certificado_a1_vencendo" => TipoNotificacao::CertificadoA1Vencendo,
             "das_vencendo" => TipoNotificacao::DasVencendo,
             "falha_rotina" => TipoNotificacao::FalhaRotina,
-            _ => return Err(ErroNotificacao::Persistencia("tipo inválido".into())),
+            _ => return Err(ErroNotificacao::Persistencia("tipo invÃ¡lido".into())),
         };
         Ok(TemplateNotificacao {
             id: self.id,
