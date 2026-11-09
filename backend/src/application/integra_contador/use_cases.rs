@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Instant;
 
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::Value;
@@ -27,6 +28,10 @@ use crate::domain::integra_contador::servicos::{
     EstadoCatalogo, bloqueado_por_verbo, resolver_servico,
 };
 use crate::domain::serpro::ambiente::AmbienteSerpro;
+use crate::domain::serpro::medicao::{
+    ComandoRegistrarChamada, OrigemChamada, ResultadoChamada, ServicoMedicaoSerpro,
+};
+use crate::domain::serpro::produto::ProdutoSerpro;
 
 #[derive(Debug, Clone)]
 pub struct ComandoIntegraContador {
@@ -67,6 +72,9 @@ pub struct ExecutarIntegraContadorUseCase {
     auditoria: Arc<dyn AuditoriaIntegraContador>,
     procuracoes: Arc<dyn ValidadorProcuracao>,
     operator_header_enabled: bool,
+    /// Servico de medicao de uso SERPRO — registra toda chamada de saida
+    /// para fins de cobranca, distinguindo TRIAL de PRODUCAO.
+    servico_medicao: Arc<dyn ServicoMedicaoSerpro>,
     /// CatÃƒÂ¡logo configurÃƒÂ¡vel (`catalogo_servicos_integra`, ADR-0013).
     /// `None` = catÃƒÂ¡logo estÃƒÂ¡tico do domÃƒÂ­nio (comportamento anterior).
     /// ResoluÃƒÂ§ÃƒÂ£o ÃƒÂ© banco-primeiro; queda no estÃƒÂ¡tico quando nÃƒÂ£o configurado
@@ -82,6 +90,7 @@ impl ExecutarIntegraContadorUseCase {
         auditoria: Arc<dyn AuditoriaIntegraContador>,
         procuracoes: Arc<dyn ValidadorProcuracao>,
         operator_header_enabled: bool,
+        servico_medicao: Arc<dyn ServicoMedicaoSerpro>,
     ) -> Self {
         Self {
             contexto,
@@ -90,6 +99,7 @@ impl ExecutarIntegraContadorUseCase {
             auditoria,
             procuracoes,
             operator_header_enabled,
+            servico_medicao,
             provedor_catalogo: None,
         }
     }
@@ -279,6 +289,7 @@ impl ExecutarIntegraContadorUseCase {
             contribuinte: contexto.contribuinte.clone(),
             pedido_dados: comando.pedido_dados.clone(),
         };
+        let inicio = Instant::now();
         let entrega = self
             .cliente
             .executar(
@@ -289,9 +300,38 @@ impl ExecutarIntegraContadorUseCase {
                 &comando.request_id,
             )
             .await;
+        let duracao_ms = inicio.elapsed().as_millis() as u64;
+
+        let resultado_medicao = |entrega: &EntregaIntegraContador| -> ResultadoChamada {
+            match entrega.http_status {
+                200..=299 => ResultadoChamada::Sucesso,
+                400..=499 => ResultadoChamada::Erro4xx,
+                504 => ResultadoChamada::Timeout,
+                500..=599 => ResultadoChamada::Erro5xx,
+                _ => ResultadoChamada::Indeterminado,
+            }
+        };
 
         match entrega {
             Ok(entrega) => {
+                let _ = self
+                    .servico_medicao
+                    .registrar_chamada(&ComandoRegistrarChamada {
+                        escritorio_id: comando.escritorio_id,
+                        produto: ProdutoSerpro::IntegraContador,
+                        verbo: comando.verbo.como_str().to_owned(),
+                        servico: Some(servico.id_servico.clone()),
+                        ambiente: comando.ambiente,
+                        cliente_id: None,
+                        usuario_id: Some(comando.usuario_id),
+                        origem: OrigemChamada::Manual,
+                        resultado: resultado_medicao(&entrega),
+                        status_http: Some(entrega.http_status),
+                        duracao_ms,
+                        request_id: comando.request_id.clone(),
+                    })
+                    .await;
+
                 self.finalizar_reserva(
                     reserva.as_ref(),
                     comando.verbo,
@@ -329,6 +369,24 @@ impl ExecutarIntegraContadorUseCase {
                 } else {
                     "FALHA_TRANSPORTE"
                 };
+                let _ = self
+                    .servico_medicao
+                    .registrar_chamada(&ComandoRegistrarChamada {
+                        escritorio_id: comando.escritorio_id,
+                        produto: ProdutoSerpro::IntegraContador,
+                        verbo: comando.verbo.como_str().to_owned(),
+                        servico: Some(servico.id_servico.clone()),
+                        ambiente: comando.ambiente,
+                        cliente_id: None,
+                        usuario_id: Some(comando.usuario_id),
+                        origem: OrigemChamada::Manual,
+                        resultado: ResultadoChamada::Indeterminado,
+                        status_http: None,
+                        duracao_ms,
+                        request_id: comando.request_id.clone(),
+                    })
+                    .await;
+
                 if let Some(reserva) = &reserva {
                     self.idempotencia
                         .atualizar(

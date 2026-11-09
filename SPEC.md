@@ -1973,6 +1973,59 @@ serviço:
 
 ---
 
+## 10.5 Medição de uso SERPRO (FASE H — Produção)
+
+A contagem de chamadas SERPRO distingue automaticamente `TRIAL` de `PRODUCAO` no campo `ambiente` da
+tabela `chamadas_serpro` e nos agregados `agregados_consumo_serpro`. Toda chamada de saída ao SERPRO
+(consultas manuais, rotinas agendadas, lotes, retries, fallbacks, chamadas de procuração/autenticação)
+é contada em um único ponto — o serviço de medição `ServicoMedicaoSerpro` — invocado dos casos de uso
+da aplicação antes de retornar ao chamador.
+
+### Campos registrados por chamada
+
+| Campo | Descrição |
+|-------|-----------|
+| `escritorio_id` | Escritório proprietário da chamada (isolamento multi-tenant). |
+| `produto` | `INTEGRA_CONTADOR` ou `DIVIDA_ATIVA`. |
+| `verbo` | Verbo do Integra Contador (`Apoiar`, `Consultar`, `Declarar`, `Emitir`, `Monitorar`) ou serviço da Dívida Ativa (`devedor`, `inscricao`). |
+| `servico` | `idServico` do Integra Contador ou caminho do endpoint da Dívida Ativa. |
+| `ambiente` | `TRIAL` ou `PRODUCAO` — usado para cobrança separada. |
+| `cliente_id` | Cliente consultado, quando aplicável. |
+| `usuario_id` | Usuário que originou a chamada. |
+| `origem` | `manual`, `rotina` ou `lote`. |
+| `resultado` | `sucesso`, `4xx`, `5xx`, `timeout`, `indeterminado`. |
+| `status_http` | Código HTTP da resposta, quando disponível. |
+| `duracao_ms` | Duração da chamada em milissegundos. |
+| `request_id` | ID de correlação da requisição. |
+| `criado_em` | Timestamp da chamada. |
+
+### Agregados
+
+A tabela `agregados_consumo_serpro` mantém contadores por escritório/produto/ambiente/dia,
+atualizados de forma atômica (upsert). Não há duplicação em retry idempotente.
+
+### Planos e limites
+
+Cada escritório tem um plano (`planos_escritorio`) com limite de chamadas/mês e uma assinatura
+ativa (`assinaturas_escritorio`). Antes de registrar a chamada, o serviço verifica se o
+escritório está dentro do limite. Ao exceder:
+
+- Se `bloqueio_ao_exceder = true`: chamada é rejeitada com `LimiteChamadasExcedido`.
+- Se `bloqueio_ao_exceder = false`: chamada é registrada mas o escritório é notificado (80% e 100%).
+
+### Chamadas bloqueadas localmente
+
+Chamadas bloqueadas localmente (rate limit interno, produção não configurada, validação de
+parâmetro) não contam como chamada SERPRO e não são cobradas, mas são registradas à parte
+na tabela `bloqueios_serpro` para diagnóstico.
+
+### Referência
+
+- [`docs/GO-LIVE.md`](docs/GO-LIVE.md) — Checklist de go-live (D5, P5, P4, D2/P2/P3).
+- [`docs/ADR/0018-medicao-uso-serpro.md`](docs/ADR/0018-medicao-uso-serpro.md) — Decisão arquitetural de medição.
+
+---
+
 ## 11. Startup, migrations e operação
 
 As migrations são SQL versionado em `backend/migrations/` e embutidas no binário por `diesel_migrations::embed_migrations!`. O startup aguarda o PostgreSQL com retry limitado, executa as migrations pendentes sob advisory lock e só então cria o pool e inicia o Axum.

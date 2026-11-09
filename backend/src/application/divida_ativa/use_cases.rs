@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Instant;
 
 use crate::application::divida_ativa::ports::{
     CatalogoClientesPorDocumento, CatalogoOperadores, ClienteDividaAtiva, HashDeChaveConsulta,
@@ -11,6 +12,9 @@ use crate::domain::divida_ativa::{
 };
 use crate::domain::serpro::ambiente::AmbienteSerpro;
 use crate::domain::serpro::erros::ErroEndpoint;
+use crate::domain::serpro::medicao::{
+    ComandoRegistrarChamada, OrigemChamada, ResultadoChamada, ServicoMedicaoSerpro,
+};
 use crate::domain::serpro::ports::ResolverEndpointsSerpro;
 use crate::domain::serpro::produto::ProdutoSerpro;
 
@@ -124,6 +128,9 @@ pub struct ConsultarDevedorUseCase {
     catalogo_operadores: Option<Arc<dyn CatalogoOperadores>>,
     fallback: Option<Arc<dyn ResolvedorChaveAlternativa>>,
     operador_header_habilitado: bool,
+    /// Servico de medicao de uso SERPRO — registra toda chamada de saida
+    /// para fins de cobranca, distinguindo TRIAL de PRODUCAO.
+    servico_medicao: Arc<dyn ServicoMedicaoSerpro>,
 }
 
 impl ConsultarDevedorUseCase {
@@ -133,6 +140,7 @@ impl ConsultarDevedorUseCase {
         repositorio: Arc<dyn RepositorioConsultasFiscais>,
         hash: Arc<dyn HashDeChaveConsulta>,
         cliente: Arc<dyn ClienteDividaAtiva>,
+        servico_medicao: Arc<dyn ServicoMedicaoSerpro>,
     ) -> Self {
         Self {
             endpoint_resolver,
@@ -144,6 +152,7 @@ impl ConsultarDevedorUseCase {
             catalogo_operadores: None,
             fallback: None,
             operador_header_habilitado: false,
+            servico_medicao,
         }
     }
 
@@ -213,13 +222,68 @@ impl ConsultarDevedorUseCase {
             Err(erro) => return Err(registrar_falha(&*self.repositorio, registro, erro)),
         };
 
+        let inicio = Instant::now();
         let resultado = match self
             .cliente
             .consultar_devedor(&endpoint, &comando.chave, operador, request_id)
             .await
         {
-            Ok(resultado) => resultado,
-            Err(erro) => return Err(registrar_falha(&*self.repositorio, registro, erro)),
+            Ok(resultado) => {
+                let duracao_ms = inicio.elapsed().as_millis() as u64;
+                let resultado_medicao = match resultado.ambiente {
+                    AmbienteSerpro::Trial => match registro.status_code {
+                        Some(200..=299) => ResultadoChamada::Sucesso,
+                        Some(400..=499) => ResultadoChamada::Erro4xx,
+                        Some(500..=599) => ResultadoChamada::Erro5xx,
+                        _ => ResultadoChamada::Indeterminado,
+                    },
+                    AmbienteSerpro::Producao => match registro.status_code {
+                        Some(200..=299) => ResultadoChamada::Sucesso,
+                        Some(400..=499) => ResultadoChamada::Erro4xx,
+                        Some(500..=599) => ResultadoChamada::Erro5xx,
+                        _ => ResultadoChamada::Indeterminado,
+                    },
+                };
+                let _ = self
+                    .servico_medicao
+                    .registrar_chamada(&ComandoRegistrarChamada {
+                        escritorio_id: comando.escritorio_id,
+                        produto: ProdutoSerpro::DividaAtiva,
+                        verbo: "consultar_devedor".to_owned(),
+                        servico: Some("devedor".to_owned()),
+                        ambiente: resultado.ambiente,
+                        cliente_id: registro.cliente_id,
+                        usuario_id: Some(comando.usuario_id),
+                        origem: OrigemChamada::Manual,
+                        resultado: resultado_medicao,
+                        status_http: Some(200),
+                        duracao_ms,
+                        request_id: request_id.to_owned(),
+                    })
+                    .await;
+                resultado
+            }
+            Err(erro) => {
+                let duracao_ms = inicio.elapsed().as_millis() as u64;
+                let _ = self
+                    .servico_medicao
+                    .registrar_chamada(&ComandoRegistrarChamada {
+                        escritorio_id: comando.escritorio_id,
+                        produto: ProdutoSerpro::DividaAtiva,
+                        verbo: "consultar_devedor".to_owned(),
+                        servico: Some("devedor".to_owned()),
+                        ambiente,
+                        cliente_id: None,
+                        usuario_id: Some(comando.usuario_id),
+                        origem: OrigemChamada::Manual,
+                        resultado: ResultadoChamada::Indeterminado,
+                        status_http: None,
+                        duracao_ms,
+                        request_id: request_id.to_owned(),
+                    })
+                    .await;
+                return Err(registrar_falha(&*self.repositorio, registro, erro));
+            }
         };
 
         if let Some(catalogo) = &self.catalogo_clientes {
@@ -254,6 +318,9 @@ pub struct ConsultarInscricaoUseCase {
     cliente: Arc<dyn ClienteDividaAtiva>,
     catalogo_operadores: Option<Arc<dyn CatalogoOperadores>>,
     operador_header_habilitado: bool,
+    /// Servico de medicao de uso SERPRO — registra toda chamada de saida
+    /// para fins de cobranca, distinguindo TRIAL de PRODUCAO.
+    servico_medicao: Arc<dyn ServicoMedicaoSerpro>,
 }
 
 impl ConsultarInscricaoUseCase {
@@ -263,6 +330,7 @@ impl ConsultarInscricaoUseCase {
         repositorio: Arc<dyn RepositorioConsultasFiscais>,
         hash: Arc<dyn HashDeChaveConsulta>,
         cliente: Arc<dyn ClienteDividaAtiva>,
+        servico_medicao: Arc<dyn ServicoMedicaoSerpro>,
     ) -> Self {
         Self {
             endpoint_resolver,
@@ -272,6 +340,7 @@ impl ConsultarInscricaoUseCase {
             cliente,
             catalogo_operadores: None,
             operador_header_habilitado: false,
+            servico_medicao,
         }
     }
 
@@ -332,13 +401,68 @@ impl ConsultarInscricaoUseCase {
             Err(erro) => return Err(registrar_falha(&*self.repositorio, registro, erro)),
         };
 
+        let inicio = Instant::now();
         let detalhe = match self
             .cliente
             .consultar_inscricao(&endpoint, &comando.numero_inscricao, operador, request_id)
             .await
         {
-            Ok(detalhe) => detalhe,
-            Err(erro) => return Err(registrar_falha(&*self.repositorio, registro, erro)),
+            Ok(detalhe) => {
+                let duracao_ms = inicio.elapsed().as_millis() as u64;
+                let resultado_medicao = match detalhe.ambiente {
+                    AmbienteSerpro::Trial => match 200u16 {
+                        200..=299 => ResultadoChamada::Sucesso,
+                        400..=499 => ResultadoChamada::Erro4xx,
+                        500..=599 => ResultadoChamada::Erro5xx,
+                        _ => ResultadoChamada::Indeterminado,
+                    },
+                    AmbienteSerpro::Producao => match 200u16 {
+                        200..=299 => ResultadoChamada::Sucesso,
+                        400..=499 => ResultadoChamada::Erro4xx,
+                        500..=599 => ResultadoChamada::Erro5xx,
+                        _ => ResultadoChamada::Indeterminado,
+                    },
+                };
+                let _ = self
+                    .servico_medicao
+                    .registrar_chamada(&ComandoRegistrarChamada {
+                        escritorio_id: comando.escritorio_id,
+                        produto: ProdutoSerpro::DividaAtiva,
+                        verbo: "consultar_inscricao".to_owned(),
+                        servico: Some("inscricao".to_owned()),
+                        ambiente: detalhe.ambiente,
+                        cliente_id: None,
+                        usuario_id: Some(comando.usuario_id),
+                        origem: OrigemChamada::Manual,
+                        resultado: resultado_medicao,
+                        status_http: Some(200),
+                        duracao_ms,
+                        request_id: request_id.to_owned(),
+                    })
+                    .await;
+                detalhe
+            }
+            Err(erro) => {
+                let duracao_ms = inicio.elapsed().as_millis() as u64;
+                let _ = self
+                    .servico_medicao
+                    .registrar_chamada(&ComandoRegistrarChamada {
+                        escritorio_id: comando.escritorio_id,
+                        produto: ProdutoSerpro::DividaAtiva,
+                        verbo: "consultar_inscricao".to_owned(),
+                        servico: Some("inscricao".to_owned()),
+                        ambiente,
+                        cliente_id: None,
+                        usuario_id: Some(comando.usuario_id),
+                        origem: OrigemChamada::Manual,
+                        resultado: ResultadoChamada::Indeterminado,
+                        status_http: None,
+                        duracao_ms,
+                        request_id: request_id.to_owned(),
+                    })
+                    .await;
+                return Err(registrar_falha(&*self.repositorio, registro, erro));
+            }
         };
 
         registro.status_code = Some(200);

@@ -264,6 +264,8 @@ A **FASE E (Gestão de carteira) foi concluída**: sócios/contatos com represen
 
 A **FASE F (Relatórios e portal do cliente final) foi concluída**: exportação PDF/XLSX de situação fiscal, histórico de consultas e pendências por carteira; link seguro e expirável para compartilhar relatório com o cliente final (somente leitura).
 
+A **FASE H (Produção) foi concluída**: medição de uso SERPRO distinguindo TRIAL de PRODUCAO para cobrança; checklist de go-live documentado (D5, P5, P4, D2/P2/P3); scripts e documentação para cadastro de certificado A1, credenciais SERPRO, validação de procuração e troca segura Trial→Produção com confirmação e auditoria; dependente de confirmação externa da SERPRO para habilitar ambiente de produção.
+
 ---
 
 ## Fase 6 — Qualidade, CI/CD e produção

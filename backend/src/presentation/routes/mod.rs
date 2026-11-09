@@ -22,12 +22,14 @@ use crate::application::ports::SaudeBanco;
 use crate::application::serpro::{
     AlterarModoTrialSerproUseCase, CredencialFallbackGlobal, ObterConfiguracaoSerproUseCase,
 };
+use crate::application::serpro::medicao::ServicoMedicaoSerproImpl;
 use crate::infrastructure::auth::HashArgon2;
 use crate::infrastructure::config::{BURST_RATE_LIMIT, Config, REQUISICOES_POR_SEGUNDO};
 use crate::infrastructure::crypto::criar_criptografia;
 use crate::infrastructure::persistence::admin::AdminRepositorioDiesel;
 use crate::infrastructure::persistence::certificados::CertificadoRepositorioDiesel;
 use crate::infrastructure::persistence::clientes::ClienteRepositorioDiesel;
+use crate::infrastructure::persistence::serpro::medicao::RepositorioMedicaoDiesel;
 use crate::infrastructure::serpro::{SerproCriptografia, SerproRepositorioDiesel};
 use crate::presentation::admin::handlers::{listar_escritorios, provisionar_tenant};
 use crate::presentation::admin::serpro::handlers::alterar_modo_trial_serpro;
@@ -168,6 +170,17 @@ where
 
     // ===== SERPRO (Fase 3) =====
     let serpro_repo = SerproRepositorioDiesel::novo(pool.clone());
+    // Medição de uso SERPRO (Fase G/H): repositorio único implementa todas
+    // as portas de medição (chamadas, agregados, planos, assinaturas,
+    // bloqueios).
+    let repositorio_medicao =
+        std::sync::Arc::new(RepositorioMedicaoDiesel::novo(pool.clone()));
+    let servico_medicao = std::sync::Arc::new(ServicoMedicaoSerproImpl::novo(
+        repositorio_medicao.clone(),
+        repositorio_medicao.clone(),
+        repositorio_medicao.clone(),
+        repositorio_medicao.clone(),
+    ));
     let obter_config_serpro =
         ObterConfiguracaoSerproUseCase::novo(std::sync::Arc::new(serpro_repo.clone()));
     // O mesmo use case alimenta o middleware do snapshot de ambiente (SPEC
@@ -381,6 +394,7 @@ where
                     ),
                 ),
                 config.serpro.operator_header_enabled,
+                servico_medicao.clone(),
             )
             .com_catalogo(Some(catalogo_integra.clone())),
         );
@@ -559,6 +573,7 @@ where
             consultas_repositorio_trait.clone(),
             hash_chave_consultas.clone(),
             cliente_http_divida.clone(),
+            servico_medicao.clone(),
         )
         .com_catalogo_clientes(catalogo_clientes_consulta)
         .com_operadores(
@@ -576,6 +591,7 @@ where
             consultas_repositorio_trait,
             hash_chave_consultas,
             cliente_http_divida,
+            servico_medicao,
         )
         .com_operadores(
             catalogo_operadores_consulta,
