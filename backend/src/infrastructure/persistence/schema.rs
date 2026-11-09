@@ -540,6 +540,40 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    relatorios (id) {
+        id -> Uuid,
+        escritorio_id -> Uuid,
+        usuario_id -> Uuid,
+        cliente_id -> Nullable<Uuid>,
+        #[max_length = 32]
+        tipo_relatorio -> Varchar,
+        #[max_length = 16]
+        formato -> Varchar,
+        #[max_length = 16]
+        status -> Varchar,
+        conteudo -> Nullable<Bytea>,
+        nome_arquivo -> Nullable<Text>,
+        #[max_length = 7]
+        competencia -> Nullable<Varchar>,
+        expira_em -> Timestamptz,
+        criado_em -> Timestamptz,
+        atualizado_em -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    links_compartilhamento_relatorios (id) {
+        id -> Uuid,
+        relatorio_id -> Uuid,
+        #[max_length = 64]
+        token -> Varchar,
+        expira_em -> Timestamptz,
+        acessado_em -> Nullable<Timestamptz>,
+        criado_em -> Timestamptz,
+    }
+}
+
 diesel::joinable!(auditoria_eventos -> escritorios (escritorio_id));
 diesel::joinable!(carteira_clientes -> clientes (cliente_id));
 diesel::joinable!(carteira_clientes -> escritorios (escritorio_id));
@@ -547,6 +581,10 @@ diesel::joinable!(carteira_clientes -> usuarios (responsavel_usuario_id));
 diesel::joinable!(carteira_usuarios -> clientes (cliente_id));
 diesel::joinable!(carteira_usuarios -> escritorios (escritorio_id));
 diesel::joinable!(carteira_usuarios -> usuarios (usuario_id));
+diesel::joinable!(links_compartilhamento_relatorios -> relatorios (relatorio_id));
+diesel::joinable!(relatorios -> clientes (cliente_id));
+diesel::joinable!(relatorios -> escritorios (escritorio_id));
+diesel::joinable!(relatorios -> usuarios (usuario_id));
 diesel::joinable!(certificados_a1 -> escritorios (escritorio_id));
 diesel::joinable!(chamadas_operacionais -> escritorios (escritorio_id));
 diesel::joinable!(cliente_filiais -> clientes (cliente_id));
@@ -605,9 +643,11 @@ diesel::allow_tables_to_appear_in_same_query!(
     guias_emissao,
     idempotencia_operacoes,
     itens_consulta_lote,
+    links_compartilhamento_relatorios,
     notificacoes,
     preferencias_notificacao,
     procuracoes,
+    relatorios,
     sessoes,
     sessoes_admin,
     socio_contatos,

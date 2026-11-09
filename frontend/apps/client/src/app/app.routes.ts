@@ -156,5 +156,25 @@ export const routes: Routes = [
         (m) => m.GuiaEmitirComponent,
       ),
   },
-  { path: '**', redirectTo: 'dashboard' },
+  // Fase F — Relatórios e link seguro de compartilhamento.
+  {
+    path: 'relatorios',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/relatorios/relatorios-list.component').then(
+        (m) => m.RelatoriosListComponent,
+      ),
+  },
+  // Fase F — Link público de compartilhamento de relatório (somente leitura, sem autenticação).
+  {
+    path: 'relatorios/compartilhado/:token',
+    loadComponent: () =>
+      import('./features/relatorios/relatorio-compartilhado.page').then(
+        (m) => m.RelatorioCompartilhadoPage,
+      ),
+  },
+  {
+    path: '**',
+    redirectTo: 'dashboard',
+  },
 ];

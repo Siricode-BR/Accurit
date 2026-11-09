@@ -11,3 +11,4 @@ pub mod trabalhos;
 pub mod notificacoes;
 pub mod guias;
 pub mod usuarios;
+pub mod relatorios;

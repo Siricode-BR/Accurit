@@ -262,6 +262,8 @@ A **FASE D (emissão de guias e documentos) foi concluída**: ADR-0014 autorizan
 
 A **FASE E (Gestão de carteira) foi concluída**: sócios/contatos com representante principal, filiais/unidades, tags, responsável interno e observações por cliente; importação em massa CSV/XLSX com prévia, validação de CPF/CNPJ e relatório de erros; permissões granulares por função (gestor/analista/operador leitura) e carteira de clientes, com guards no backend e frontend; usuários do escritório com paginação e busca no servidor.
 
+A **FASE F (Relatórios e portal do cliente final) foi concluída**: exportação PDF/XLSX de situação fiscal, histórico de consultas e pendências por carteira; link seguro e expirável para compartilhar relatório com o cliente final (somente leitura).
+
 ---
 
 ## Fase 6 — Qualidade, CI/CD e produção

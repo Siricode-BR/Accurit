@@ -8,3 +8,4 @@ pub mod tenancy;
 pub mod trabalhos;
 pub mod notificacoes;
 pub mod guias;
+pub mod relatorios;

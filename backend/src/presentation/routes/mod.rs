@@ -37,9 +37,17 @@ use crate::presentation::certificados::construir_certificados;
 use crate::presentation::clientes::router::construir_clientes;
 use crate::presentation::handlers;
 use crate::presentation::middleware::{cors, rate_limit, request_id, security_headers};
+use crate::presentation::relatorios::router::{construir_publico, construir as construir_relatorios};
+use crate::presentation::relatorios::state::EstadoRelatorios;
 use crate::presentation::serpro::ambiente::{EstadoAmbiente, resolver_ambiente};
 use crate::presentation::serpro::handlers::obter_ambiente;
 use crate::presentation::serpro::state::SerproState;
+use crate::application::relatorios::use_cases::{
+    AcessarRelatorioPorLinkUseCase, BuscarRelatorioUseCase, CriarLinkCompartilhamentoUseCase,
+    GerarRelatorioUseCase, ListarRelatoriosUseCase, ValidarLinkCompartilhamentoUseCase,
+};
+use crate::domain::relatorios::ports::{RepositorioLinksCompartilhamento, RepositorioRelatorios};
+use crate::infrastructure::persistence::relatorios::RelatoriosDiesel;
 use crate::presentation::state::AppState;
 use secrecy::ExposeSecret;
 
@@ -116,7 +124,7 @@ where
         auditoria_clientes.clone(),
     );
     let gestao_carteira_cliente = crate::application::clientes::CarteiraClienteUseCase::novo(
-        cliente_repo_trait,
+        cliente_repo_trait.clone(),
         carteira_repo.clone(),
         auditoria_clientes,
     );
@@ -801,6 +809,64 @@ where
                 ),
             ),
         );
+
+        // ===== Fase F — Relatórios =====
+        let relatorios_repo = std::sync::Arc::new(RelatoriosDiesel::novo(pool.clone()));
+        let gerar_relatorio_uc = std::sync::Arc::new(
+            GerarRelatorioUseCase::novo(
+                relatorios_repo.clone() as std::sync::Arc<dyn RepositorioRelatorios>,
+                cliente_repo_trait.clone(),
+            ),
+        );
+        let listar_relatorios_uc = std::sync::Arc::new(
+            ListarRelatoriosUseCase::novo(
+                relatorios_repo.clone() as std::sync::Arc<dyn RepositorioRelatorios>,
+            ),
+        );
+        let buscar_relatorio_uc = std::sync::Arc::new(
+            BuscarRelatorioUseCase::novo(
+                relatorios_repo.clone() as std::sync::Arc<dyn RepositorioRelatorios>,
+            ),
+        );
+        let criar_link_uc = std::sync::Arc::new(
+            CriarLinkCompartilhamentoUseCase::novo(
+                relatorios_repo.clone() as std::sync::Arc<dyn RepositorioLinksCompartilhamento>,
+                relatorios_repo.clone() as std::sync::Arc<dyn RepositorioRelatorios>,
+            ),
+        );
+        let validar_link_uc = std::sync::Arc::new(
+            ValidarLinkCompartilhamentoUseCase::novo(
+                relatorios_repo.clone() as std::sync::Arc<dyn RepositorioLinksCompartilhamento>,
+            ),
+        );
+        let acessar_por_link_uc = std::sync::Arc::new(
+            AcessarRelatorioPorLinkUseCase::novo(
+                relatorios_repo.clone() as std::sync::Arc<dyn RepositorioLinksCompartilhamento>,
+                relatorios_repo.clone() as std::sync::Arc<dyn RepositorioRelatorios>,
+            ),
+        );
+        let estado_relatorios = EstadoRelatorios::novo(
+            gerar_relatorio_uc,
+            listar_relatorios_uc,
+            buscar_relatorio_uc,
+            criar_link_uc,
+            validar_link_uc,
+            acessar_por_link_uc,
+        );
+
+        api = api.nest(
+            "/relatorios",
+            construir_relatorios(
+                estado_relatorios.clone(),
+                ExigirAudiencia::novo(
+                    auth_state.tokens.clone(),
+                    crate::domain::auth::Audiencia::Client,
+                ),
+            ),
+        );
+
+        // Rota pública de link de compartilhamento (sem autenticação, somente leitura).
+        api = api.merge(construir_publico(estado_relatorios));
     }
 
     let api = api

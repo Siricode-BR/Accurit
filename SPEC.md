@@ -1078,6 +1078,86 @@ escritório).
 
 Todas as rotas exigem autenticação com audiência `client` e isolamento por `escritorio_id`.
 
+### 8.9 Relatórios e link seguro de compartilhamento (Fase F)
+
+A Fase F introduz a geração de relatórios em PDF e XLSX (situação fiscal, histórico de
+consultas, pendências por carteira) e a possibilidade de compartilhar esses relatórios com o
+cliente final por meio de um link seguro e expirável, sem exigir autenticação no portal.
+
+#### 8.9.1 Tabelas
+
+`relatorios` armazena, por escritório, cada relatório gerado: tipo, formato, status, conteúdo
+(arquivo gerado em PDF ou XLSX), nome do arquivo, competência opcional, tempo de expiração e
+timestamps.
+
+`links_compartilhamento_relatorios` armazena o vínculo entre um relatório e um token de
+compartilhamento, com tempo de expiração e timestamp de último acesso. O token é aleatório e
+pode ser acessado por qualquer pessoa que o possua, sem autenticação no portal (somente leitura).
+
+```sql
+CREATE TABLE relatorios (
+    id UUID PRIMARY KEY,
+    escritorio_id UUID NOT NULL REFERENCES escritorios(id) ON DELETE CASCADE,
+    usuario_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    cliente_id UUID NULL REFERENCES clientes(id) ON DELETE SET NULL,
+    tipo_relatorio VARCHAR(32) NOT NULL CHECK (
+        tipo_relatorio IN ('situacao_fiscal', 'historico_consultas', 'pendencias_carteira')
+    ),
+    formato VARCHAR(16) NOT NULL CHECK (formato IN ('PDF', 'XLSX')),
+    status VARCHAR(16) NOT NULL CHECK (status IN ('gerando', 'concluido', 'falhou')),
+    conteudo BYTEA NULL,
+    nome_arquivo TEXT NULL,
+    competencia VARCHAR(7) NULL CHECK (competencia ~ '^\d{4}-\d{2}$'),
+    expira_em TIMESTAMPTZ NOT NULL,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_relatorios_escritorio_id ON relatorios(escritorio_id);
+CREATE INDEX idx_relatorios_usuario_id ON relatorios(usuario_id);
+CREATE INDEX idx_relatorios_status ON relatorios(status);
+CREATE INDEX idx_relatorios_criado_em ON relatorios(criado_em DESC);
+
+CREATE TABLE links_compartilhamento_relatorios (
+    id UUID PRIMARY KEY,
+    relatorio_id UUID NOT NULL REFERENCES relatorios(id) ON DELETE CASCADE,
+    token VARCHAR(64) NOT NULL UNIQUE,
+    expira_em TIMESTAMPTZ NOT NULL,
+    acessado_em TIMESTAMPTZ NULL,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_links_compartilhamento_relatorios_relatorio_id ON links_compartilhamento_relatorios(relatorio_id);
+CREATE INDEX idx_links_compartilhamento_relatorios_token ON links_compartilhamento_relatorios(token);
+CREATE INDEX idx_links_compartilhamento_relatorios_expira_em ON links_compartilhamento_relatorios(expira_em);
+```
+
+#### 8.9.2 Regras de negócio
+
+- Qualquer usuário autenticado na plataforma do escritório pode gerar relatórios para os
+  clientes de sua carteira (respeitando a restrição de carteira definida na Fase E).
+- O relatório é gerado de forma assíncrona: primeiro é criado com status `gerando`, depois
+  o conteúdo é produzido e o status passa para `concluido` ou `falhou`.
+- O conteúdo do relatório (PDF ou XLSX) é armazenado na tabela `relatorios` e pode ser
+  baixado pelo usuário que o gerou ou por qualquer pessoa que possua o link de
+  compartilhamento válido.
+- Um link de compartilhamento é válido até sua data de expiração. Após expirar, o acesso
+  é negado.
+- Cada acesso a um link de compartilhamento registra o timestamp de `acessado_em`.
+
+#### 8.9.3 Contrato da API (Fase F)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `POST` | `/api/v1/relatorios` | Gera um relatório (corpo: `{ tipoRelatorio, formato, clienteId?, competencia? }`) |
+| `GET` | `/api/v1/relatorios` | Lista relatórios do escritório autenticado |
+| `GET` | `/api/v1/relatorios/{id}` | Busca um relatório por ID |
+| `GET` | `/api/v1/relatorios/{id}/baixar` | Baixa o conteúdo do relatório (PDF/XLSX) |
+| `POST` | `/api/v1/relatorios/{id}/compartilhar` | Cria um link de compartilhamento para o relatório |
+| `GET` | `/api/v1/relatorios/compartilhado/{token}` | Baixa um relatório por link público (sem autenticação) |
+
+Todas as rotas autenticadas exigem audiência `client` e isolamento por `escritorio_id`. O
+endpoint `/relatorios/compartilhado/{token}` é público (somente leitura) e exige apenas um
+token válido e não expirado.
+
 ---
 
 ## 9. Modelo de dados — PostgreSQL 16
@@ -1727,6 +1807,54 @@ CREATE TABLE carteira_usuarios (
 );
 CREATE INDEX idx_carteira_usuarios_usuario ON carteira_usuarios(usuario_id);
 CREATE INDEX idx_carteira_usuarios_cliente ON carteira_usuarios(cliente_id);
+```
+
+### 9.20 `relatorios` (Fase F)
+
+Um relatório gerado por um usuário do escritório, contendo o conteúdo do arquivo (PDF ou XLSX),
+o tipo de relatório, o formato, o status de processamento e o tempo de expiração.
+
+```sql
+CREATE TABLE relatorios (
+    id UUID PRIMARY KEY,
+    escritorio_id UUID NOT NULL REFERENCES escritorios(id) ON DELETE CASCADE,
+    usuario_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    cliente_id UUID NULL REFERENCES clientes(id) ON DELETE SET NULL,
+    tipo_relatorio VARCHAR(32) NOT NULL CHECK (
+        tipo_relatorio IN ('situacao_fiscal', 'historico_consultas', 'pendencias_carteira')
+    ),
+    formato VARCHAR(16) NOT NULL CHECK (formato IN ('PDF', 'XLSX')),
+    status VARCHAR(16) NOT NULL CHECK (status IN ('gerando', 'concluido', 'falhou')),
+    conteudo BYTEA NULL,
+    nome_arquivo TEXT NULL,
+    competencia VARCHAR(7) NULL CHECK (competencia ~ '^\d{4}-\d{2}$'),
+    expira_em TIMESTAMPTZ NOT NULL,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_relatorios_escritorio_id ON relatorios(escritorio_id);
+CREATE INDEX idx_relatorios_usuario_id ON relatorios(usuario_id);
+CREATE INDEX idx_relatorios_status ON relatorios(status);
+CREATE INDEX idx_relatorios_criado_em ON relatorios(criado_em DESC);
+```
+
+### 9.21 `links_compartilhamento_relatorios` (Fase F)
+
+Link seguro e expirável para compartilhamento de um relatório com o cliente final
+(somente leitura, sem exigir autenticação no portal).
+
+```sql
+CREATE TABLE links_compartilhamento_relatorios (
+    id UUID PRIMARY KEY,
+    relatorio_id UUID NOT NULL REFERENCES relatorios(id) ON DELETE CASCADE,
+    token VARCHAR(64) NOT NULL UNIQUE,
+    expira_em TIMESTAMPTZ NOT NULL,
+    acessado_em TIMESTAMPTZ NULL,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_links_compartilhamento_relatorios_relatorio_id ON links_compartilhamento_relatorios(relatorio_id);
+CREATE INDEX idx_links_compartilhamento_relatorios_token ON links_compartilhamento_relatorios(token);
+CREATE INDEX idx_links_compartilhamento_relatorios_expira_em ON links_compartilhamento_relatorios(expira_em);
 ```
 
 ---

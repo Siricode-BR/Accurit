@@ -1,0 +1,45 @@
+.compartilhado-container {
+  max-width: 500px;
+  margin: 4rem auto;
+  padding: 0 1rem;
+  text-align: center;
+}
+
+.carregando,
+.erro,
+.sucesso {
+  padding: 2rem;
+  border-radius: var(--acc-radius-lg, 12px);
+}
+
+.carregando {
+  border: 1px solid var(--acc-color-border, #e2e8f0);
+  background: var(--acc-color-surface, #ffffff);
+}
+
+.erro {
+  border: 1px solid var(--acc-color-border-danger, #fca5a5);
+  background: var(--acc-color-bg-danger, #fef2f2);
+  color: var(--acc-color-text-danger, #b91c1c);
+}
+
+.sucesso {
+  border: 1px solid var(--acc-color-border-success, #bbf7d0);
+  background: var(--acc-color-bg-success, #f0fdf4);
+  color: var(--acc-color-text-success, #166534);
+}
+
+a {
+  color: var(--acc-color-primary, #1e40af);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+a:hover {
+  text-decoration: none;
+}
+
+.texto-muto {
+  font-size: 0.875rem;
+  color: var(--acc-color-text-muted, #64748b);
+}

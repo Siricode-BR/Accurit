@@ -1,0 +1,28 @@
+<div class="compartilhado-container">
+  @if (carregando()) {
+    <div class="carregando">
+      <acc-spinner size="lg"></acc-spinner>
+      <p>Processando link compartilhado...</p>
+    </div>
+  } @else if (erro(); as mensagem) {
+    <div class="erro">
+      <p>{{ mensagem }}</p>
+      <a routerLink="/">Voltar ao portal</a>
+    </div>
+  } @else {
+    <div class="sucesso">
+      <p>O relatório está sendo baixado.</p>
+      <p class="texto-muto">
+        Se o download não iniciar automaticamente, clique no link abaixo:
+      </p>
+      <a
+        [href]="'/api/v1/relatorios/compartilhado/' + route.snapshot.paramMap.get('token')"
+        target="_blank"
+        rel="noopener noreferrer"
+        >Baixar relatório</a
+      >
+      <br /><br />
+      <a routerLink="/">Voltar ao portal</a>
+    </div>
+  }
+</div>

@@ -30,4 +30,9 @@ export const NAVEGACAO_CLIENT: readonly AccNavGroup[] = [
       { id: 'consultas-lote', label: 'Consultas em lote', icon: 'search', route: '/consultas-lote' },
     ],
   },
+  {
+    id: 'relatorios',
+    label: 'Relatórios (Fase F)',
+    items: [{ id: 'relatorios', label: 'Relatórios', icon: 'beaker', route: '/relatorios' }],
+  },
 ];

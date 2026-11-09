@@ -9,3 +9,4 @@ export * from './trabalhos/trabalhos';
 export * from './notificacoes/notificacoes';
 export * from './guias/guias';
 export * from './usuario/usuario';
+export * from './relatorios/relatorios';

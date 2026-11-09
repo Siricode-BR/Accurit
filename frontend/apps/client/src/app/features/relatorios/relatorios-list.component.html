@@ -1,0 +1,162 @@
+<div class="relatorios-container">
+  <header class="relatorios-header">
+    <div>
+      <h1 class="page-title">Relatórios</h1>
+      <p class="page-subtitle">
+        Exporte situação fiscal, histórico de consultas e pendências por
+        carteira em PDF ou XLSX.
+      </p>
+    </div>
+    <button type="button" acc-cta icon="menu" (click)="abrirModalGerar()">
+      Gerar relatório
+    </button>
+  </header>
+
+  @if (erro(); as mensagem) {
+    <div class="alert-error" role="alert">
+      <p>{{ mensagem }}</p>
+      <button acc-button variant="outline" size="sm" (click)="limparErro()">
+        Fechar
+      </button>
+    </div>
+  }
+
+  <section class="tabela" aria-label="Relatórios gerados">
+    <table class="acc-table">
+      <thead>
+        <tr>
+          <th>Tipo</th>
+          <th>Formato</th>
+          <th>Status</th>
+          <th>Nome do arquivo</th>
+          <th>Expira em</th>
+          <th>Criado em</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (r of relatorios(); track r.id) {
+          <tr>
+            <td>{{ rotuloTipo(r.tipoRelatorio) }}</td>
+            <td>{{ rotuloFormato(r.formato) }}</td>
+            <td>
+              <acc-badge [status]="badgeStatus(r.status)">
+                {{ rotuloStatus(r.status) }}
+              </acc-badge>
+            </td>
+            <td>{{ r.nomeArquivo ?? '—' }}</td>
+            <td>{{ r.expiraEm | date:'dd/MM/yyyy HH:mm' }}</td>
+            <td>{{ r.criadoEm | date:'dd/MM/yyyy HH:mm' }}</td>
+            <td>
+              <div class="acoes-linha">
+                @if (r.status === 'concluido') {
+                  <button
+                    acc-button
+                    variant="ghost"
+                    size="sm"
+                    (click)="$event.stopPropagation(); baixarRelatorio(r.id)"
+                  >
+                    Baixar
+                  </button>
+                }
+                <button
+                  acc-button
+                  variant="outline"
+                  size="sm"
+                  (click)="$event.stopPropagation(); abrirModalCompartilhamento(r.id)"
+                >
+                  Compartilhar
+                </button>
+              </div>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="7" class="empty-message">
+              Nenhum relatório gerado ainda.
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<!-- Modal: gerar relatório -->
+@if (modalGerarAberto()) {
+  <acc-modal title="Gerar relatório" (fechar)="fecharModalGerar()" size="lg">
+    <div class="form-linha">
+      <label class="label">Tipo de relatório</label>
+      <div class="opcoes-grid">
+        @for (opcao of tiposRelatorio; track opcao.value) {
+          <label class="opcao">
+            <input
+              type="radio"
+              name="tipoRelatorio"
+              [value]="opcao.value"
+              [checked]="tipoSelecionado() === opcao.value"
+              (change)="selecionarTipo(opcao.value)"
+            />
+            {{ opcao.label }}
+          </label>
+        }
+      </div>
+    </div>
+    <div class="form-linha">
+      <label class="label">Formato de exportação</label>
+      <div class="opcoes-grid">
+        @for (opcao of formatosRelatorio; track opcao.value) {
+          <label class="opcao">
+            <input
+              type="radio"
+              name="formatoRelatorio"
+              [value]="opcao.value"
+              [checked]="formatoSelecionado() === opcao.value"
+              (change)="selecionarFormato(opcao.value)"
+            />
+            {{ opcao.label }}
+          </label>
+        }
+      </div>
+    </div>
+    <div class="form-acoes">
+      <button acc-button variant="outline" size="sm" (click)="fecharModalGerar()">
+        Cancelar
+      </button>
+      <button acc-button variant="primary" size="sm" (click)="gerarRelatorio()">
+        Gerar
+      </button>
+    </div>
+  </acc-modal>
+}
+
+<!-- Modal: link de compartilhamento -->
+@if (linkCompartilhamento(); as link) {
+  <acc-modal title="Link de compartilhamento" (fechar)="fecharModalCompartilhamento()" size="lg">
+    <p class="modal-hint">
+      Compartilhe este link com o cliente para visualização somente leitura.
+      O link expira em {{ link.expiraEm | date:'dd/MM/yyyy HH:mm' }}.
+    </p>
+    <div class="form-linha">
+      <input
+        class="input"
+        type="text"
+        [value]="urlCompartilhamento(link.token)"
+        readonly
+      />
+      <button
+        acc-button
+        variant="outline"
+        size="sm"
+        (click)="copiarLink(link.token)"
+      >
+        Copiar
+      </button>
+    </div>
+    <div class="form-acoes">
+      <button acc-button variant="outline" size="sm" (click)="fecharModalCompartilhamento()">
+        Fechar
+      </button>
+    </div>
+  </acc-modal>
+}
