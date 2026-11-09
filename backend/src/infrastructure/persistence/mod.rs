@@ -11,3 +11,4 @@ pub mod notificacoes;
 pub mod guias;
 pub mod usuarios;
 pub mod relatorios;
+pub mod serpro;

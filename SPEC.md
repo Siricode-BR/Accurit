@@ -1889,6 +1889,11 @@ CREATE INDEX idx_links_compartilhamento_relatorios_expira_em ON links_compartilh
 | `GET` | `/api/v1/serpro/integra-contador/catalogo` | Lista linhas do catálogo de serviços do Integra Contador com status por serviço |
 | `PATCH` | `/api/v1/admin/integra-contador/catalogo` | Habilita/desabilita um serviço no catálogo (ADMIN; fail-closed se `versaoConfirmada` falsa) |
 | `GET` | `/api/v1/procuracoes/{cpfCnpj}` | Situação das procurações do contribuinte |
+| `GET` | `/api/v1/relatorios` | Lista relatórios do escritório autenticado |
+| `GET` | `/api/v1/relatorios/{id}` | Busca um relatório por ID |
+| `GET` | `/api/v1/relatorios/{id}/baixar` | Baixa o conteúdo do relatório (PDF/XLSX) |
+| `POST` | `/api/v1/relatorios/{id}/compartilhar` | Cria um link de compartilhamento para o relatório |
+| `GET` | `/api/v1/relatorios/compartilhado/{token}` | Baixa um relatório por link público (sem autenticação) |
 | `GET` | `/api/v1/admin/escritorios?page=...&pageSize=...` | Lista paginada de escritórios, apenas metadados (id, slug, nome, modoTrialSerpro, versao, atualizadoEm) — ADMIN |
 | `GET` | `/api/v1/serpro/ambiente` | Ambiente efetivo do escritório do token, `{ ambienteEfetivo, atualizadoEm }` — somente leitura, audiência `client` |
 | `PATCH` | `/api/v1/admin/escritorios/{id}/serpro/trial` | Alternância do modo Trial pelo gestor de tenants — corpo `{ modoTrialSerpro, versao }` (concorrência otimista; `409` em divergência; credencial/certificado ausentes → `400`) |

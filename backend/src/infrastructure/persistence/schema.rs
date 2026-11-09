@@ -574,6 +574,94 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    chamadas_serpro (id) {
+        id -> Uuid,
+        escritorio_id -> Uuid,
+        #[max_length = 32]
+        produto -> Varchar,
+        #[max_length = 32]
+        verbo -> Varchar,
+        #[max_length = 64]
+        servico -> Nullable<Varchar>,
+        #[max_length = 16]
+        ambiente -> Varchar,
+        cliente_id -> Nullable<Uuid>,
+        usuario_id -> Nullable<Uuid>,
+        #[max_length = 16]
+        origem -> Varchar,
+        #[max_length = 16]
+        resultado -> Varchar,
+        status_http -> Nullable<Int4>,
+        duracao_ms -> Int4,
+        #[max_length = 64]
+        request_id -> Varchar,
+        criado_em -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    agregados_consumo_serpro (id) {
+        id -> Uuid,
+        escritorio_id -> Uuid,
+        #[max_length = 32]
+        produto -> Varchar,
+        #[max_length = 16]
+        ambiente -> Varchar,
+        #[max_length = 16]
+        periodo -> Varchar,
+        referencia_periodo -> Timestamptz,
+        total_chamadas -> Int4,
+        chamadas_sucesso -> Int4,
+        chamadas_4xx -> Int4,
+        chamadas_5xx -> Int4,
+        chamadas_timeout -> Int4,
+        chamadas_indeterminado -> Int4,
+        duracao_total_ms -> Int8,
+        atualizado_em -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    planos_escritorio (id) {
+        id -> Uuid,
+        #[max_length = 64]
+        nome -> Varchar,
+        descricao -> Nullable<Text>,
+        chamadas_mes -> Int4,
+        preco_mensal_cents -> Int4,
+        ativo -> Bool,
+        criado_em -> Timestamptz,
+        atualizado_em -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    assinaturas_escritorio (id) {
+        id -> Uuid,
+        escritorio_id -> Uuid,
+        plano_id -> Uuid,
+        chamadas_mes_limite -> Int4,
+        bloqueio_ao_exceder -> Bool,
+        ativo -> Bool,
+        criado_em -> Timestamptz,
+        atualizado_em -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    bloqueios_serpro (id) {
+        id -> Uuid,
+        escritorio_id -> Uuid,
+        #[max_length = 32]
+        produto -> Varchar,
+        #[max_length = 64]
+        motivo -> Varchar,
+        contexto -> Nullable<Text>,
+        criado_em -> Timestamptz,
+    }
+}
+
 diesel::joinable!(auditoria_eventos -> escritorios (escritorio_id));
 diesel::joinable!(carteira_clientes -> clientes (cliente_id));
 diesel::joinable!(carteira_clientes -> escritorios (escritorio_id));
@@ -585,6 +673,13 @@ diesel::joinable!(links_compartilhamento_relatorios -> relatorios (relatorio_id)
 diesel::joinable!(relatorios -> clientes (cliente_id));
 diesel::joinable!(relatorios -> escritorios (escritorio_id));
 diesel::joinable!(relatorios -> usuarios (usuario_id));
+diesel::joinable!(chamadas_serpro -> escritorios (escritorio_id));
+diesel::joinable!(chamadas_serpro -> clientes (cliente_id));
+diesel::joinable!(chamadas_serpro -> usuarios (usuario_id));
+diesel::joinable!(agregados_consumo_serpro -> escritorios (escritorio_id));
+diesel::joinable!(assinaturas_escritorio -> escritorios (escritorio_id));
+diesel::joinable!(assinaturas_escritorio -> planos_escritorio (plano_id));
+diesel::joinable!(bloqueios_serpro -> escritorios (escritorio_id));
 diesel::joinable!(certificados_a1 -> escritorios (escritorio_id));
 diesel::joinable!(chamadas_operacionais -> escritorios (escritorio_id));
 diesel::joinable!(cliente_filiais -> clientes (cliente_id));
@@ -644,6 +739,11 @@ diesel::allow_tables_to_appear_in_same_query!(
     idempotencia_operacoes,
     itens_consulta_lote,
     links_compartilhamento_relatorios,
+    chamadas_serpro,
+    agregados_consumo_serpro,
+    planos_escritorio,
+    assinaturas_escritorio,
+    bloqueios_serpro,
     notificacoes,
     preferencias_notificacao,
     procuracoes,
