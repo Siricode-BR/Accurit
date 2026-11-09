@@ -65,7 +65,7 @@
         <div class="card-acoes">
           <button
             acc-button
-            variant={trabalho.habilitado ? 'danger' : 'success'}
+            [variant]="trabalho.habilitado ? 'secondary' : 'danger'"
             size="md"
             (click)="alternar()"
           >
