@@ -91,6 +91,8 @@ pub struct Config {
     /// §9.11): `CONSULTAS_RETENCAO_DIAS`.
     pub consultas_retencao_dias: u64,
     pub log_filter: String,
+    /// Token exigido em `Authorization: Bearer` para expor `/metrics`.
+    pub metrics_token: Option<secrecy::SecretString>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -261,6 +263,7 @@ impl Config {
             serpro,
             consultas_retencao_dias,
             log_filter,
+            metrics_token: segredo_opcional(&mapa, "METRICS_TOKEN"),
         })
     }
 }
