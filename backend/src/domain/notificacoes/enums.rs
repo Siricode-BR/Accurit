@@ -27,6 +27,7 @@ pub enum TipoNotificacao {
     CertificadoA1Vencendo,
     DasVencendo,
     FalhaRotina,
+    LimiteConsumoSerpro,
 }
 
 impl TipoNotificacao {
@@ -38,6 +39,7 @@ impl TipoNotificacao {
             Self::CertificadoA1Vencendo => "certificado_a1_vencendo",
             Self::DasVencendo => "das_vencendo",
             Self::FalhaRotina => "falha_rotina",
+            Self::LimiteConsumoSerpro => "limite_consumo_serpro",
         }
     }
 
@@ -49,6 +51,7 @@ impl TipoNotificacao {
             Self::CertificadoA1Vencendo,
             Self::DasVencendo,
             Self::FalhaRotina,
+            Self::LimiteConsumoSerpro,
         ]
     }
 }

@@ -29,6 +29,7 @@ import { ProcuracaoService } from '../../data/procuracao.service';
 import { mensagemDeErro } from '../../core/http/mensagem-erro';
 import { ClienteService } from '../../data/cliente.service';
 import { ConsultasFiscaisService } from '../../data/consultas-fiscais.service';
+import { LgpdService } from '../../data/lgpd.service';
 import { SessionStore } from '../../core/auth/session.store';
 import {
   AccButtonComponent,
@@ -45,6 +46,7 @@ import {
   AccModalComponent,
 } from '@accurit/ui';
 import { AbaId, EstadoCliente, LeituraEstado } from './cliente-detalhes.types';
+import { TrialMockPanelComponent } from '../serpro/trial-mock-panel.component';
 
 /** Abas por `?aba=`; a aba "unidades" foi substituída pelas abas reais da Fase E. */
 const ABAS: readonly AccTab[] = [
@@ -151,6 +153,7 @@ function formatarData(value: string | null | undefined): string {
     AccPageHeaderComponent,
     AccSelectComponent,
     AccModalComponent,
+    TrialMockPanelComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './cliente-detalhes.page.html',
@@ -175,6 +178,7 @@ export class ClienteDetalhesPage implements OnInit {
   });
 
   private readonly route = inject(ActivatedRoute);
+  private readonly lgpdService = inject(LgpdService);
   protected readonly router = inject(Router);
 
   protected readonly cliente = signal<ClienteDto | null>(null);
@@ -795,10 +799,44 @@ export class ClienteDetalhesPage implements OnInit {
       } else {
         this.estadoCliente.set('erro');
         this.erroCliente.set(
-          (erro as { error?: { message?: string } })?.error?.message ??
-            'Falha ao carregar os dados do cliente.',
+          mensagemDeErro(erro, 'Falha ao carregar os dados do cliente.'),
         );
       }
+    }
+  }
+
+  protected async exportarLgpd(): Promise<void> {
+    const cliente = this.cliente();
+    if (!cliente) return;
+    try {
+      const blob = await this.lgpdService.exportarCliente(cliente.id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `lgpd-cliente-${cliente.id}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (erro) {
+      this.erroCliente.set(mensagemDeErro(erro, 'Não foi possível exportar os dados do cliente.'));
+    }
+  }
+
+  protected async anonimizarLgpd(): Promise<void> {
+    const cliente = this.cliente();
+    if (!cliente) return;
+    if (
+      !confirm(
+        'Anonimizar os dados pessoais deste cliente? A ação é irreversible e será auditada.',
+      )
+    ) {
+      return;
+    }
+    try {
+      await this.lgpdService.anonimizarCliente(cliente.id);
+      await this.carregarCliente(cliente.id);
+      this.erroCliente.set('Dados do cliente anonimizados e auditoria registrada.');
+    } catch (erro) {
+      this.erroCliente.set(mensagemDeErro(erro, 'Não foi possível anonimizar o cliente.'));
     }
   }
 }

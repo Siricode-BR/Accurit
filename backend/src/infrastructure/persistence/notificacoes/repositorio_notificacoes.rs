@@ -79,6 +79,7 @@ impl NotificacaoRow {
             "certificado_a1_vencendo" => TipoNotificacao::CertificadoA1Vencendo,
             "das_vencendo" => TipoNotificacao::DasVencendo,
             "falha_rotina" => TipoNotificacao::FalhaRotina,
+            "limite_consumo_serpro" => TipoNotificacao::LimiteConsumoSerpro,
             _ => return Err(ErroNotificacao::Persistencia("tipo invÃ¡lido".into())),
         };
         Ok(Notificacao {

@@ -137,6 +137,8 @@ struct PlanoEscritorioRow {
     nome: String,
     descricao: Option<String>,
     chamadas_mes: i32,
+    clientes_limite: i32,
+    usuarios_limite: i32,
     preco_mensal_cents: i32,
     ativo: bool,
     criado_em: DateTime<Utc>,
@@ -150,6 +152,8 @@ impl PlanoEscritorioRow {
             nome: self.nome,
             descricao: self.descricao,
             chamadas_mes: self.chamadas_mes as i64,
+            clientes_limite: self.clientes_limite as i64,
+            usuarios_limite: self.usuarios_limite as i64,
             preco_mensal_cents: self.preco_mensal_cents as i64,
             ativo: self.ativo,
             criado_em: self.criado_em,
@@ -166,6 +170,8 @@ struct AssinaturaEscritorioRow {
     escritorio_id: Uuid,
     plano_id: Uuid,
     chamadas_mes_limite: i32,
+    clientes_limite: i32,
+    usuarios_limite: i32,
     bloqueio_ao_exceder: bool,
     ativo: bool,
     criado_em: DateTime<Utc>,
@@ -179,6 +185,8 @@ impl AssinaturaEscritorioRow {
             escritorio_id: self.escritorio_id,
             plano_id: self.plano_id,
             chamadas_mes_limite: self.chamadas_mes_limite as i64,
+            clientes_limite: self.clientes_limite as i64,
+            usuarios_limite: self.usuarios_limite as i64,
             bloqueio_ao_exceder: self.bloqueio_ao_exceder,
             ativo: self.ativo,
             criado_em: self.criado_em,
@@ -523,6 +531,47 @@ impl RepositorioAgregadosConsumo for RepositorioMedicaoDiesel {
 
 #[async_trait::async_trait]
 impl RepositorioPlanosEscritorio for RepositorioMedicaoDiesel {
+    async fn criar(&self, plano: &PlanoEscritorio) -> Result<PlanoEscritorio, ErroMedicao> {
+        let pool = self.pool.clone();
+        let plano = plano.clone();
+        tokio::task::spawn_blocking(move || -> Result<PlanoEscritorio, ErroMedicao> {
+            let mut conexao = pool
+                .get()
+                .map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
+            let linha = diesel::insert_into(
+                crate::infrastructure::persistence::schema::planos_escritorio::table,
+            )
+            .values((
+                crate::infrastructure::persistence::schema::planos_escritorio::dsl::id
+                    .eq(Uuid::now_v7()),
+                crate::infrastructure::persistence::schema::planos_escritorio::dsl::nome
+                    .eq(plano.nome),
+                crate::infrastructure::persistence::schema::planos_escritorio::dsl::descricao
+                    .eq(plano.descricao),
+                crate::infrastructure::persistence::schema::planos_escritorio::dsl::chamadas_mes
+                    .eq(plano.chamadas_mes as i32),
+                crate::infrastructure::persistence::schema::planos_escritorio::dsl::clientes_limite
+                    .eq(plano.clientes_limite as i32),
+                crate::infrastructure::persistence::schema::planos_escritorio::dsl::usuarios_limite
+                    .eq(plano.usuarios_limite as i32),
+                crate::infrastructure::persistence::schema::planos_escritorio::dsl::preco_mensal_cents
+                    .eq(plano.preco_mensal_cents as i32),
+                crate::infrastructure::persistence::schema::planos_escritorio::dsl::ativo
+                    .eq(plano.ativo),
+                crate::infrastructure::persistence::schema::planos_escritorio::dsl::criado_em
+                    .eq(Utc::now()),
+                crate::infrastructure::persistence::schema::planos_escritorio::dsl::atualizado_em
+                    .eq(Utc::now()),
+            ))
+            .get_result::<PlanoEscritorioRow>(&mut conexao)
+            .map_err(|_| ErroMedicao::RepositorioIndisponivel)?
+            .para_entidade();
+            Ok(linha)
+        })
+        .await
+        .map_err(|_| ErroMedicao::RepositorioIndisponivel)?
+    }
+
     async fn listar_ativos(&self) -> Result<Vec<PlanoEscritorio>, ErroMedicao> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || -> Result<Vec<PlanoEscritorio>, ErroMedicao> {
@@ -534,6 +583,26 @@ impl RepositorioPlanosEscritorio for RepositorioMedicaoDiesel {
                     .filter(
                         crate::infrastructure::persistence::schema::planos_escritorio::dsl::ativo
                             .eq(true),
+                    )
+                    .load(&mut conexao)
+                    .map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
+            Ok(linhas.into_iter().map(|r| r.para_entidade()).collect())
+        })
+        .await
+        .map_err(|_| ErroMedicao::RepositorioIndisponivel)?
+    }
+
+    async fn listar_todos(&self) -> Result<Vec<PlanoEscritorio>, ErroMedicao> {
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || -> Result<Vec<PlanoEscritorio>, ErroMedicao> {
+            let mut conexao = pool
+                .get()
+                .map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
+            let linhas: Vec<PlanoEscritorioRow> =
+                crate::infrastructure::persistence::schema::planos_escritorio::table
+                    .order(
+                        crate::infrastructure::persistence::schema::planos_escritorio::dsl::nome
+                            .asc(),
                     )
                     .load(&mut conexao)
                     .map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
@@ -641,6 +710,10 @@ impl RepositorioAssinaturasEscritorio for RepositorioMedicaoDiesel {
                     .eq(assinatura.plano_id),
                 crate::infrastructure::persistence::schema::assinaturas_escritorio::dsl::chamadas_mes_limite
                     .eq(assinatura.chamadas_mes_limite as i32),
+                crate::infrastructure::persistence::schema::assinaturas_escritorio::dsl::clientes_limite
+                    .eq(assinatura.clientes_limite as i32),
+                crate::infrastructure::persistence::schema::assinaturas_escritorio::dsl::usuarios_limite
+                    .eq(assinatura.usuarios_limite as i32),
                 crate::infrastructure::persistence::schema::assinaturas_escritorio::dsl::bloqueio_ao_exceder
                     .eq(assinatura.bloqueio_ao_exceder),
                 crate::infrastructure::persistence::schema::assinaturas_escritorio::dsl::ativo
@@ -727,5 +800,134 @@ impl RepositorioBloqueiosSerpro for RepositorioMedicaoDiesel {
         })
         .await
         .map_err(|_| ErroMedicao::RepositorioIndisponivel)?
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::domain::serpro::medicao::ports::RepositorioEscritoriosConsumo
+    for RepositorioMedicaoDiesel
+{
+    async fn listar(
+        &self,
+    ) -> Result<Vec<crate::domain::serpro::medicao::ports::EscritorioConsumo>, ErroMedicao> {
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut conexao = pool
+                .get()
+                .map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
+            use crate::infrastructure::persistence::schema::escritorios::dsl as e;
+            let linhas: Vec<(Uuid, String, String)> = e::escritorios
+                .select((e::id, e::nome, e::cnpj))
+                .order(e::nome.asc())
+                .load(&mut conexao)
+                .map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
+            Ok(linhas
+                .into_iter()
+                .map(
+                    |(id, nome, cnpj)| crate::domain::serpro::medicao::ports::EscritorioConsumo {
+                        id,
+                        nome,
+                        cnpj,
+                    },
+                )
+                .collect())
+        })
+        .await
+        .map_err(|_| ErroMedicao::RepositorioIndisponivel)?
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::application::serpro::medicao::use_cases::NotificadorConsumo
+    for RepositorioMedicaoDiesel
+{
+    async fn notificar_limite(
+        &self,
+        escritorio_id: Uuid,
+        usuario_id: Option<Uuid>,
+        percentual: f64,
+        limite: i64,
+    ) -> Result<(), ErroMedicao> {
+        let Some(usuario_id) = usuario_id else {
+            return Ok(());
+        };
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut conexao = pool
+                .get()
+                .map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
+            let titulo = if percentual >= 100.0 {
+                "Limite mensal de chamadas SERPRO atingido"
+            } else {
+                "Consumo de chamadas SERPRO acima de 80%"
+            };
+            let corpo = format!(
+                "O escritório utilizou {percentual:.0}% do limite de {limite} chamadas SERPRO no mês."
+            );
+            diesel::sql_query(
+                "INSERT INTO notificacoes \
+                 (id, usuario_id, escritorio_id, canal, tipo, titulo, corpo, lida) \
+                 VALUES ($1, $2, $3, 'in_app', 'limite_consumo_serpro', $4, $5, FALSE)",
+            )
+            .bind::<diesel::sql_types::Uuid, _>(Uuid::now_v7())
+            .bind::<diesel::sql_types::Uuid, _>(usuario_id)
+            .bind::<diesel::sql_types::Uuid, _>(escritorio_id)
+            .bind::<diesel::sql_types::Text, _>(titulo)
+            .bind::<diesel::sql_types::Text, _>(corpo)
+            .execute(&mut conexao)
+            .map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
+            Ok(())
+        })
+        .await
+        .map_err(|_| ErroMedicao::RepositorioIndisponivel)?
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::application::serpro::medicao::use_cases::LimitesPlano for RepositorioMedicaoDiesel {
+    async fn pode_criar_cliente(&self, escritorio_id: Uuid) -> Result<bool, ErroMedicao> {
+        let Some(assinatura) =
+            RepositorioAssinaturasEscritorio::buscar_por_escritorio(self, escritorio_id).await?
+        else {
+            return Ok(true);
+        };
+        let pool = self.pool.clone();
+        let total = tokio::task::spawn_blocking(move || {
+            use crate::infrastructure::persistence::schema::clientes::dsl as c;
+            let mut conexao = pool
+                .get()
+                .map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
+            c::clientes
+                .filter(c::escritorio_id.eq(escritorio_id))
+                .count()
+                .get_result::<i64>(&mut conexao)
+                .map_err(|_| ErroMedicao::RepositorioIndisponivel)
+        })
+        .await
+        .map_err(|_| ErroMedicao::RepositorioIndisponivel)??;
+        Ok(total < assinatura.clientes_limite)
+    }
+
+    async fn pode_criar_usuario(&self, escritorio_id: Uuid) -> Result<bool, ErroMedicao> {
+        let Some(assinatura) =
+            RepositorioAssinaturasEscritorio::buscar_por_escritorio(self, escritorio_id).await?
+        else {
+            return Ok(true);
+        };
+        let pool = self.pool.clone();
+        let total = tokio::task::spawn_blocking(move || {
+            use crate::infrastructure::persistence::schema::usuarios::dsl as u;
+            let mut conexao = pool
+                .get()
+                .map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
+            u::usuarios
+                .filter(u::escritorio_id.eq(escritorio_id))
+                .count()
+                .get_result::<i64>(&mut conexao)
+                .map_err(|_| ErroMedicao::RepositorioIndisponivel)
+        })
+        .await
+        .map_err(|_| ErroMedicao::RepositorioIndisponivel)??;
+        Ok(total < assinatura.usuarios_limite)
     }
 }

@@ -578,6 +578,33 @@ diesel::table! {
 }
 
 diesel::table! {
+    politicas_retencao_escritorio (escritorio_id) {
+        escritorio_id -> Uuid,
+        consultas_dias -> Int4,
+        relatorios_dias -> Int4,
+        auditoria_dias -> Int4,
+        criado_em -> Timestamptz,
+        atualizado_em -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    consentimentos_lgpd (id) {
+        id -> Uuid,
+        escritorio_id -> Uuid,
+        cliente_id -> Uuid,
+        #[max_length = 32]
+        tipo -> Varchar,
+        #[max_length = 16]
+        versao -> Varchar,
+        aceito_em -> Timestamptz,
+        revogado_em -> Nullable<Timestamptz>,
+        ip -> Nullable<Inet>,
+        criado_em -> Timestamptz,
+    }
+}
+
+diesel::table! {
     chamadas_serpro (id) {
         id -> Uuid,
         escritorio_id -> Uuid,
@@ -632,6 +659,8 @@ diesel::table! {
         nome -> Varchar,
         descricao -> Nullable<Text>,
         chamadas_mes -> Int4,
+        clientes_limite -> Int4,
+        usuarios_limite -> Int4,
         preco_mensal_cents -> Int4,
         ativo -> Bool,
         criado_em -> Timestamptz,
@@ -645,6 +674,8 @@ diesel::table! {
         escritorio_id -> Uuid,
         plano_id -> Uuid,
         chamadas_mes_limite -> Int4,
+        clientes_limite -> Int4,
+        usuarios_limite -> Int4,
         bloqueio_ao_exceder -> Bool,
         ativo -> Bool,
         criado_em -> Timestamptz,
@@ -682,6 +713,9 @@ diesel::joinable!(chamadas_serpro -> usuarios (usuario_id));
 diesel::joinable!(agregados_consumo_serpro -> escritorios (escritorio_id));
 diesel::joinable!(assinaturas_escritorio -> escritorios (escritorio_id));
 diesel::joinable!(assinaturas_escritorio -> planos_escritorio (plano_id));
+diesel::joinable!(politicas_retencao_escritorio -> escritorios (escritorio_id));
+diesel::joinable!(consentimentos_lgpd -> escritorios (escritorio_id));
+diesel::joinable!(consentimentos_lgpd -> clientes (cliente_id));
 diesel::joinable!(bloqueios_serpro -> escritorios (escritorio_id));
 diesel::joinable!(certificados_a1 -> escritorios (escritorio_id));
 diesel::joinable!(chamadas_operacionais -> escritorios (escritorio_id));
@@ -747,6 +781,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     planos_escritorio,
     assinaturas_escritorio,
     bloqueios_serpro,
+    politicas_retencao_escritorio,
+    consentimentos_lgpd,
     notificacoes,
     preferencias_notificacao,
     procuracoes,

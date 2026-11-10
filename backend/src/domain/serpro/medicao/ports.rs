@@ -12,6 +12,18 @@ use crate::domain::serpro::medicao::entidades::{
 use crate::domain::serpro::medicao::erros::ErroMedicao;
 
 /// Repositório de chamadas SERpro (raw, append-only).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EscritorioConsumo {
+    pub id: Uuid,
+    pub nome: String,
+    pub cnpj: String,
+}
+
+#[async_trait]
+pub trait RepositorioEscritoriosConsumo: Send + Sync {
+    async fn listar(&self) -> Result<Vec<EscritorioConsumo>, ErroMedicao>;
+}
+
 #[async_trait]
 pub trait RepositorioChamadasSerpro: Send + Sync {
     async fn registrar(
@@ -56,7 +68,9 @@ pub trait RepositorioAgregadosConsumo: Send + Sync {
 /// Repositório de planos de escritório.
 #[async_trait]
 pub trait RepositorioPlanosEscritorio: Send + Sync {
+    async fn criar(&self, plano: &PlanoEscritorio) -> Result<PlanoEscritorio, ErroMedicao>;
     async fn listar_ativos(&self) -> Result<Vec<PlanoEscritorio>, ErroMedicao>;
+    async fn listar_todos(&self) -> Result<Vec<PlanoEscritorio>, ErroMedicao>;
     async fn buscar_por_id(&self, id: Uuid) -> Result<Option<PlanoEscritorio>, ErroMedicao>;
 }
 

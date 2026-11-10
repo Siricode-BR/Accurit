@@ -16,7 +16,8 @@ use crate::domain::serpro::medicao::enums::{PeriodoAgregado, ResultadoChamada};
 use crate::domain::serpro::medicao::erros::ErroMedicao;
 use crate::domain::serpro::medicao::ports::{
     RepositorioAgregadosConsumo, RepositorioAssinaturasEscritorio, RepositorioBloqueiosSerpro,
-    RepositorioChamadasSerpro, RepositorioPlanosEscritorio, ServicoMedicaoSerpro,
+    RepositorioChamadasSerpro, RepositorioEscritoriosConsumo, RepositorioPlanosEscritorio,
+    ServicoMedicaoSerpro,
 };
 use crate::domain::serpro::produto::ProdutoSerpro;
 
@@ -27,6 +28,27 @@ pub struct ServicoMedicaoSerproImpl {
     agregados: Arc<dyn RepositorioAgregadosConsumo>,
     assinaturas: Arc<dyn RepositorioAssinaturasEscritorio>,
     bloqueios: Arc<dyn RepositorioBloqueiosSerpro>,
+    notificador: Option<Arc<dyn NotificadorConsumo>>,
+}
+
+#[async_trait::async_trait]
+pub trait NotificadorConsumo: Send + Sync {
+    /// Cria notificação in-app quando o consumo cruza 80% ou 100% do limite.
+    async fn notificar_limite(
+        &self,
+        escritorio_id: Uuid,
+        usuario_id: Option<Uuid>,
+        percentual: f64,
+        limite: i64,
+    ) -> Result<(), ErroMedicao>;
+}
+
+/// Verificação dos limites de clientes/usuários do plano nos casos de uso
+/// de cadastro.
+#[async_trait::async_trait]
+pub trait LimitesPlano: Send + Sync {
+    async fn pode_criar_cliente(&self, escritorio_id: Uuid) -> Result<bool, ErroMedicao>;
+    async fn pode_criar_usuario(&self, escritorio_id: Uuid) -> Result<bool, ErroMedicao>;
 }
 
 impl ServicoMedicaoSerproImpl {
@@ -41,7 +63,14 @@ impl ServicoMedicaoSerproImpl {
             agregados,
             assinaturas,
             bloqueios,
+            notificador: None,
         }
+    }
+
+    #[must_use]
+    pub fn com_notificador(mut self, notificador: Arc<dyn NotificadorConsumo>) -> Self {
+        self.notificador = Some(notificador);
+        self
     }
 }
 
@@ -81,6 +110,9 @@ impl ServicoMedicaoSerpro for ServicoMedicaoSerproImpl {
 
         // 3. Registra a chamada.
         let _chamada = self.chamadas.registrar(comando).await?;
+        crate::presentation::observability::registrar_chamada_serpro(
+            comando.resultado != ResultadoChamada::Sucesso,
+        );
 
         // 4. Atualiza o agregado do dia/mês atual.
         let _ = self.atualizar_agregados(comando.escritorio_id, agora).await;
@@ -91,6 +123,26 @@ impl ServicoMedicaoSerpro for ServicoMedicaoSerproImpl {
         } else {
             0.0
         };
+
+        if let Some(notificador) = &self.notificador {
+            let anterior = if assinatura.chamadas_mes_limite > 0 {
+                (chamadas_mes as f64 / assinatura.chamadas_mes_limite as f64) * 100.0
+            } else {
+                0.0
+            };
+            for marco in [80.0_f64, 100.0_f64] {
+                if anterior < marco && percentual >= marco {
+                    let _ = notificador
+                        .notificar_limite(
+                            comando.escritorio_id,
+                            comando.usuario_id,
+                            marco,
+                            assinatura.chamadas_mes_limite,
+                        )
+                        .await;
+                }
+            }
+        }
 
         Ok(ResultadoRegistroChamada {
             chamada_aceita: true,
@@ -149,6 +201,24 @@ impl ServicoMedicaoSerpro for ServicoMedicaoSerproImpl {
             };
 
             self.agregados.upsert(&agregado).await?;
+
+            let agregado_mes = AgregadoConsumoSerpro {
+                id: Uuid::now_v7(),
+                escritorio_id,
+                produto,
+                ambiente,
+                periodo: PeriodoAgregado::Mes,
+                referencia_periodo: inicio_mes(referencia),
+                total_chamadas: total,
+                chamadas_sucesso: sucesso,
+                chamadas_4xx: c4xx,
+                chamadas_5xx: c5xx,
+                chamadas_timeout: ctimeout,
+                chamadas_indeterminado: cint,
+                duracao_total_ms: duracao,
+                atualizado_em: Utc::now(),
+            };
+            self.agregados.upsert(&agregado_mes).await?;
         }
 
         Ok(())
@@ -264,22 +334,31 @@ impl CriarPlanoEscritorioUseCase {
         nome: String,
         descricao: Option<String>,
         chamadas_mes: i64,
+        clientes_limite: i64,
+        usuarios_limite: i64,
         preco_mensal_cents: i64,
     ) -> Result<PlanoEscritorio, ErroMedicao> {
-        let _plano = PlanoEscritorio {
+        if nome.trim().is_empty() {
+            return Err(ErroMedicao::Interno("nome do plano é obrigatório".into()));
+        }
+        if chamadas_mes <= 0 || clientes_limite <= 0 || usuarios_limite <= 0 {
+            return Err(ErroMedicao::Interno(
+                "limites do plano devem ser positivos".into(),
+            ));
+        }
+        let plano = PlanoEscritorio {
             id: Uuid::now_v7(),
-            nome,
+            nome: nome.trim().to_owned(),
             descricao,
             chamadas_mes,
+            clientes_limite,
+            usuarios_limite,
             preco_mensal_cents,
             ativo: true,
             criado_em: Utc::now(),
             atualizado_em: Utc::now(),
         };
-        self.planos.listar_ativos().await?;
-        Err(ErroMedicao::Interno(
-            "use repositorio diretamente para criar planos".to_owned(),
-        ))
+        self.planos.criar(&plano).await
     }
 }
 
@@ -323,6 +402,8 @@ impl CriarAtualizarAssinaturaUseCase {
                 escritorio_id,
                 plano_id,
                 chamadas_mes_limite,
+                clientes_limite: existente.clientes_limite,
+                usuarios_limite: existente.usuarios_limite,
                 bloqueio_ao_exceder,
                 ativo: existente.ativo,
                 criado_em: existente.criado_em,
@@ -335,6 +416,8 @@ impl CriarAtualizarAssinaturaUseCase {
                 escritorio_id,
                 plano_id,
                 chamadas_mes_limite,
+                clientes_limite: _plano.clientes_limite,
+                usuarios_limite: _plano.usuarios_limite,
                 bloqueio_ao_exceder,
                 ativo: true,
                 criado_em: Utc::now(),
@@ -357,6 +440,11 @@ impl ListarPlanosUseCase {
 
     pub async fn executar(&self) -> Result<Vec<PlanoEscritorio>, ErroMedicao> {
         self.planos.listar_ativos().await
+    }
+
+    /// Backoffice: inclui planos inativos.
+    pub async fn executar_todos(&self) -> Result<Vec<PlanoEscritorio>, ErroMedicao> {
+        self.planos.listar_todos().await
     }
 }
 
@@ -403,23 +491,35 @@ impl ListarConsumoEscritorioUseCase {
             .listar_por_escritorio(escritorio_id, 50)
             .await?;
 
-        let total_mes: i64 = agregados
-            .iter()
-            .filter(|a| a.periodo == PeriodoAgregado::Mes)
-            .map(|a| a.total_chamadas)
-            .sum();
+        let total_mes: i64 = self
+            .chamadas
+            .listar_por_periodo(
+                escritorio_id,
+                None,
+                None,
+                None,
+                inicio_mes(Utc::now()),
+                inicio_mes(Utc::now()) + chrono::Duration::days(31),
+            )
+            .await?
+            .len() as i64;
+
+        let percentual = if assinatura.chamadas_mes_limite > 0 {
+            (total_mes as f64 / assinatura.chamadas_mes_limite as f64) * 100.0
+        } else {
+            0.0
+        };
 
         Ok(ConsumoEscritorioDto {
             escritorio_id,
             plano_id: assinatura.plano_id,
             chamadas_mes_limite: assinatura.chamadas_mes_limite,
+            clientes_limite: assinatura.clientes_limite,
+            usuarios_limite: assinatura.usuarios_limite,
             bloqueio_ao_exceder: assinatura.bloqueio_ao_exceder,
             chamadas_usadas_mes: total_mes,
-            percentual_utilizacao: if assinatura.chamadas_mes_limite > 0 {
-                (total_mes as f64 / assinatura.chamadas_mes_limite as f64) * 100.0
-            } else {
-                0.0
-            },
+            percentual_utilizacao: percentual,
+            aviso_consumo: aviso_consumo(percentual),
             agregados: agregados
                 .into_iter()
                 .map(|a| AgregadoConsumoDto {
@@ -461,9 +561,12 @@ pub struct ConsumoEscritorioDto {
     pub escritorio_id: Uuid,
     pub plano_id: Uuid,
     pub chamadas_mes_limite: i64,
+    pub clientes_limite: i64,
+    pub usuarios_limite: i64,
     pub bloqueio_ao_exceder: bool,
     pub chamadas_usadas_mes: i64,
     pub percentual_utilizacao: f64,
+    pub aviso_consumo: Option<String>,
     pub agregados: Vec<AgregadoConsumoDto>,
     pub chamadas_recentes: Vec<ChamadaRecenteDto>,
 }
@@ -497,4 +600,218 @@ pub struct ChamadaRecenteDto {
     pub status_http: Option<u16>,
     pub duracao_ms: u64,
     pub criado_em: DateTime<Utc>,
+}
+
+/// Primeiro instante do mï¿½s corrente em UTC.
+pub fn inicio_mes(referencia: DateTime<Utc>) -> DateTime<Utc> {
+    NaiveDate::from_ymd_opt(
+        referencia.date_naive().year(),
+        referencia.date_naive().month(),
+        1,
+    )
+    .expect("data vï¿½lida")
+    .and_hms_opt(0, 0, 0)
+    .expect("hora vï¿½lida")
+    .and_utc()
+}
+
+/// Aviso amigï¿½vel a partir de 80% / 100% do limite mensal.
+pub fn aviso_consumo(percentual: f64) -> Option<String> {
+    if percentual >= 100.0 {
+        Some("Limite mensal de chamadas SERPRO atingido.".to_owned())
+    } else if percentual >= 80.0 {
+        Some("Consumo acima de 80% do limite mensal de chamadas SERPRO.".to_owned())
+    } else {
+        None
+    }
+}
+
+/// Caso de uso: consumo agregado de todos os escritórios (backoffice).
+pub struct ConsumoAdminUseCase {
+    chamadas: Arc<dyn RepositorioChamadasSerpro>,
+    assinaturas: Arc<dyn RepositorioAssinaturasEscritorio>,
+    planos: Arc<dyn RepositorioPlanosEscritorio>,
+    escritorios: Arc<dyn RepositorioEscritoriosConsumo>,
+}
+
+impl ConsumoAdminUseCase {
+    pub fn novo(
+        chamadas: Arc<dyn RepositorioChamadasSerpro>,
+        assinaturas: Arc<dyn RepositorioAssinaturasEscritorio>,
+        planos: Arc<dyn RepositorioPlanosEscritorio>,
+        escritorios: Arc<dyn RepositorioEscritoriosConsumo>,
+    ) -> Self {
+        Self {
+            chamadas,
+            assinaturas,
+            planos,
+            escritorios,
+        }
+    }
+
+    pub async fn executar(
+        &self,
+        inicio: DateTime<Utc>,
+        fim: DateTime<Utc>,
+        produto: Option<String>,
+        ambiente: Option<String>,
+        escritorio_id: Option<Uuid>,
+    ) -> Result<ConsumoAdminDto, ErroMedicao> {
+        let escritorios = self.escritorios.listar().await?;
+        let planos = self.planos.listar_todos().await?;
+        let mut linhas = Vec::new();
+        let mut por_dia: std::collections::BTreeMap<String, (i64, i64, i64)> =
+            std::collections::BTreeMap::new();
+        let mut total_geral = 0i64;
+        let mut erro_geral = 0i64;
+        let mut duracao_geral = 0i64;
+
+        for escritorio in escritorios {
+            if let Some(filtro) = escritorio_id
+                && filtro != escritorio.id
+            {
+                continue;
+            }
+            let chamadas = self
+                .chamadas
+                .listar_por_periodo(
+                    escritorio.id,
+                    produto.clone(),
+                    ambiente.clone(),
+                    None,
+                    inicio,
+                    fim,
+                )
+                .await?;
+            let total = chamadas.len() as i64;
+            let sucesso = chamadas
+                .iter()
+                .filter(|c| c.resultado == ResultadoChamada::Sucesso)
+                .count() as i64;
+            let erros = total - sucesso;
+            let duracao: i64 = chamadas.iter().map(|c| c.duracao_ms as i64).sum();
+            for chamada in &chamadas {
+                let dia = chamada.criado_em.format("%Y-%m-%d").to_string();
+                let entrada = por_dia.entry(dia).or_insert((0, 0, 0));
+                entrada.0 += 1;
+                if chamada.resultado != ResultadoChamada::Sucesso {
+                    entrada.1 += 1;
+                }
+                entrada.2 += chamada.duracao_ms as i64;
+            }
+            total_geral += total;
+            erro_geral += erros;
+            duracao_geral += duracao;
+
+            let assinatura = self
+                .assinaturas
+                .buscar_por_escritorio(escritorio.id)
+                .await?;
+            let plano_nome = assinatura.as_ref().and_then(|a| {
+                planos
+                    .iter()
+                    .find(|p| p.id == a.plano_id)
+                    .map(|p| p.nome.clone())
+            });
+
+            linhas.push(ConsumoEscritorioAdminDto {
+                escritorio_id: escritorio.id,
+                nome: escritorio.nome,
+                cnpj: escritorio.cnpj,
+                plano_nome,
+                chamadas_limite: assinatura.as_ref().map(|a| a.chamadas_mes_limite),
+                chamadas_usadas: total,
+                chamadas_sucesso: sucesso,
+                chamadas_erro: erros,
+                taxa_erro: if total > 0 {
+                    erros as f64 / total as f64
+                } else {
+                    0.0
+                },
+                duracao_media_ms: if total > 0 { duracao / total } else { 0 },
+            });
+        }
+
+        linhas.sort_by_key(|a| std::cmp::Reverse(a.chamadas_usadas));
+        let ranking = linhas
+            .iter()
+            .take(10)
+            .map(|l| RankingConsumoDto {
+                escritorio_id: l.escritorio_id,
+                nome: l.nome.clone(),
+                chamadas: l.chamadas_usadas,
+            })
+            .collect();
+        let serie = por_dia
+            .into_iter()
+            .map(|(dia, (total, erros, duracao))| SerieConsumoDto {
+                dia,
+                chamadas: total,
+                erros,
+                duracao_media_ms: if total > 0 { duracao / total } else { 0 },
+            })
+            .collect();
+
+        Ok(ConsumoAdminDto {
+            inicio,
+            fim,
+            total_chamadas: total_geral,
+            total_erros: erro_geral,
+            taxa_erro: if total_geral > 0 {
+                erro_geral as f64 / total_geral as f64
+            } else {
+                0.0
+            },
+            duracao_media_ms: if total_geral > 0 {
+                duracao_geral / total_geral
+            } else {
+                0
+            },
+            escritorios: linhas,
+            ranking,
+            serie,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ConsumoAdminDto {
+    pub inicio: DateTime<Utc>,
+    pub fim: DateTime<Utc>,
+    pub total_chamadas: i64,
+    pub total_erros: i64,
+    pub taxa_erro: f64,
+    pub duracao_media_ms: i64,
+    pub escritorios: Vec<ConsumoEscritorioAdminDto>,
+    pub ranking: Vec<RankingConsumoDto>,
+    pub serie: Vec<SerieConsumoDto>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConsumoEscritorioAdminDto {
+    pub escritorio_id: Uuid,
+    pub nome: String,
+    pub cnpj: String,
+    pub plano_nome: Option<String>,
+    pub chamadas_limite: Option<i64>,
+    pub chamadas_usadas: i64,
+    pub chamadas_sucesso: i64,
+    pub chamadas_erro: i64,
+    pub taxa_erro: f64,
+    pub duracao_media_ms: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct RankingConsumoDto {
+    pub escritorio_id: Uuid,
+    pub nome: String,
+    pub chamadas: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct SerieConsumoDto {
+    pub dia: String,
+    pub chamadas: i64,
+    pub erros: i64,
+    pub duracao_media_ms: i64,
 }

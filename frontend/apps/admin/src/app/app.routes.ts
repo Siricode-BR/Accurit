@@ -49,5 +49,11 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/integra-contador/catalogo.page').then((m) => m.CatalogoIntegraPage),
   },
+  {
+    path: 'consumo',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/consumo/consumo-admin.page').then((m) => m.ConsumoAdminPage),
+  },
   { path: '**', redirectTo: 'dashboard' },
 ];

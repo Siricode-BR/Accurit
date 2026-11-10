@@ -33,6 +33,7 @@ export const NAVEGACAO_CLIENT: readonly AccNavGroup[] = [
   {
     id: 'relatorios',
     label: 'Relatórios (Fase F)',
-    items: [{ id: 'relatorios', label: 'Relatórios', icon: 'beaker', route: '/relatorios' }],
+    items: [{ id: 'relatorios', label: 'Relatórios', icon: 'beaker', route: '/relatorios' },
+      { id: 'consumo', label: 'Consumo SERPRO', icon: 'dashboard', route: '/consumo' }],
   },
 ];

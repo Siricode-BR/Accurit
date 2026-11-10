@@ -42,6 +42,10 @@ describe('App', () => {
       '/clientes',
       '/consultas/integra-contador',
       '/consultas/divida-ativa',
+      '/trabalhos',
+      '/consultas-lote',
+      '/relatorios',
+      '/consumo',
     ]);
   });
 });

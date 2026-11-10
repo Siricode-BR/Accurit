@@ -165,6 +165,12 @@ export const routes: Routes = [
         (m) => m.RelatoriosListComponent,
       ),
   },
+  {
+    path: 'consumo',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/consumo/consumo.page').then((m) => m.ConsumoPage),
+  },
   // Fase F — Link público de compartilhamento de relatório (somente leitura, sem autenticação).
   {
     path: 'relatorios/compartilhado/:token',

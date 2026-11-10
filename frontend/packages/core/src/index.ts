@@ -12,3 +12,5 @@ export * from './notificacoes/notificacoes';
 export * from './guias/guias';
 export * from './usuario/usuario';
 export * from './relatorios/relatorios';
+export * from './consumo/consumo';
+export * from './lgpd/lgpd';

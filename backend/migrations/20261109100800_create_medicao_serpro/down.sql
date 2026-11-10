@@ -1,4 +1,3 @@
--- Fase G — Reverter medição de uso SERPRO.
 DROP TABLE IF EXISTS bloqueios_serpro;
 DROP TABLE IF EXISTS assinaturas_escritorio;
 DROP TABLE IF EXISTS planos_escritorio;

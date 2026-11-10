@@ -20,6 +20,10 @@ use crate::application::divida_ativa::use_cases::{
 };
 use crate::application::ports::SaudeBanco;
 use crate::application::serpro::medicao::ServicoMedicaoSerproImpl;
+use crate::application::serpro::medicao::{
+    ConsumoAdminUseCase, CriarAtualizarAssinaturaUseCase, CriarPlanoEscritorioUseCase,
+    ListarConsumoEscritorioUseCase, ListarPlanosUseCase,
+};
 use crate::application::serpro::{
     AlterarModoTrialSerproUseCase, CredencialFallbackGlobal, ObterConfiguracaoSerproUseCase,
 };
@@ -63,6 +67,9 @@ where
     let pool = estado.pool.clone();
     let cliente_repo = ClienteRepositorioDiesel::novo(pool.clone());
     let admin_repo = AdminRepositorioDiesel::novo(pool.clone());
+    let limites_plano_repo: std::sync::Arc<
+        dyn crate::application::serpro::medicao::use_cases::LimitesPlano,
+    > = std::sync::Arc::new(RepositorioMedicaoDiesel::novo(pool.clone()));
     let argon2 =
         std::sync::Arc::new(HashArgon2::novo(&config.auth).expect("argon2 deve inicializar"));
 
@@ -70,7 +77,8 @@ where
         std::sync::Arc::new(cliente_repo.clone()),
         std::sync::Arc::new(cliente_repo.clone()),
         PoliticaClientes::default(),
-    );
+    )
+    .com_limites(limites_plano_repo.clone());
     let obter_clientes = ObterClienteUseCase::novo(std::sync::Arc::new(cliente_repo.clone()));
     let listar_clientes = ListarClientesUseCase::novo(std::sync::Arc::new(cliente_repo.clone()));
     let atualizar_clientes = AtualizarClienteUseCase::novo(
@@ -135,7 +143,7 @@ where
         std::sync::Arc::new(cliente_repo.clone()),
         std::sync::Arc::new(cliente_repo.clone()),
     );
-    let _gestao_acesso_usuarios =
+    let gestao_acesso_usuarios =
         crate::application::clientes::GestaoAcessoUsuariosUseCase::novo(carteira_repo.clone()
             as std::sync::Arc<dyn crate::application::clientes::RepositorioAcessoUsuarios>);
 
@@ -174,12 +182,41 @@ where
     // as portas de medição (chamadas, agregados, planos, assinaturas,
     // bloqueios).
     let repositorio_medicao = std::sync::Arc::new(RepositorioMedicaoDiesel::novo(pool.clone()));
-    let servico_medicao = std::sync::Arc::new(ServicoMedicaoSerproImpl::novo(
-        repositorio_medicao.clone(),
-        repositorio_medicao.clone(),
-        repositorio_medicao.clone(),
-        repositorio_medicao.clone(),
-    ));
+    let servico_medicao = std::sync::Arc::new(
+        ServicoMedicaoSerproImpl::novo(
+            repositorio_medicao.clone(),
+            repositorio_medicao.clone(),
+            repositorio_medicao.clone(),
+            repositorio_medicao.clone(),
+        )
+        .com_notificador(repositorio_medicao.clone()),
+    );
+    let estado_consumo = crate::presentation::consumo::EstadoConsumo {
+        consumo_cliente: std::sync::Arc::new(ListarConsumoEscritorioUseCase::novo(
+            repositorio_medicao.clone(),
+            repositorio_medicao.clone(),
+            repositorio_medicao.clone(),
+        )),
+        consumo_admin: std::sync::Arc::new(ConsumoAdminUseCase::novo(
+            repositorio_medicao.clone(),
+            repositorio_medicao.clone(),
+            repositorio_medicao.clone(),
+            repositorio_medicao.clone(),
+        )),
+        planos_listar: std::sync::Arc::new(ListarPlanosUseCase::novo(repositorio_medicao.clone())),
+        planos_criar: std::sync::Arc::new(CriarPlanoEscritorioUseCase::novo(
+            repositorio_medicao.clone(),
+        )),
+        assinatura_atribuir: std::sync::Arc::new(CriarAtualizarAssinaturaUseCase::novo(
+            repositorio_medicao.clone(),
+            repositorio_medicao.clone(),
+        )),
+    };
+    let estado_lgpd = crate::presentation::lgpd::EstadoLgpd {
+        repo: std::sync::Arc::new(crate::infrastructure::persistence::lgpd::LgpdDiesel::novo(
+            pool.clone(),
+        )),
+    };
     let obter_config_serpro =
         ObterConfiguracaoSerproUseCase::novo(std::sync::Arc::new(serpro_repo.clone()));
     // O mesmo use case alimenta o middleware do snapshot de ambiente (SPEC
@@ -251,6 +288,13 @@ where
     let mut api = Router::new()
         .route("/health", get(handlers::saude::<S>))
         .with_state(estado);
+    crate::presentation::observability::iniciar_relogio();
+    api = api.merge(crate::presentation::observability::construir(
+        crate::presentation::observability::EstadoObservabilidade {
+            metrics_token: config.metrics_token.clone().map(std::sync::Arc::new),
+            ambiente: format!("{:?}", config.app_env),
+        },
+    ));
 
     if let Some(auth_state) = auth.clone() {
         api = api.nest("/auth", construir_auth(auth_state.clone()));
@@ -279,9 +323,32 @@ where
             crate::presentation::administradores::construir_administradores(
                 gestao_administradores.clone(),
                 auth_state.clone(),
-            );
-        api = api.nest("/administradores", administradores_router.clone());
+            ); // Backoffice SaaS: apenas administradores da plataforma. Usuários de
+        // escritórios são geridos exclusivamente no app client.
         api = api.nest("/admin/administradores", administradores_router);
+        api = api.nest(
+            "/usuarios",
+            crate::presentation::usuarios::router::construir_usuarios(
+                gestao_usuarios.clone(),
+                gestao_acesso_usuarios.clone(),
+                verificar_acesso.clone(),
+                &auth_state,
+                Some(limites_plano_repo.clone()),
+            ),
+        );
+
+        api = api.merge(crate::presentation::consumo::construir_cliente(
+            estado_consumo.clone(),
+            auth_state.clone(),
+        ));
+        api = api.merge(crate::presentation::consumo::construir_admin(
+            estado_consumo.clone(),
+            auth_state.clone(),
+        ));
+        api = api.merge(crate::presentation::lgpd::construir(
+            estado_lgpd,
+            auth_state.clone(),
+        ));
 
         // Etapa 0.2/0.4 — rotas de gestão de escritórios do backoffice SaaS.
         // (provisionamento de tenant + alternância do modo Trial SERPRO)
@@ -932,4 +999,7 @@ where
                 ),
         )
         .layer(axum_middleware::from_fn(request_id::middleware))
+        .layer(axum_middleware::from_fn(
+            crate::presentation::observability::middleware,
+        ))
 }
