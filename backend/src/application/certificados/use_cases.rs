@@ -52,6 +52,22 @@ impl CriarCertificadoUseCase {
         validar_titular(&comando.titular_cpf_cnpj)?;
         validar_conteudo(&comando.conteudo)?;
 
+        // Certificado A1 de pessoa jurídica: o titular deve ser o próprio
+        // escritório. Divergência é rejeitada sem expor o conteúdo.
+        let titular_digitos: String = comando
+            .titular_cpf_cnpj
+            .chars()
+            .filter(char::is_ascii_digit)
+            .collect();
+        if titular_digitos.len() == 14
+            && let Some(cnpj_escritorio) = self
+                .repositorio
+                .buscar_cnpj_escritorio(comando.escritorio_id)?
+            && cnpj_escritorio != titular_digitos
+        {
+            return Err(CertificadoError::TitularDivergente);
+        }
+
         if comando.conteudo.len() > self.politica.max_conteudo_bytes {
             return Err(CertificadoError::Dominio(
                 CertificadoInvalido::ConteudoVazio,
@@ -301,6 +317,13 @@ mod tests {
             _: &crate::domain::certificados::Certificado,
         ) -> Result<(), RepositorioError> {
             Ok(())
+        }
+
+        fn buscar_cnpj_escritorio(
+            &self,
+            _: EscritorioId,
+        ) -> Result<Option<String>, RepositorioError> {
+            Ok(Some("11222333000181".to_owned()))
         }
     }
 

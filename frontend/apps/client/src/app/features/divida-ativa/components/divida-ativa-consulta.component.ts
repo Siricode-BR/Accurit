@@ -17,6 +17,7 @@ import {
 import { isValidDocument, sanitizeDocument } from '@accurit/shared';
 import { DividaAtivaService } from '../../../data/divida-ativa.service';
 import { SerproAmbienteService } from '../../../data/serpro.ambiente.service';
+import { TrialMockPanelComponent } from '../../serpro/trial-mock-panel.component';
 import { ConsultaModo, ModoOpcao } from '../divida-ativa.types';
 
 /**
@@ -27,7 +28,7 @@ import { ConsultaModo, ModoOpcao } from '../divida-ativa.types';
 @Component({
   selector: 'app-divida-ativa-consulta',
   standalone: true,
-  imports: [AccButtonComponent, AccCardComponent, AccDocumentFieldComponent, AccEmptyStateComponent],
+  imports: [AccButtonComponent, AccCardComponent, AccDocumentFieldComponent, AccEmptyStateComponent, TrialMockPanelComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './divida-ativa-consulta.component.html',
   styleUrl: './divida-ativa-consulta.component.css',
@@ -97,5 +98,10 @@ export class DividaAtivaConsultaComponent implements OnInit {
   protected limpar(): void {
     this.consultou.set(false);
     this.servico.limpar();
+  }
+
+  protected usarDocumentoTrial(documento: string): void {
+    this.documento.set(documento);
+    this.modo.set('devedor');
   }
 }

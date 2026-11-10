@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { LoginRequestDto, UsuarioSessaoDto, UserRole } from '@accurit/core';
 import { SessionStore } from './session.store';
+import { mensagemDeErro } from '../http/mensagem-erro';
 
 type AuthStatus = 'idle' | 'loading' | 'error';
 
@@ -59,7 +60,7 @@ export class AuthService {
         error: (err: { error?: { message?: string }; message?: string }) => {
           this.#status.set('error');
           this.#errorMessage.set(
-            err.error?.message ?? err.message ?? 'Credenciais inválidas. Tente novamente.'
+            mensagemDeErro(err, 'Credenciais inválidas. Tente novamente.')
           );
         },
       });

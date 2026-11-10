@@ -34,6 +34,7 @@ pub struct Estado {
     pub gestao: Arc<GestaoUsuariosUseCase>,
     pub acesso: Arc<GestaoAcessoUsuariosUseCase>,
     pub verificar: Arc<VerificarAcessoUseCase>,
+    pub limites: Option<Arc<dyn crate::application::serpro::medicao::use_cases::LimitesPlano>>,
 }
 
 /// Titular (`CLIENTE`) do escritório; `OPERADOR` não gerencia usuários.
@@ -117,6 +118,15 @@ async fn criar(
     } else {
         ator_portal(&ctx)?
     };
+    if !admin
+        && let (Some(escritorio), Some(limites)) = (ctx.escritorio_id, &estado.limites)
+        && !limites
+            .pode_criar_usuario(escritorio)
+            .await
+            .unwrap_or(false)
+    {
+        return Err(ApiError::validacao("limite de usuários do plano atingido"));
+    }
     let criado = estado.gestao.criar(
         &ator,
         CriarUsuarioCommand {
@@ -325,11 +335,13 @@ pub fn construir_usuarios(
     acesso: GestaoAcessoUsuariosUseCase,
     verificar: VerificarAcessoUseCase,
     auth: &AuthState,
+    limites: Option<Arc<dyn crate::application::serpro::medicao::use_cases::LimitesPlano>>,
 ) -> Router {
     let estado = Estado {
         gestao: Arc::new(gestao),
         acesso: Arc::new(acesso),
         verificar: Arc::new(verificar),
+        limites,
     };
     let rotas = rotas!(false)
         .route("/{id}/acesso", get(obter_acesso).put(definir_acesso))
@@ -348,6 +360,7 @@ pub fn construir_usuarios_admin(
         gestao: Arc::new(gestao),
         acesso: Arc::new(acesso),
         verificar: Arc::new(verificar),
+        limites: None,
     };
     proteger(rotas!(true), auth, Audiencia::Admin, estado)
 }

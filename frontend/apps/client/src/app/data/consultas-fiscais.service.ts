@@ -6,6 +6,7 @@ import {
   ListagemConsultasDto,
   SituacaoFiscalDto,
 } from '@accurit/core';
+import { mensagemDeErro } from '../core/http/mensagem-erro';
 
 export interface CarregarConsultasOpcoes {
   pagina?: number;
@@ -37,11 +38,6 @@ const ESTADO_INICIAL: ConsultasState = {
   carregandoSituacao: false,
   erroSituacao: null,
 };
-
-function mensagemDeErro(erro: unknown, padrao: string): string {
-  const erroApi = erro as { error?: { message?: string }; message?: string };
-  return erroApi?.error?.message ?? erroApi?.message ?? padrao;
-}
 
 function codigoDeErro(erro: unknown): string | null {
   return (erro as { error?: { code?: string } })?.error?.code ?? null;

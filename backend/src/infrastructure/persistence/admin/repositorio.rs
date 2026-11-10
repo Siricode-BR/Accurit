@@ -1,4 +1,7 @@
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use diesel::{
+    BoolExpressionMethods, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl,
+    TextExpressionMethods,
+};
 use ipnet::IpNet;
 use serde_json::Value as JsonValue;
 use uuid::Uuid;
@@ -10,7 +13,7 @@ use crate::application::admin::{
 };
 use crate::infrastructure::persistence::pool::DbPool;
 use crate::infrastructure::persistence::schema::{
-    administradores, auditoria_eventos, escritorios, usuarios,
+    administradores, auditoria_eventos, escritorios, sessoes_admin, usuarios,
 };
 
 diesel::define_sql_function! {
@@ -226,6 +229,7 @@ type LinhaAdministrador = (
     String,
     bool,
     chrono::DateTime<chrono::Utc>,
+    chrono::DateTime<chrono::Utc>,
     Option<chrono::DateTime<chrono::Utc>>,
 );
 
@@ -237,8 +241,8 @@ fn administrador_de(linha: LinhaAdministrador) -> AdministradorDto {
         cpf: linha.3,
         ativo: linha.4,
         criado_em: linha.5,
-        atualizado_em: linha.5,
-        ultimo_login_em: linha.6,
+        atualizado_em: linha.6,
+        ultimo_login_em: linha.7,
     }
 }
 
@@ -246,8 +250,26 @@ fn administrador_de(linha: LinhaAdministrador) -> AdministradorDto {
 /// `use self::administradores::dsl::*` estiver no escopo.
 macro_rules! base_administrador {
     () => {
-        (id, nome, email, cpf, ativo, criado_em, ultimo_login_em)
+        (
+            id,
+            nome,
+            email,
+            cpf,
+            ativo,
+            criado_em,
+            atualizado_em,
+            ultimo_login_em,
+        )
     };
+}
+
+#[derive(diesel::AsChangeset)]
+#[diesel(table_name = administradores)]
+struct AdministradorChangeset {
+    nome: Option<String>,
+    email: Option<String>,
+    ativo: Option<bool>,
+    atualizado_em: chrono::DateTime<chrono::Utc>,
 }
 
 impl AdministradorRepositorio for AdminRepositorioDiesel {
@@ -260,17 +282,19 @@ impl AdministradorRepositorio for AdminRepositorioDiesel {
 
         let mut conexao = self.conexao()?;
         let administrador_id = Uuid::now_v7();
+        let agora = chrono::Utc::now();
 
         diesel::insert_into(administradores)
             .values((
                 id.eq(administrador_id),
                 nome.eq(&admin.nome),
-                email.eq(&admin.email),
+                email.eq(admin.email.to_ascii_lowercase()),
                 cpf.eq(&admin.cpf),
                 senha_hash.eq(senha_hash_nova),
                 ativo.eq(true),
                 falhas_consecutivas.eq(0),
-                criado_em.eq(chrono::Utc::now()),
+                criado_em.eq(agora),
+                atualizado_em.eq(agora),
             ))
             .execute(&mut conexao)
             .map(|_| administrador_id)
@@ -290,6 +314,7 @@ impl AdministradorRepositorio for AdminRepositorioDiesel {
     fn listar(
         &self,
         paginacao: &Paginacao,
+        busca: Option<&str>,
     ) -> Result<(Vec<AdministradorDto>, usize), RepositorioError> {
         use self::administradores::dsl::*;
 
@@ -297,13 +322,26 @@ impl AdministradorRepositorio for AdminRepositorioDiesel {
         let limite = i64::from(paginacao.por_pagina);
         let deslocamento = i64::from(paginacao.pagina - 1) * limite;
 
-        let total = administradores
-            .count()
-            .get_result::<i64>(&mut conexao)
-            .map_err(|_| RepositorioError::Dados)?;
+        let filtro = busca.map(|termo| format!("%{}%", termo.to_ascii_lowercase()));
 
-        let linhas = administradores
-            .select(base_administrador!())
+        let total = match filtro.as_deref() {
+            Some(padrao) => administradores
+                .filter(lower(nome).like(padrao).or(lower(email).like(padrao)))
+                .count()
+                .get_result::<i64>(&mut conexao),
+            None => administradores.count().get_result::<i64>(&mut conexao),
+        }
+        .map_err(|_| RepositorioError::Dados)?;
+
+        let consulta = administradores.select(base_administrador!());
+        let consulta = match filtro.as_deref() {
+            Some(padrao) => consulta
+                .filter(lower(nome).like(padrao).or(lower(email).like(padrao)))
+                .into_boxed(),
+            None => consulta.into_boxed(),
+        };
+
+        let linhas = consulta
             .order_by((criado_em.desc(), id.asc()))
             .limit(limite)
             .offset(deslocamento)
@@ -343,6 +381,17 @@ impl AdministradorRepositorio for AdminRepositorioDiesel {
             .map(|opcao| opcao.map(administrador_de))
     }
 
+    fn contar_ativos(&self) -> Result<i64, RepositorioError> {
+        use self::administradores::dsl::*;
+
+        let mut conexao = self.conexao()?;
+        administradores
+            .filter(ativo.eq(true))
+            .count()
+            .get_result::<i64>(&mut conexao)
+            .map_err(|_| RepositorioError::Dados)
+    }
+
     fn atualizar(
         &self,
         id_alvo: Uuid,
@@ -351,32 +400,28 @@ impl AdministradorRepositorio for AdminRepositorioDiesel {
         use self::administradores::dsl::*;
 
         let mut conexao = self.conexao()?;
-        let alvo = administradores.filter(id.eq(id_alvo));
 
-        // Atribuição condicional: só as colunas presentes no PATCH mudam.
-        let atualizado = match (&mudancas.nome, &mudancas.email) {
-            (Some(nome_novo), Some(email_novo)) => diesel::update(alvo)
-                .set((nome.eq(nome_novo), email.eq(email_novo)))
-                .execute(&mut conexao),
-            (Some(nome_novo), None) => diesel::update(alvo)
-                .set(nome.eq(nome_novo))
-                .execute(&mut conexao),
-            (None, Some(email_novo)) => diesel::update(alvo)
-                .set(email.eq(email_novo))
-                .execute(&mut conexao),
-            (None, None) => Ok(0),
+        let changeset = AdministradorChangeset {
+            nome: mudancas.nome.clone(),
+            email: mudancas.email.clone(),
+            ativo: mudancas.ativo,
+            atualizado_em: chrono::Utc::now(),
         };
-        atualizado.map_err(|e| {
-            if let diesel::result::Error::DatabaseError(
-                diesel::result::DatabaseErrorKind::UniqueViolation,
-                _,
-            ) = e
-            {
-                RepositorioError::UsuarioExistente
-            } else {
-                RepositorioError::Dados
-            }
-        })?;
+
+        diesel::update(administradores.filter(id.eq(id_alvo)))
+            .set(&changeset)
+            .execute(&mut conexao)
+            .map_err(|e| {
+                if let diesel::result::Error::DatabaseError(
+                    diesel::result::DatabaseErrorKind::UniqueViolation,
+                    _,
+                ) = e
+                {
+                    RepositorioError::UsuarioExistente
+                } else {
+                    RepositorioError::Dados
+                }
+            })?;
 
         administradores
             .select(base_administrador!())
@@ -397,7 +442,10 @@ impl AdministradorRepositorio for AdminRepositorioDiesel {
         let mut conexao = self.conexao()?;
 
         diesel::update(administradores.filter(id.eq(id_alvo)))
-            .set(senha_hash.eq(senha_hash_nova))
+            .set((
+                senha_hash.eq(senha_hash_nova),
+                atualizado_em.eq(chrono::Utc::now()),
+            ))
             .execute(&mut conexao)
             .map_err(|_| RepositorioError::Dados)?;
 
@@ -408,5 +456,20 @@ impl AdministradorRepositorio for AdminRepositorioDiesel {
             .optional()
             .map_err(|_| RepositorioError::Dados)
             .map(|opcao| opcao.map(administrador_de))
+    }
+
+    fn revogar_sessoes(&self, id_alvo: Uuid) -> Result<(), RepositorioError> {
+        use self::sessoes_admin::dsl::*;
+
+        let mut conexao = self.conexao()?;
+        diesel::update(
+            sessoes_admin
+                .filter(administrador_id.eq(id_alvo))
+                .filter(revogada_em.is_null()),
+        )
+        .set(revogada_em.eq(chrono::Utc::now()))
+        .execute(&mut conexao)
+        .map(|_| ())
+        .map_err(|_| RepositorioError::Dados)
     }
 }

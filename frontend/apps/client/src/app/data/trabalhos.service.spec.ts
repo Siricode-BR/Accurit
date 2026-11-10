@@ -169,6 +169,6 @@ describe('TrabalhosService', () => {
 
     await service.listarTrabalhos().catch(() => {});
 
-    expect(service.erroTrabalhos()).toBe('Falha no backend');
+    expect(service.erroTrabalhos()).toBe('Falha ao carregar trabalhos agendados.');
   });
 });

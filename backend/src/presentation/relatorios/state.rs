@@ -4,7 +4,8 @@ use std::sync::Arc;
 
 use crate::application::relatorios::use_cases::{
     AcessarRelatorioPorLinkUseCase, BuscarRelatorioUseCase, CriarLinkCompartilhamentoUseCase,
-    GerarRelatorioUseCase, ListarRelatoriosUseCase, ValidarLinkCompartilhamentoUseCase,
+    GerarRelatorioUseCase, ListarRelatoriosUseCase, RevogarLinksRelatorioUseCase,
+    ValidarLinkCompartilhamentoUseCase,
 };
 
 #[derive(Clone)]
@@ -15,6 +16,7 @@ pub struct EstadoRelatorios {
     pub criar_link: Arc<CriarLinkCompartilhamentoUseCase>,
     pub validar_link: Arc<ValidarLinkCompartilhamentoUseCase>,
     pub acessar_por_link: Arc<AcessarRelatorioPorLinkUseCase>,
+    pub revogar_links: Arc<RevogarLinksRelatorioUseCase>,
 }
 
 impl EstadoRelatorios {
@@ -25,6 +27,7 @@ impl EstadoRelatorios {
         criar_link: Arc<CriarLinkCompartilhamentoUseCase>,
         validar_link: Arc<ValidarLinkCompartilhamentoUseCase>,
         acessar_por_link: Arc<AcessarRelatorioPorLinkUseCase>,
+        revogar_links: Arc<RevogarLinksRelatorioUseCase>,
     ) -> Self {
         Self {
             gerar,
@@ -33,6 +36,7 @@ impl EstadoRelatorios {
             criar_link,
             validar_link,
             acessar_por_link,
+            revogar_links,
         }
     }
 }

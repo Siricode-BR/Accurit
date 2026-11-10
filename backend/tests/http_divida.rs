@@ -264,16 +264,27 @@ fn ambiente_mock(respostas: &[(u16, Option<Value>)]) -> (Ambiente, MockSerpro) {
         config.serpro.divida_ativa_trial_url = url_base.clone();
         config.serpro.integra_trial_url = url_base;
         config.serpro.trial_bearer_token = Some(SecretString::from(TOKEN_TRIAL));
+        config.serpro.trial_mock = false;
+        // O teste substitui o SERPRO por um servidor HTTP local; o simulador
+        // determinístico não deve interceptar essas chamadas.
+        config.serpro.trial_mock = false;
     });
     (ambiente, mock)
+}
+
+fn cnpj_de_slug(slug: &str) -> String {
+    let valor = slug.bytes().fold(0u64, |acc, b| {
+        acc.wrapping_mul(31).wrapping_add(u64::from(b))
+    });
+    format!("{:014}", valor % 100_000_000_000_000)
 }
 
 fn semear_escritorio(banco: &BancoTemporario, slug: &str) -> Uuid {
     let mut conexao = banco.conexao();
     let id = Uuid::now_v7();
-    sql_query("INSERT INTO escritorios (id, slug, nome) VALUES ($1, $2, $3)")
+    sql_query("INSERT INTO escritorios (id, cnpj, nome) VALUES ($1, $2, $3)")
         .bind::<diesel::sql_types::Uuid, _>(id)
-        .bind::<Text, _>(slug)
+        .bind::<Text, _>(cnpj_de_slug(slug))
         .bind::<Text, _>(format!("Escritório {slug}"))
         .execute(&mut conexao)
         .expect("escritório deve ser inserido");
@@ -784,12 +795,12 @@ async fn historico_isola_por_escritorio() {
     let alfa = contar(
         &ambiente.banco,
         "SELECT COUNT(*) AS total FROM consultas_fiscais \
-         WHERE escritorio_id = (SELECT id FROM escritorios WHERE slug = 'alfa')",
+         WHERE escritorio_id = (SELECT id FROM escritorios WHERE nome LIKE '%alfa%')",
     );
     let bravo = contar(
         &ambiente.banco,
         "SELECT COUNT(*) AS total FROM consultas_fiscais \
-         WHERE escritorio_id = (SELECT id FROM escritorios WHERE slug = 'bravo')",
+         WHERE escritorio_id = (SELECT id FROM escritorios WHERE nome LIKE '%bravo%')",
     );
     assert_eq!(bravo, 1, "consulta de B fica em B");
     assert_eq!(alfa, 0, "A não vê consulta de B");
@@ -802,6 +813,7 @@ async fn producao_divida_ativa_e_bloqueada() {
     let ambiente = ambiente_com(&[], |config| {
         config.serpro.divida_ativa_trial_url = url_base;
         config.serpro.trial_bearer_token = Some(SecretString::from(TOKEN_TRIAL));
+        config.serpro.trial_mock = false;
     });
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
     semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
@@ -840,6 +852,7 @@ async fn limite_local_por_escritorio_e_429() {
     let ambiente = ambiente_com(&[], |config| {
         config.serpro.divida_ativa_trial_url = url_base;
         config.serpro.trial_bearer_token = Some(SecretString::from(TOKEN_TRIAL));
+        config.serpro.trial_mock = false;
         config.serpro.rate_limit_consultas_por_segundo = 1;
     });
     let escritorio = semear_escritorio(&ambiente.banco, "alfa");
@@ -869,6 +882,7 @@ async fn flag_fallback_on_nao_cria_segunda_tentativa_sem_codigo() {
     let ambiente = ambiente_com(&[], |config| {
         config.serpro.divida_ativa_trial_url = url_base;
         config.serpro.trial_bearer_token = Some(SecretString::from(TOKEN_TRIAL));
+        config.serpro.trial_mock = false;
         config.serpro.divida_ativa_fallback_codigo_contribuinte = true;
     });
     // sem semente de catálogo: nenhum código de contribuinte disponível

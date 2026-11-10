@@ -14,6 +14,7 @@ import {
   AccSpinnerComponent,
 } from '@accurit/ui';
 import { LinhaCatalogoServicoDto } from '@accurit/core';
+import { mensagemDeErro } from '../../core/http/mensagem-erro';
 
 @Component({
   selector: 'app-catalogo-integra-page',
@@ -232,7 +233,7 @@ export class CatalogoIntegraPage implements OnInit {
         error: (err: { error?: { message?: string } }) => {
           this.atualizando.set(null);
           this.mensagemAviso.set(
-            err?.error?.message ?? 'Falha ao atualizar o catálogo de serviços.',
+            mensagemDeErro(err, 'Falha ao atualizar o catálogo de serviços.'),
           );
         },
       });

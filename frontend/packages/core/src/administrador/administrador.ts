@@ -30,6 +30,7 @@ export interface CriarAdministradorRequestDto {
 export interface AtualizarAdministradorRequestDto {
   nome?: string;
   email?: string;
+  ativo?: boolean;
 }
 
 /** `PUT /administradores/{id}` — alteração de senha. */

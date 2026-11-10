@@ -7,6 +7,7 @@ import {
   CriarTenantResponseDto,
   AmbienteSerpro,
 } from '@accurit/core';
+import { mensagemDeErro } from '../core/http/mensagem-erro';
 
 interface TenantsState {
   itens: TenantDto[];
@@ -20,7 +21,7 @@ interface TenantsState {
 @Injectable({ providedIn: 'root' })
 export class TenantService {
   private readonly http = inject(HttpClient);
-  private readonly baseUrl = '/api/v1';
+  private readonly baseUrl = '/api/v1/admin/escritorios';
 
   #state = signal<TenantsState>({
     itens: [],
@@ -69,7 +70,7 @@ export class TenantService {
         this.#state.update((s) => ({
           ...s,
           carregando: false,
-          erro: err.message ?? 'Falha ao carregar lista de escritórios.',
+          erro: mensagemDeErro(err, 'Falha ao carregar lista de escritórios.'),
         }));
       },
     });

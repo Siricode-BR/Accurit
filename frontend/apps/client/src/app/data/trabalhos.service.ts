@@ -11,6 +11,7 @@ import {
   TrabalhoAgendadoDto,
   AlternarTrabalhoRequest,
 } from '@accurit/core';
+import { mensagemDeErro } from '../core/http/mensagem-erro';
 
 /**
  * Serviço de trabalhos agendados e consultas em lote (FASE B).
@@ -57,7 +58,7 @@ export class TrabalhosService {
       this.#trabalhos.set(resposta);
     } catch (err: any) {
       this.#erroTrabalhos.set(
-        err.error?.message ?? err.message ?? 'Falha ao carregar trabalhos agendados.',
+        mensagemDeErro(err, 'Falha ao carregar trabalhos agendados.'),
       );
     } finally {
       this.#carregandoTrabalhos.set(false);
@@ -74,7 +75,7 @@ export class TrabalhosService {
       return resposta;
     } catch (err: any) {
       this.#erroTrabalhos.set(
-        err.error?.message ?? err.message ?? 'Falha ao criar trabalho agendado.',
+        mensagemDeErro(err, 'Falha ao criar trabalho agendado.'),
       );
       throw err;
     }
@@ -88,7 +89,7 @@ export class TrabalhosService {
       );
     } catch (err: any) {
       this.#erroTrabalhos.set(
-        err.error?.message ?? err.message ?? 'Falha ao buscar trabalho agendado.',
+        mensagemDeErro(err, 'Falha ao buscar trabalho agendado.'),
       );
       throw err;
     }
@@ -113,9 +114,7 @@ export class TrabalhosService {
       );
     } catch (err: any) {
       this.#erroTrabalhos.set(
-        err.error?.message ??
-          err.message ??
-          'Falha ao alterar o trabalho agendado.',
+        mensagemDeErro(err, 'Falha ao alterar o trabalho agendado.'),
       );
       throw err;
     }
@@ -145,9 +144,7 @@ export class TrabalhosService {
       this.#execucoes.set(resposta);
     } catch (err: any) {
       this.#erroExecucoes.set(
-        err.error?.message ??
-          err.message ??
-          'Falha ao carregar execuções do trabalho.',
+        mensagemDeErro(err, 'Falha ao carregar execuções do trabalho.'),
       );
     } finally {
       this.#carregandoExecucoes.set(false);
@@ -164,9 +161,7 @@ export class TrabalhosService {
       this.#execucoes.set(resposta);
     } catch (err: any) {
       this.#erroExecucoes.set(
-        err.error?.message ??
-          err.message ??
-          'Falha ao carregar execuções do escritório.',
+        mensagemDeErro(err, 'Falha ao carregar execuções do escritório.'),
       );
     } finally {
       this.#carregandoExecucoes.set(false);
@@ -193,7 +188,7 @@ export class TrabalhosService {
       this.#lotes.set(resposta);
     } catch (err: any) {
       this.#erroLotes.set(
-        err.error?.message ?? err.message ?? 'Falha ao carregar consultas em lote.',
+        mensagemDeErro(err, 'Falha ao carregar consultas em lote.'),
       );
     } finally {
       this.#carregandoLotes.set(false);
@@ -212,7 +207,7 @@ export class TrabalhosService {
       return resposta;
     } catch (err: any) {
       this.#erroLotes.set(
-        err.error?.message ?? err.message ?? 'Falha ao criar consulta em lote.',
+        mensagemDeErro(err, 'Falha ao criar consulta em lote.'),
       );
       throw err;
     }
@@ -228,7 +223,7 @@ export class TrabalhosService {
       );
     } catch (err: any) {
       this.#erroLotes.set(
-        err.error?.message ?? err.message ?? 'Falha ao buscar consulta em lote.',
+        mensagemDeErro(err, 'Falha ao buscar consulta em lote.'),
       );
       throw err;
     }
@@ -244,7 +239,7 @@ export class TrabalhosService {
       );
     } catch (err: any) {
       this.#erroLotes.set(
-        err.error?.message ?? err.message ?? 'Falha ao carregar itens do lote.',
+        mensagemDeErro(err, 'Falha ao carregar itens do lote.'),
       );
       throw err;
     }

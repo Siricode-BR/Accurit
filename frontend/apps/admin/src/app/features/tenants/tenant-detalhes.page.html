@@ -17,7 +17,7 @@
       <span class="cabecalho__icone"><acc-icon name="building" /></span>
       <div class="cabecalho__texto">
         <h1 class="titulo">{{ t.nome }}</h1>
-        <p class="slug">{{ formatarCnpj(t.cnpj) }}</p>
+        <p class="tenant-cnpj">{{ formatarCnpj(t.cnpj) }}</p>
       </div>
       <acc-badge [status]="t.modoTrialSerpro ? 'warning' : 'success'">
         {{ t.modoTrialSerpro ? 'Trial SERPRO' : 'Produção' }}

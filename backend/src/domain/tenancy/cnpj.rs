@@ -47,49 +47,23 @@ fn todos_digitos_iguais(digitos: &str) -> bool {
 fn digitos_verificadores_validos(cnpj: &str) -> bool {
     let numeros: Vec<u32> = cnpj.bytes().map(|byte| u32::from(byte - b'0')).collect();
 
-    // Primeiro dígito verificador
-    let primeiro_peso: Vec<u32> = vec![2u32; 5]
-        .into_iter()
-        .chain(vec![3u32; 4])
-        .chain(vec![4u32; 3])
-        .chain(vec![5u32; 2])
-        .chain(std::iter::once(6u32))
-        .take(12)
-        .collect();
-
-    let soma1: u32 = numeros[..12]
-        .iter()
-        .enumerate()
-        .map(|(indice, digito)| digito * primeiro_peso[indice])
-        .sum();
-
-    let resto1 = (soma1 * 10) % 11;
-    let digito1 = if resto1 == 10 { 0 } else { resto1 };
-
-    if numeros[12] != digito1 {
+    let primeiro = calcular_digito_cnpj(&numeros[..12], &[5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+    if numeros[12] != primeiro {
         return false;
     }
 
-    // Segundo dígito verificador
-    let segundo_peso: Vec<u32> = vec![2u32; 6]
-        .into_iter()
-        .chain(vec![3u32; 5])
-        .chain(vec![4u32; 4])
-        .chain(vec![5u32; 3])
-        .chain(vec![6u32; 2])
-        .take(12)
-        .collect();
+    let segundo = calcular_digito_cnpj(&numeros[..13], &[6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+    numeros[13] == segundo
+}
 
-    let soma2: u32 = numeros[..12]
+fn calcular_digito_cnpj(digitos: &[u32], pesos: &[u32]) -> u32 {
+    let soma: u32 = digitos
         .iter()
-        .enumerate()
-        .map(|(indice, digito)| digito * segundo_peso[indice])
+        .zip(pesos)
+        .map(|(digito, peso)| digito * peso)
         .sum();
-
-    let resto2 = (soma2 * 10) % 11;
-    let digito2 = if resto2 == 10 { 0 } else { resto2 };
-
-    numeros[13] == digito2
+    let resto = soma % 11;
+    if resto < 2 { 0 } else { 11 - resto }
 }
 
 impl fmt::Display for Cnpj {
@@ -113,12 +87,12 @@ mod tests {
     #[test]
     fn aceita_cnpj_valido_com_e_sem_mascara() {
         assert_eq!(
-            Cnpj::novo("52998224725896").unwrap().como_str(),
-            "52998224725896"
+            Cnpj::novo("11222333000181").unwrap().como_str(),
+            "11222333000181"
         );
         assert_eq!(
-            Cnpj::novo("52.998.224/7258-96").unwrap().como_str(),
-            "52998224725896"
+            Cnpj::novo("11.222.333/0001-81").unwrap().como_str(),
+            "11222333000181"
         );
     }
 

@@ -28,11 +28,14 @@ CREATE INDEX idx_relatorios_criado_em ON relatorios(criado_em DESC);
 CREATE TABLE links_compartilhamento_relatorios (
     id UUID PRIMARY KEY,
     relatorio_id UUID NOT NULL REFERENCES relatorios(id) ON DELETE CASCADE,
-    token VARCHAR(64) NOT NULL UNIQUE,
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
     expira_em TIMESTAMPTZ NOT NULL,
+    max_acessos INTEGER NOT NULL DEFAULT 50 CHECK (max_acessos > 0),
+    acessos INTEGER NOT NULL DEFAULT 0 CHECK (acessos >= 0),
+    revogado_em TIMESTAMPTZ NULL,
     acessado_em TIMESTAMPTZ NULL,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_links_compartilhamento_relatorios_relatorio_id ON links_compartilhamento_relatorios(relatorio_id);
-CREATE INDEX idx_links_compartilhamento_relatorios_token ON links_compartilhamento_relatorios(token);
+CREATE INDEX idx_links_compartilhamento_relatorios_token_hash ON links_compartilhamento_relatorios(token_hash);
 CREATE INDEX idx_links_compartilhamento_relatorios_expira_em ON links_compartilhamento_relatorios(expira_em);

@@ -290,7 +290,7 @@ mod tests {
             .emitir_admin(&administrador(), Audiencia::Admin)
             .unwrap();
         let resultado = servico(900).validar(&token.token, Audiencia::Client);
-        eprintln!("SONDA: {resultado:?}");
+        assert!(resultado.is_err());
     }
 
     #[test]

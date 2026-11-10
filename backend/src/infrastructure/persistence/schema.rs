@@ -13,6 +13,7 @@ diesel::table! {
         falhas_consecutivas -> Int4,
         bloqueado_ate -> Nullable<Timestamptz>,
         criado_em -> Timestamptz,
+        atualizado_em -> Timestamptz,
     }
 }
 
@@ -566,8 +567,11 @@ diesel::table! {
         id -> Uuid,
         relatorio_id -> Uuid,
         #[max_length = 64]
-        token -> Varchar,
+        token_hash -> Varchar,
         expira_em -> Timestamptz,
+        max_acessos -> Int4,
+        acessos -> Int4,
+        revogado_em -> Nullable<Timestamptz>,
         acessado_em -> Nullable<Timestamptz>,
         criado_em -> Timestamptz,
     }

@@ -9,6 +9,7 @@ CREATE TABLE administradores (
     falhas_consecutivas INTEGER NOT NULL DEFAULT 0,
     bloqueado_ate TIMESTAMPTZ,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CHECK (cpf ~ '^[0-9]{11}$'),
     CHECK (email ~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$')
 );

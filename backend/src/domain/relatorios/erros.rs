@@ -8,6 +8,10 @@ pub enum ErroRelatorio {
     LinkNaoEncontrado,
     #[error("link de compartilhamento expirado")]
     LinkExpirado,
+    #[error("link de compartilhamento revogado")]
+    LinkRevogado,
+    #[error("limite de acessos do link atingido")]
+    LinkLimiteAtingido,
     #[error("tipo de relatório inválido: {0}")]
     TipoInvalido(String),
     #[error("formato de exportação inválido: {0}")]
@@ -24,6 +28,8 @@ impl ErroRelatorio {
             Self::RelatorioNaoEncontrado => "RELATORIO_NAO_ENCONTRADO",
             Self::LinkNaoEncontrado => "LINK_NAO_ENCONTRADO",
             Self::LinkExpirado => "LINK_EXPIRADO",
+            Self::LinkRevogado => "LINK_REVOGADO",
+            Self::LinkLimiteAtingido => "LINK_LIMITE_ATINGIDO",
             Self::TipoInvalido(_) => "TIPO_INVALIDO",
             Self::FormatoInvalido(_) => "FORMATO_INVALIDO",
             Self::Persistencia(_) => "PERSISTENCIA",

@@ -184,7 +184,7 @@ impl CriarLinkCompartilhamentoUseCase {
     pub async fn executar(
         &self,
         comando: ComandoCriarLink,
-    ) -> Result<LinkCompartilhamento, ErroRelatorio> {
+    ) -> Result<(LinkCompartilhamento, String), ErroRelatorio> {
         // Verifica se o relatório existe e pertence ao escritório.
         let _relatorio = self
             .relatorios
@@ -196,15 +196,20 @@ impl CriarLinkCompartilhamentoUseCase {
             return Err(ErroRelatorio::RelatorioNaoEncontrado);
         }
 
+        // Token opaco com alta entropia; o banco guarda apenas o hash.
+        let token = format!("{}{}", Uuid::now_v7().simple(), Uuid::now_v7().simple());
+        let max_acessos = comando.max_acessos.clamp(1, 1000);
         let link = self
             .links
             .criar(&NovoLinkCompartilhamento {
                 relatorio_id: comando.relatorio_id,
+                token_hash: crate::domain::relatorios::entidades::hash_token(&token),
                 expira_em: comando.expira_em,
+                max_acessos,
             })
             .await?;
 
-        Ok(link)
+        Ok((link, token))
     }
 }
 
@@ -231,6 +236,12 @@ impl ValidarLinkCompartilhamentoUseCase {
 
         if agora > link.expira_em {
             return Err(ErroRelatorio::LinkExpirado);
+        }
+        if link.revogado_em.is_some() {
+            return Err(ErroRelatorio::LinkRevogado);
+        }
+        if link.acessos >= link.max_acessos {
+            return Err(ErroRelatorio::LinkLimiteAtingido);
         }
 
         Ok(link)
@@ -299,8 +310,45 @@ impl AcessarRelatorioPorLinkUseCase {
         if agora > link.expira_em {
             return Err(ErroRelatorio::LinkExpirado);
         }
+        if link.revogado_em.is_some() {
+            return Err(ErroRelatorio::LinkRevogado);
+        }
+        if link.acessos >= link.max_acessos {
+            return Err(ErroRelatorio::LinkLimiteAtingido);
+        }
 
         Ok(link)
+    }
+}
+
+/// Revoga todos os links de compartilhamento de um relatório do escritório.
+pub struct RevogarLinksRelatorioUseCase {
+    links: Arc<dyn RepositorioLinksCompartilhamento>,
+    relatorios: Arc<dyn RepositorioRelatorios>,
+}
+
+impl RevogarLinksRelatorioUseCase {
+    pub fn novo(
+        links: Arc<dyn RepositorioLinksCompartilhamento>,
+        relatorios: Arc<dyn RepositorioRelatorios>,
+    ) -> Self {
+        Self { links, relatorios }
+    }
+
+    pub async fn executar(
+        &self,
+        relatorio_id: Uuid,
+        escritorio_id: Uuid,
+    ) -> Result<u64, ErroRelatorio> {
+        let relatorio = self
+            .relatorios
+            .buscar_por_id(relatorio_id)
+            .await?
+            .ok_or(ErroRelatorio::RelatorioNaoEncontrado)?;
+        if relatorio.escritorio_id != escritorio_id {
+            return Err(ErroRelatorio::RelatorioNaoEncontrado);
+        }
+        self.links.revogar_por_relatorio(relatorio_id).await
     }
 }
 
@@ -344,6 +392,8 @@ pub struct ComandoCriarLink {
     pub relatorio_id: Uuid,
     pub escritorio_id: Uuid,
     pub expira_em: DateTime<Utc>,
+    /// Limite de acessos do link (1..=1000; padrão 50).
+    pub max_acessos: i32,
 }
 
 /// Comando para listar relatórios (compatível com filtros futuros).

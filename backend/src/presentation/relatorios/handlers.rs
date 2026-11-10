@@ -145,16 +145,18 @@ pub async fn baixar_relatorio(
 pub async fn criar_link_compartilhamento(
     State(estado): State<EstadoRelatorios>,
     Extension(contexto): Extension<RequestContext>,
-    Path(_id): Path<Uuid>,
+    Path(id): Path<Uuid>,
     Json(requisicao): Json<CriarLinkCompartilhamentoRequest>,
 ) -> Result<Json<LinkCompartilhamentoDto>, ApiError> {
-    let _escritorio_id = contexto.escritorio_id.ok_or_else(ApiError::proibido)?;
+    let escritorio_id = contexto.escritorio_id.ok_or_else(ApiError::proibido)?;
 
-    let comando: crate::application::relatorios::use_cases::ComandoCriarLink = requisicao
+    let mut comando: crate::application::relatorios::use_cases::ComandoCriarLink = requisicao
         .try_into()
         .map_err(|e: String| ApiError::validacao(e))?;
+    comando.relatorio_id = id;
+    comando.escritorio_id = escritorio_id;
 
-    let link = estado
+    let (link, token) = estado
         .criar_link
         .executar(comando)
         .await
@@ -165,10 +167,30 @@ pub async fn criar_link_compartilhamento(
             _ => ApiError::erro_interno(),
         })?;
 
-    Ok(Json(LinkCompartilhamentoDto::from(link)))
+    Ok(Json(LinkCompartilhamentoDto::de_criacao(link, token)))
 }
 
-/// GET /relatorios/compartilhado/{token} — acessa um relatório via link público (somente leitura).
+/// DELETE /relatorios/{id}/compartilhamento - revoga todos os links do relatório.
+pub async fn revogar_links_compartilhamento(
+    State(estado): State<EstadoRelatorios>,
+    Extension(contexto): Extension<RequestContext>,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    let escritorio_id = contexto.escritorio_id.ok_or_else(ApiError::proibido)?;
+    estado
+        .revogar_links
+        .executar(id, escritorio_id)
+        .await
+        .map_err(|e| match e {
+            crate::domain::relatorios::erros::ErroRelatorio::RelatorioNaoEncontrado => {
+                ApiError::nao_encontrado("relatório")
+            }
+            _ => ApiError::erro_interno(),
+        })?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// GET /relatorios/compartilhado/{token} - acessa um relatório via link público (somente leitura).
 pub async fn obter_relatorio_por_link(
     State(estado): State<EstadoRelatorios>,
     Path(token): Path<String>,
@@ -184,6 +206,12 @@ pub async fn obter_relatorio_por_link(
             }
             crate::domain::relatorios::erros::ErroRelatorio::LinkExpirado => {
                 ApiError::nao_encontrado("link expirado")
+            }
+            crate::domain::relatorios::erros::ErroRelatorio::LinkRevogado => {
+                ApiError::nao_encontrado("link")
+            }
+            crate::domain::relatorios::erros::ErroRelatorio::LinkLimiteAtingido => {
+                ApiError::nao_encontrado("link")
             }
             _ => ApiError::erro_interno(),
         })?;

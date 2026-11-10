@@ -19,7 +19,6 @@ pub struct ErrorBody {
     pub code: String,
     pub message: String,
     pub request_id: String,
-    pub details: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -27,7 +26,6 @@ pub struct ApiError {
     status: StatusCode,
     code: &'static str,
     message: String,
-    details: Vec<String>,
     retry_after: Option<HeaderValue>,
 }
 
@@ -37,7 +35,6 @@ impl ApiError {
             status,
             code,
             message: message.into(),
-            details: Vec::new(),
             retry_after: None,
         }
     }
@@ -47,8 +44,9 @@ impl ApiError {
         self
     }
 
-    pub fn com_detalhe(mut self, detalhe: impl Into<String>) -> Self {
-        self.details.push(detalhe.into());
+    /// Detalhe técnico **nunca** vai para a resposta: fica apenas no log.
+    pub fn com_detalhe(self, detalhe: impl Into<String>) -> Self {
+        tracing::debug!(detalhe = %detalhe.into(), "detalhe interno de erro");
         self
     }
 
@@ -66,7 +64,6 @@ impl ApiError {
                 code: self.code.to_owned(),
                 message: self.message.clone(),
                 request_id: request_id.to_owned(),
-                details: self.details.clone(),
             },
         }
     }
@@ -216,13 +213,27 @@ impl ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        self.resposta("desconhecido")
+        let request_id = crate::presentation::middleware::request_id::atual()
+            .unwrap_or_else(|| "desconhecido".to_owned());
+        self.resposta(&request_id)
     }
 }
 
 impl From<axum::extract::rejection::JsonRejection> for ApiError {
     fn from(_: axum::extract::rejection::JsonRejection) -> Self {
         Self::invalid_json()
+    }
+}
+
+impl From<axum::extract::rejection::PathRejection> for ApiError {
+    fn from(_: axum::extract::rejection::PathRejection) -> Self {
+        Self::validacao("Parâmetro de rota inválido")
+    }
+}
+
+impl From<axum::extract::rejection::QueryRejection> for ApiError {
+    fn from(_: axum::extract::rejection::QueryRejection) -> Self {
+        Self::validacao("Parâmetros de consulta inválidos")
     }
 }
 
@@ -238,9 +249,19 @@ impl From<ProvisionarError> for ApiError {
                 crate::application::admin::RepositorioError::UsuarioExistente => {
                     Self::conflito("Já existe um usuário com este e-mail")
                 }
+                crate::application::admin::RepositorioError::AutoDesativacao
+                | crate::application::admin::RepositorioError::UltimoAdministradorAtivo => {
+                    Self::conflito("Operação não permitida para este administrador")
+                }
                 crate::application::admin::RepositorioError::Validacao(msg) => Self::validacao(msg),
             },
-            ProvisionarError::Validacao(msg) => Self::validacao(msg),
+            ProvisionarError::Validacao(msg) => {
+                if msg.contains("CNPJ") {
+                    Self::nova(StatusCode::UNPROCESSABLE_ENTITY, "VALIDACAO", msg)
+                } else {
+                    Self::validacao(msg)
+                }
+            }
             ProvisionarError::Senha => Self::erro_interno(),
         }
     }
@@ -292,6 +313,11 @@ impl From<crate::application::certificados::CertificadoError> for ApiError {
                 Self::erro_interno()
             }
             crate::application::certificados::CertificadoError::AcessoNegado => Self::proibido(),
+            crate::application::certificados::CertificadoError::TitularDivergente => Self::nova(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "VALIDACAO",
+                "O CNPJ do certificado A1 não corresponde ao CNPJ deste escritório",
+            ),
             crate::application::certificados::CertificadoError::Fingerprint(e) => {
                 Self::validacao(e.to_string())
             }
@@ -319,5 +345,42 @@ impl From<UsuarioError> for ApiError {
                 UsuarioRepoError::EscritorioInexistente => Self::nao_encontrado("escritório"),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn envelope_de_erro_nao_expoe_detalhes_nem_request_id_tecnico() {
+        let erro = ApiError::erro_interno();
+        let json = serde_json::to_string(&erro.envelope("req-123")).unwrap();
+        assert!(json.contains("\"code\":\"ERRO_INTERNO\""));
+        assert!(json.contains("\"requestId\":\"req-123\""));
+        assert!(json.contains("Erro interno inesperado"));
+        assert!(!json.contains("details"));
+        for proibido in [
+            "diesel",
+            "postgres",
+            "SELECT",
+            "constraint",
+            "panicked",
+            ".rs",
+            "localhost",
+            "reqwest",
+            "gateway.apiserpro",
+        ] {
+            assert!(!json.to_lowercase().contains(proibido));
+        }
+    }
+
+    #[test]
+    fn rejeicoes_de_extratores_viram_envelope_amigavel() {
+        let erro = ApiError::validacao("Par�metro de rota inv�lido");
+        assert_eq!(erro.status(), StatusCode::BAD_REQUEST);
+        let json = serde_json::to_string(&erro.envelope("req-1")).unwrap();
+        assert!(json.contains("VALIDACAO"));
+        assert!(!json.contains("details"));
     }
 }

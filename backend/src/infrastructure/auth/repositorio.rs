@@ -393,7 +393,7 @@ impl AdministradorRepositorio for RepositorioDiesel {
     ) -> Result<Option<Administrador>, RepositorioError> {
         let mut conexao = self.conexao()?;
         let resultado = diesel::sql_query(
-            "SELECT id, email, senha_hash, ativo, bloqueado_ate \
+            "SELECT id, nome, email, senha_hash, ativo, bloqueado_ate \
              FROM administradores WHERE id = $1",
         )
         .bind::<SqlUuid, _>(administrador_id)

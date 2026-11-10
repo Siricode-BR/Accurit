@@ -13,6 +13,7 @@ import { isValidDocument, sanitizeDocument } from '@accurit/shared';
 import { IntegraContadorService } from '../../../data/integra-contador.service';
 import { SerproAmbienteService } from '../../../data/serpro.ambiente.service';
 import { CATALOGO, VERBOS, VERBO_PADRAO } from '../integra-contador.catalogo';
+import { TrialMockPanelComponent } from '../../serpro/trial-mock-panel.component';
 import { VerboIntegraContador } from '../integra-contador.types';
 
 /**
@@ -25,7 +26,7 @@ import { VerboIntegraContador } from '../integra-contador.types';
 @Component({
   selector: 'app-integra-contador-consulta',
   standalone: true,
-  imports: [AccButtonComponent, AccCardComponent, AccDocumentFieldComponent, AccSelectComponent],
+  imports: [AccButtonComponent, AccCardComponent, AccDocumentFieldComponent, AccSelectComponent, TrialMockPanelComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './integra-contador-consulta.component.html',
   styleUrl: './integra-contador-consulta.component.css',

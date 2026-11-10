@@ -6,6 +6,7 @@ import {
   GuiaEmissaoDto,
   RequisicaoEmitirGuia,
 } from '@accurit/core';
+import { mensagemDeErro } from '../core/http/mensagem-erro';
 
 /**
  * Serviço de emissão de guias (FASE D).
@@ -35,7 +36,7 @@ export class GuiasService {
       this.#guias.set(resposta);
     } catch (err: any) {
       this.#erro.set(
-        err.error?.message ?? err.message ?? 'Falha ao carregar guias.',
+        mensagemDeErro(err, 'Falha ao carregar guias.'),
       );
     } finally {
       this.#carregando.set(false);
@@ -52,7 +53,7 @@ export class GuiasService {
       return guia;
     } catch (err: any) {
       this.#erro.set(
-        err.error?.message ?? err.message ?? 'Falha ao emitir guia.',
+        mensagemDeErro(err, 'Falha ao emitir guia.'),
       );
       throw err;
     }
@@ -65,7 +66,7 @@ export class GuiasService {
       );
     } catch (err: any) {
       this.#erro.set(
-        err.error?.message ?? err.message ?? 'Falha ao buscar guia.',
+        mensagemDeErro(err, 'Falha ao buscar guia.'),
       );
       throw err;
     }
@@ -85,7 +86,7 @@ export class GuiasService {
       return guia;
     } catch (err: any) {
       this.#erro.set(
-        err.error?.message ?? err.message ?? 'Falha ao baixar guia.',
+        mensagemDeErro(err, 'Falha ao baixar guia.'),
       );
       throw err;
     }

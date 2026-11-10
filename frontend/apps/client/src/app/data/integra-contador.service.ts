@@ -1,6 +1,7 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
+import { mensagemDeErro } from '../core/http/mensagem-erro';
 
 export type VerboIntegraContador = 'Consultar' | 'Declarar' | 'Emitir' | 'Apoiar' | 'Monitorar';
 
@@ -61,7 +62,7 @@ export class IntegraContadorService {
       this.#ultimoResultado.set(resposta);
     } catch (err: any) {
       this.#erro.set(
-        err.error?.message ?? err.message ?? 'Falha ao executar Integra Contador.'
+        mensagemDeErro(err, 'Falha ao executar Integra Contador.')
       );
       throw err;
     } finally {

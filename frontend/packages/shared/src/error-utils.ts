@@ -78,7 +78,9 @@ export function mensagemDeErro(
         // 5xx - indisponível
         // Em produção, NUNCA vazar stack, host ou detalhes técnicos
         // Apenas mostrar mensagem genérica + código de suporte
-        const requestId = (httpError as any)?.requestId;
+        const requestId =
+          (httpError as { error?: { requestId?: string } }).error?.requestId ??
+          (httpError as { requestId?: string }).requestId;
         if (requestId) {
           return `Serviço indisponível. Código de suporte: ${requestId}`;
         }

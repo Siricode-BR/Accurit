@@ -184,6 +184,7 @@ fn ambiente_mock(
     let ambiente = ambiente_com(|config| {
         config.serpro.integra_trial_url = url_base;
         config.serpro.trial_bearer_token = Some(SecretString::from(TOKEN_TRIAL));
+        config.serpro.trial_mock = false;
         ajustes(config);
     });
     (ambiente, mock)
@@ -195,12 +196,19 @@ fn ambiente_default(respostas: &[(u16, Option<Value>)]) -> (Ambiente, MockSerpro
 
 // ===== sementes =====
 
+fn cnpj_de_slug(slug: &str) -> String {
+    let valor = slug.bytes().fold(0u64, |acc, b| {
+        acc.wrapping_mul(31).wrapping_add(u64::from(b))
+    });
+    format!("{:014}", valor % 100_000_000_000_000)
+}
+
 fn semear_escritorio(banco: &BancoTemporario, slug: &str) -> Uuid {
     let mut conexao = banco.conexao();
     let id = Uuid::now_v7();
-    sql_query("INSERT INTO escritorios (id, slug, nome) VALUES ($1, $2, $3)")
+    sql_query("INSERT INTO escritorios (id, cnpj, nome) VALUES ($1, $2, $3)")
         .bind::<SqlUuid, _>(id)
-        .bind::<Text, _>(slug)
+        .bind::<Text, _>(cnpj_de_slug(slug))
         .bind::<Text, _>(format!("EscritÃ³rio {slug}"))
         .execute(&mut conexao)
         .expect("escritÃ³rio deve ser inserido");
@@ -239,10 +247,11 @@ fn semear_gestor(banco: &BancoTemporario) {
         .expect("hash deve ser gerado");
 
     sql_query(
-        "INSERT INTO administradores (id, email, cpf, senha_hash, ativo) \
-         VALUES ($1, $2, $3, $4, $5)",
+        "INSERT INTO administradores (id, nome, email, cpf, senha_hash, ativo) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
     )
     .bind::<SqlUuid, _>(Uuid::now_v7())
+    .bind::<Text, _>("Gestor de teste")
     .bind::<Text, _>(EMAIL_GESTOR)
     .bind::<Text, _>(CPF_OPERADOR)
     .bind::<Text, _>(hash)

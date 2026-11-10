@@ -9,6 +9,7 @@ import {
   RelatorioDto,
   RelatorioResumoDto,
 } from '@accurit/core';
+import { mensagemDeErro } from '../core/http/mensagem-erro';
 
 /**
  * Relatórios e link seguro de compartilhamento (Fase E).
@@ -38,7 +39,7 @@ export class RelatoriosService {
       this.#relatorios.set(resposta);
     } catch (err: any) {
       this.#erro.set(
-        err.error?.message ?? err.message ?? 'Falha ao carregar relatórios.',
+        mensagemDeErro(err, 'Falha ao carregar relatórios.'),
       );
     } finally {
       this.#carregando.set(false);
@@ -57,7 +58,7 @@ export class RelatoriosService {
       return relatorio;
     } catch (err: any) {
       this.#erro.set(
-        err.error?.message ?? err.message ?? 'Falha ao gerar relatório.',
+        mensagemDeErro(err, 'Falha ao gerar relatório.'),
       );
       throw err;
     }
@@ -72,7 +73,7 @@ export class RelatoriosService {
       );
     } catch (err: any) {
       this.#erro.set(
-        err.error?.message ?? err.message ?? 'Falha ao buscar relatório.',
+        mensagemDeErro(err, 'Falha ao buscar relatório.'),
       );
       throw err;
     }
@@ -88,7 +89,7 @@ export class RelatoriosService {
       return resposta;
     } catch (err: any) {
       this.#erro.set(
-        err.error?.message ?? err.message ?? 'Falha ao baixar relatório.',
+        mensagemDeErro(err, 'Falha ao baixar relatório.'),
       );
       throw err;
     }
@@ -109,7 +110,7 @@ export class RelatoriosService {
       return link;
     } catch (err: any) {
       this.#erro.set(
-        err.error?.message ?? err.message ?? 'Falha ao criar link de compartilhamento.',
+        mensagemDeErro(err, 'Falha ao criar link de compartilhamento.'),
       );
       throw err;
     }

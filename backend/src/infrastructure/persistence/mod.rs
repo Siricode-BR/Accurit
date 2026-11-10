@@ -3,6 +3,7 @@ pub mod certificados;
 pub mod clientes;
 pub mod guias;
 pub mod integra_contador;
+pub mod lgpd;
 pub mod migrations;
 pub mod notificacoes;
 pub mod pool;

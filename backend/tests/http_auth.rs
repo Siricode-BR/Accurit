@@ -101,10 +101,11 @@ fn semear_backoffice(banco: &BancoTemporario, ativo: bool) {
 
     let mut conexao = banco.conexao();
     sql_query(
-        "INSERT INTO administradores (id, email, cpf, senha_hash, ativo) \
-         VALUES ($1, $2, $3, $4, $5)",
+        "INSERT INTO administradores (id, nome, email, cpf, senha_hash, ativo) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
     )
     .bind::<SqlUuid, _>(Uuid::now_v7())
+    .bind::<Text, _>("Gestor de teste")
     .bind::<Text, _>(EMAIL_GESTOR)
     .bind::<Text, _>("52998224725")
     .bind::<Text, _>(hash)
@@ -580,7 +581,7 @@ async fn login_do_portal_identifica_o_escritorio_apenas_pelo_email() {
         "/api/v1/auth/client/login",
         Some(json!({
             "escritorio": "52998224725896",
-            "email": "  Cliente@Alfa.Test ",
+            "email": "  Cliente@52998224725896.Test ",
             "senha": SENHA,
         })),
         &[],

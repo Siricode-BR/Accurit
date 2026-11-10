@@ -41,6 +41,10 @@ pub trait RepositorioLinksCompartilhamento: Send + Sync {
         token: &str,
     ) -> Result<Option<LinkCompartilhamento>, ErroRelatorio>;
     async fn registrar_acesso(&self, id: Uuid) -> Result<(), ErroRelatorio>;
+    /// Revoga todos os links de um relatório.
+    async fn revogar_por_relatorio(&self, relatorio_id: Uuid) -> Result<u64, ErroRelatorio>;
+    /// Revoga um link; devolve `false` quando ele não existe.
+    async fn revogar(&self, id: Uuid) -> Result<bool, ErroRelatorio>;
     async fn listar_expirados(
         &self,
         agora: chrono::DateTime<chrono::Utc>,

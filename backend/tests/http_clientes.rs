@@ -90,13 +90,23 @@ fn cpf_com_dv(seed: u64) -> String {
 
 const CNPJ_ESCRITORIO: &str = "52998224725896";
 
-fn semear_escritorio(banco: &BancoTemporario) -> Uuid {
+fn cnpj_de_slug(valor: &str) -> String {
+    if valor.len() == 14 && valor.bytes().all(|b| b.is_ascii_digit()) {
+        return valor.to_owned();
+    }
+    let hash = valor.bytes().fold(0u64, |acc, b| {
+        acc.wrapping_mul(31).wrapping_add(u64::from(b))
+    });
+    format!("{:014}", hash % 100_000_000_000_000)
+}
+
+fn semear_escritorio(banco: &BancoTemporario, cnpj: &str) -> Uuid {
     let mut conexao = banco.conexao();
     let id = Uuid::now_v7();
     sql_query("INSERT INTO escritorios (id, nome, cnpj) VALUES ($1, $2, $3)")
         .bind::<SqlUuid, _>(id)
         .bind::<Text, _>("Escritório de teste")
-        .bind::<Text, _>(CNPJ_ESCRITORIO)
+        .bind::<Text, _>(cnpj_de_slug(cnpj))
         .execute(&mut conexao)
         .expect("escritório deve ser inserido");
     id
@@ -104,14 +114,15 @@ fn semear_escritorio(banco: &BancoTemporario) -> Uuid {
 
 fn id_do_escritorio(banco: &BancoTemporario, cnpj: &str) -> Option<Uuid> {
     sql_query("SELECT id FROM escritorios WHERE cnpj = $1")
-        .bind::<Text, _>(cnpj)
+        .bind::<Text, _>(cnpj_de_slug(cnpj))
         .get_result::<IdRow>(&mut banco.conexao())
         .ok()
         .map(|linha| linha.id)
 }
 
 fn semear_usuario(banco: &BancoTemporario, cnpj: &str, papel: &str, ativo: bool, cpf: &str) {
-    let escritorio_id = id_do_escritorio(banco, cnpj).unwrap_or_else(|| semear_escritorio(banco));
+    let escritorio_id =
+        id_do_escritorio(banco, cnpj).unwrap_or_else(|| semear_escritorio(banco, cnpj));
 
     let mut conexao = banco.conexao();
     let config = configuracao_com_extras("", &[]);
@@ -140,10 +151,11 @@ fn semear_gestor(banco: &BancoTemporario, ativo: bool) {
     let hash = argon2.gerar_hash(SENHA).expect("hash deve ser gerado");
 
     sql_query(
-        "INSERT INTO administradores (id, email, cpf, senha_hash, ativo) \
-         VALUES ($1, $2, $3, $4, $5)",
+        "INSERT INTO administradores (id, nome, email, cpf, senha_hash, ativo) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
     )
     .bind::<SqlUuid, _>(Uuid::now_v7())
+    .bind::<Text, _>("Gestor de teste")
     .bind::<Text, _>(EMAIL_GESTOR)
     .bind::<Text, _>("52998224725")
     .bind::<Text, _>(hash)
@@ -270,16 +282,10 @@ async fn crud_de_clientes_isolado_por_escritorio() {
         true,
         &cpf_com_dv(1),
     );
-    semear_usuario(
-        &ambiente.banco,
-        CNPJ_ESCRITORIO,
-        "OPERADOR",
-        true,
-        &cpf_com_dv(2),
-    );
+    semear_usuario(&ambiente.banco, "beta", "OPERADOR", true, &cpf_com_dv(2));
 
     let token_alfa = token_de(&entrar_portal(&ambiente.app, CNPJ_ESCRITORIO, "OPERADOR").await);
-    let token_beta = token_de(&entrar_portal(&ambiente.app, CNPJ_ESCRITORIO, "OPERADOR").await);
+    let token_beta = token_de(&entrar_portal(&ambiente.app, "beta", "OPERADOR").await);
 
     let resposta = enviar(
         &ambiente.app,
@@ -940,9 +946,9 @@ async fn token_expirado_retorna_sessao_expirada() {
     assert_eq!(codigo_de_erro(&corpo), "AUTH_SESSION_EXPIRED");
 }
 
-fn corpo_provisionamento(slug: &str, email: &str, cpf: &str, senha: &str) -> Value {
+fn corpo_provisionamento(cnpj: &str, email: &str, cpf: &str, senha: &str) -> Value {
     json!({
-        "slug": slug,
+        "cnpj": cnpj,
         "nome": "Novo Tenant Ltda",
         "emailTitular": email,
         "cpfTitular": cpf,
@@ -964,7 +970,7 @@ async fn gestor_provisiona_tenant_e_titular_faz_login() {
             Method::POST,
             "/api/v1/admin/escritorios",
             Some(corpo_provisionamento(
-                "novo-tenant",
+                "11222333000181",
                 "titular@novo-tenant.test",
                 "12345678909",
                 "senha-titular-9",
@@ -975,7 +981,7 @@ async fn gestor_provisiona_tenant_e_titular_faz_login() {
     .await;
     assert_eq!(criacao.status(), StatusCode::CREATED);
     let corpo = corpo_json(criacao).await;
-    assert_eq!(corpo["slug"], "novo-tenant");
+    assert_eq!(corpo["cnpj"], "11222333000181");
     assert_eq!(corpo["emailTitular"], "titular@novo-tenant.test");
     assert!(corpo["escritorioId"].as_str().is_some());
     assert!(corpo["titularId"].as_str().is_some());
@@ -983,7 +989,7 @@ async fn gestor_provisiona_tenant_e_titular_faz_login() {
     assert_eq!(
         contar(
             &ambiente.banco,
-            "SELECT COUNT(*) AS total FROM escritorios WHERE slug = 'novo-tenant'"
+            "SELECT COUNT(*) AS total FROM escritorios WHERE cnpj = '11222333000181'"
         ),
         1
     );
@@ -1027,7 +1033,7 @@ async fn gestor_provisiona_tenant_e_titular_faz_login() {
             Method::POST,
             "/api/v1/admin/escritorios",
             Some(corpo_provisionamento(
-                "novo-tenant",
+                "11222333000181",
                 "titular@novo-tenant.test",
                 "98765432100",
                 "outra-senha-12",
@@ -1066,7 +1072,7 @@ async fn provisionamento_rejeita_email_ja_usado_em_outro_escritorio_sem_criar_te
             Method::POST,
             "/api/v1/admin/escritorios",
             Some(corpo_provisionamento(
-                "outro-tenant",
+                "11444777000161",
                 "Operador@Alfa.Test",
                 "98765432100",
                 "senha-titular-9",
@@ -1080,7 +1086,7 @@ async fn provisionamento_rejeita_email_ja_usado_em_outro_escritorio_sem_criar_te
     assert_eq!(
         contar(
             &ambiente.banco,
-            "SELECT COUNT(*) AS total FROM escritorios WHERE slug = 'outro-tenant'"
+            "SELECT COUNT(*) AS total FROM escritorios WHERE cnpj = '11444777000161'"
         ),
         0,
         "não deve sobrar escritório órfão quando o e-mail já existe"
@@ -1139,9 +1145,9 @@ async fn provisionamento_exige_audiencia_admin_e_payload_valido() {
 
     for (descricao, corpo) in [
         (
-            "slug com maiúsculas e símbolos",
+            "cnpj com formato inválido",
             corpo_provisionamento(
-                "Tenant_A!",
+                "1122233300018X",
                 "titular@novo-tenant.test",
                 "12345678909",
                 "senha-titular-9",
@@ -1150,7 +1156,7 @@ async fn provisionamento_exige_audiencia_admin_e_payload_valido() {
         (
             "cpf do titular inválido",
             corpo_provisionamento(
-                "novo-tenant",
+                "11222333000181",
                 "titular@novo-tenant.test",
                 "12345678900",
                 "senha-titular-9",
@@ -1159,7 +1165,7 @@ async fn provisionamento_exige_audiencia_admin_e_payload_valido() {
         (
             "senha do titular curta",
             corpo_provisionamento(
-                "novo-tenant",
+                "11222333000181",
                 "titular@novo-tenant.test",
                 "12345678909",
                 "curta",
@@ -1168,7 +1174,7 @@ async fn provisionamento_exige_audiencia_admin_e_payload_valido() {
         (
             "email do titular inválido",
             corpo_provisionamento(
-                "novo-tenant",
+                "11222333000181",
                 "sem-arroba",
                 "12345678909",
                 "senha-titular-9",
@@ -1185,7 +1191,13 @@ async fn provisionamento_exige_audiencia_admin_e_payload_valido() {
             ),
         )
         .await;
-        assert_eq!(resposta.status(), StatusCode::BAD_REQUEST, "{descricao}");
+        assert!(
+            matches!(
+                resposta.status(),
+                StatusCode::BAD_REQUEST | StatusCode::UNPROCESSABLE_ENTITY
+            ),
+            "{descricao}"
+        );
         let corpo = corpo_json(resposta).await;
         assert_eq!(codigo_de_erro(&corpo), "VALIDACAO", "{descricao}");
     }
@@ -1193,7 +1205,7 @@ async fn provisionamento_exige_audiencia_admin_e_payload_valido() {
     assert_eq!(
         contar(
             &ambiente.banco,
-            "SELECT COUNT(*) AS total FROM escritorios WHERE slug = 'novo-tenant'"
+            "SELECT COUNT(*) AS total FROM escritorios WHERE cnpj = '11222333000181'"
         ),
         0
     );

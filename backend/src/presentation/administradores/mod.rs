@@ -37,6 +37,8 @@ pub struct AdministradorAtualizarRequest {
     pub nome: Option<String>,
     #[serde(default)]
     pub email: Option<String>,
+    #[serde(default)]
+    pub ativo: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -90,6 +92,8 @@ pub struct ListaAdministradoresQuery {
     pub page: Option<usize>,
     #[serde(default)]
     pub page_size: Option<usize>,
+    #[serde(default)]
+    pub q: Option<String>,
 }
 
 /// Erros de autorização específicos desta rota.
@@ -104,8 +108,17 @@ fn erro_repositorio(erro: RepositorioError) -> ApiError {
     match erro {
         RepositorioError::Indisponivel => ApiError::indisponivel(),
         RepositorioError::Validacao(msg) => ApiError::validacao(msg),
-        RepositorioError::EscritorioExistente | RepositorioError::UsuarioExistente => {
-            ApiError::conflito("Registro já existe")
+        RepositorioError::EscritorioExistente => {
+            ApiError::conflito("Escritório com este CNPJ já existe")
+        }
+        RepositorioError::UsuarioExistente => {
+            ApiError::conflito("Já existe um administrador com este e-mail")
+        }
+        RepositorioError::AutoDesativacao => {
+            ApiError::conflito("Você não pode desativar o seu próprio acesso")
+        }
+        RepositorioError::UltimoAdministradorAtivo => {
+            ApiError::conflito("Não é possível desativar o último administrador ativo")
         }
         RepositorioError::Dados => ApiError::erro_interno(),
     }
@@ -142,7 +155,7 @@ async fn listar(
     let por_pagina = params.page_size.unwrap_or(POR_PAGINA_PADRAO);
     let (itens, total) = estado
         .gestao
-        .listar(pagina, por_pagina)
+        .listar(pagina, por_pagina, params.q.as_deref())
         .await
         .map_err(erro_repositorio)?;
 
@@ -182,32 +195,17 @@ async fn criar(
 ) -> Result<Response, ApiError> {
     exigir_admin(&context)?;
 
-    // Unicidade de e-mail antes de tocar no banco gera 409 determinístico.
-    if estado
-        .gestao
-        .buscar_por_email(&payload.email)
-        .await
-        .map_err(erro_repositorio)?
-        .is_some()
-    {
-        return Err(ApiError::conflito("Administrador já existe"));
-    }
-
     let novo = crate::application::admin::AdministradorNovo {
         nome: payload.nome,
         email: payload.email,
         cpf: payload.cpf,
         senha: payload.senha,
     };
-    let _id = estado.gestao.criar(&novo).await.map_err(erro_repositorio)?;
-
-    // O registro criado é lido pelo e-mail para respostar com o estado real.
     let dto = estado
         .gestao
-        .buscar_por_email(&novo.email)
+        .criar(&novo, context.usuario_id, context.ip)
         .await
-        .map_err(erro_repositorio)?
-        .ok_or_else(ApiError::erro_interno)?;
+        .map_err(erro_repositorio)?;
 
     Ok((StatusCode::CREATED, Json(AdministradorResponse::from(dto))).into_response())
 }
@@ -223,10 +221,11 @@ async fn atualizar(
     let mudancas = crate::application::admin::AdministradorAtualizar {
         nome: payload.nome,
         email: payload.email,
+        ativo: payload.ativo,
     };
     let dto = estado
         .gestao
-        .atualizar(&id, &mudancas)
+        .atualizar(&id, &mudancas, context.usuario_id, context.ip)
         .await
         .map_err(erro_repositorio)?;
 
@@ -243,7 +242,7 @@ async fn alterar_senha(
 
     let dto = estado
         .gestao
-        .alterar_senha(&id, &payload.senha)
+        .alterar_senha(&id, &payload.senha, context.usuario_id, context.ip)
         .await
         .map_err(erro_repositorio)?;
 

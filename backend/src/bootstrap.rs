@@ -445,8 +445,9 @@ mod tests {
                 .expect_err("deve exigir senha forte");
         assert!(erro.to_string().contains(VARIAVEL_SENHA_ADMIN));
 
-        let erro = AdministradorOpcoes::parse(&args(&[]), "senha-forte-123".into())
-            .expect_err("deve exigir email");
+        let erro =
+            AdministradorOpcoes::parse(&args(&["--nome", "Gestor Demo"]), "senha-forte-123".into())
+                .expect_err("deve exigir email");
         assert!(erro.to_string().contains("--email"));
 
         let opcoes = AdministradorOpcoes::parse(
@@ -469,7 +470,7 @@ mod tests {
         let erro = TenantOpcoes::parse(
             &args(&[
                 "--escritorio-cnpj",
-                "52998224725896",
+                "11222333000181",
                 "--escritorio-nome",
                 "Demo",
                 "--email",
@@ -485,7 +486,7 @@ mod tests {
         let erro_admin = TenantOpcoes::parse(
             &args(&[
                 "--escritorio-cnpj",
-                "52998224725896",
+                "11222333000181",
                 "--escritorio-nome",
                 "Demo",
                 "--email",
@@ -506,7 +507,7 @@ mod tests {
         let opcoes = TenantOpcoes::parse(
             &args(&[
                 "--escritorio-cnpj",
-                "52998224725896",
+                "11222333000181",
                 "--escritorio-nome",
                 "Demo",
                 "--email",
@@ -519,13 +520,13 @@ mod tests {
             "senha-forte-123".into(),
         )
         .expect("opções válidas");
-        assert_eq!(opcoes.escritorio_cnpj.como_str(), "52998224725896");
+        assert_eq!(opcoes.escritorio_cnpj.como_str(), "11222333000181");
         assert_eq!(opcoes.papel, Papel::Operador);
     }
 
     #[test]
     fn valida_cnpj_e_email() {
-        assert!(cnpj_valido("52998224725896"));
+        assert!(cnpj_valido("11222333000181"));
         assert!(!cnpj_valido("12345678901234"));
         assert!(!cnpj_valido("11111111111111"));
         assert!(email_valido("a@b.co"));

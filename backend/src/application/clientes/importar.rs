@@ -21,7 +21,9 @@ use crate::domain::clientes::{Cliente, CpfCnpj, NovoCliente, PorteRegime, TipoCl
 /// Exige tipo, documento e nome mapeados no cabeçalho.
 fn campos_essenciais_mapeados(ordens: &[Option<(&'static str, usize)>]) -> bool {
     let mapeados: Vec<&str> = ordens.iter().flatten().map(|(c, _)| *c).collect();
-    mapeados.contains(&"tipo") && mapeados.contains(&"cpf_cnpj") && mapeados.contains(&"nome")
+    mapeados.contains(&"tipo")
+        && mapeados.contains(&"cpf_cnpj")
+        && mapeados.iter().any(|campo| COL_NOME.contains(campo))
 }
 
 /// Quantidade máxima de linhas aceitas por importação.

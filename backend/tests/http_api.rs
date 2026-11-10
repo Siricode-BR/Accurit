@@ -144,7 +144,7 @@ async fn health_retorna_503_com_envelope_quando_banco_falha() {
     let corpo = corpo_json(resposta).await;
     assert_eq!(corpo["error"]["code"], "BANCO_INDISPONIVEL");
     assert_eq!(corpo["error"]["requestId"], id);
-    assert!(corpo["error"]["details"].is_array());
+    assert!(corpo["error"].get("details").is_none());
     assert_eq!(corpo["status"], "unavailable");
     assert_eq!(corpo["db"], "unavailable");
 }
@@ -271,4 +271,46 @@ async fn limite_de_requisicoes_retorna_429_e_health_e_isento() {
         .await
         .expect("router deve responder");
     assert_eq!(resposta.status(), StatusCode::OK);
+}
+#[tokio::test]
+async fn erros_saem_no_envelope_amigavel_sem_vazar_internos() {
+    let banco = common::BancoTemporario::novo();
+    let pool = pool_do_banco(&banco);
+    let config = configuracao("");
+    let app = app(false, &config, pool);
+
+    let casos = [
+        (Method::GET, "/api/v1/nao-existe"),
+        (Method::POST, "/api/v1/health"),
+        (Method::GET, "/api/v1/health"),
+    ];
+
+    for (metodo, caminho) in casos {
+        let resposta = app.clone().oneshot(pedido(metodo, caminho)).await.unwrap();
+        assert!(resposta.status().is_client_error() || resposta.status().is_server_error());
+        let id = request_id(&resposta);
+        let corpo = corpo_json(resposta).await;
+        let texto = corpo.to_string().to_lowercase();
+        assert_eq!(corpo["error"]["requestId"], id.as_str());
+        assert!(corpo["error"]["code"].as_str().is_some());
+        assert!(corpo["error"]["message"].as_str().is_some());
+        assert!(corpo["error"].get("details").is_none());
+        for proibido in [
+            "diesel",
+            "postgres",
+            "select",
+            "constraint",
+            "panicked",
+            ".rs",
+            "localhost",
+            "reqwest",
+            "gateway.apiserpro",
+            "sql",
+        ] {
+            assert!(
+                !texto.contains(proibido),
+                "resposta vazou {proibido}: {texto}"
+            );
+        }
+    }
 }

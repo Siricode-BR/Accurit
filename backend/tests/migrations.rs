@@ -51,11 +51,18 @@ fn inserir_escritorio(
     slug: &str,
     cnpj: Option<&str>,
 ) -> diesel::QueryResult<usize> {
-    sql_query("INSERT INTO escritorios (id, slug, nome, cnpj) VALUES ($1, $2, $3, $4)")
+    // O identificador fiscal é o CNPJ; `slug` sobrevive apenas como rótulo
+    // de teste para gerar um CNPJ determinístico quando não informado.
+    let cnpj = cnpj.map(ToOwned::to_owned).unwrap_or_else(|| {
+        let valor = slug.bytes().fold(0u64, |acc, b| {
+            acc.wrapping_mul(31).wrapping_add(u64::from(b))
+        });
+        format!("{:014}", valor % 100_000_000_000_000)
+    });
+    sql_query("INSERT INTO escritorios (id, nome, cnpj) VALUES ($1, $2, $3)")
         .bind::<SqlUuid, _>(id)
-        .bind::<Text, _>(slug)
         .bind::<Text, _>("Escritório de teste")
-        .bind::<Nullable<Text>, _>(cnpj)
+        .bind::<Text, _>(cnpj)
         .execute(conexao)
 }
 
@@ -211,12 +218,18 @@ fn valida_constraints_do_schema() {
         .expect("escritório válido deve ser inserido");
 
     assert!(
-        inserir_escritorio(&mut conexao, Uuid::now_v7(), "alfa", None).is_err(),
-        "slug duplicado deve falhar"
+        inserir_escritorio(&mut conexao, Uuid::now_v7(), "alfa", Some("12345678000199")).is_err(),
+        "CNPJ duplicado deve falhar"
     );
     assert!(
-        inserir_escritorio(&mut conexao, Uuid::now_v7(), "Maiúsculo", None).is_err(),
-        "slug com caractere inválido deve falhar"
+        inserir_escritorio(
+            &mut conexao,
+            Uuid::now_v7(),
+            "Maiúsculo",
+            Some("1234567800019X")
+        )
+        .is_err(),
+        "CNPJ com caractere inválido deve falhar"
     );
     assert!(
         inserir_escritorio(&mut conexao, Uuid::now_v7(), "beta", Some("123")).is_err(),
@@ -548,8 +561,8 @@ fn inserir_administrador(
     cpf: &str,
 ) -> diesel::QueryResult<usize> {
     sql_query(
-        "INSERT INTO administradores (id, email, cpf, senha_hash) \
-         VALUES ($1, $2, $3, 'hash-de-teste')",
+        "INSERT INTO administradores (id, nome, email, cpf, senha_hash) \
+         VALUES ($1, 'Gestor de teste', $2, $3, 'hash-de-teste')",
     )
     .bind::<SqlUuid, _>(id)
     .bind::<Text, _>(email)

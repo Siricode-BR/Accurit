@@ -8,6 +8,18 @@ use axum::middleware::Next;
 use axum::response::Response;
 use uuid::Uuid;
 
+tokio::task_local! {
+    /// Request-id da requisição corrente. Handlers que convertem `ApiError`
+    /// em resposta (`?`) não recebem as extensões da requisição, então o
+    /// request-id é propagado por task-local para o envelope de erro.
+    pub static REQUEST_ID_ATUAL: String;
+}
+
+/// Request-id da requisição em processamento, quando disponível.
+pub fn atual() -> Option<String> {
+    REQUEST_ID_ATUAL.try_with(Clone::clone).ok()
+}
+
 pub const HEADER_REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
 const TAMANHO_MINIMO: usize = 8;
 const TAMANHO_MAXIMO: usize = 64;
@@ -54,7 +66,9 @@ pub async fn middleware(mut request: Request, next: Next) -> Response {
         .extensions_mut()
         .insert(RequestId::novo(request_id.clone()));
 
-    let mut resposta = next.run(request).await;
+    let mut resposta = REQUEST_ID_ATUAL
+        .scope(request_id.clone(), async move { next.run(request).await })
+        .await;
 
     if let Ok(valor) = HeaderValue::from_str(&request_id) {
         resposta.headers_mut().insert(HEADER_REQUEST_ID, valor);

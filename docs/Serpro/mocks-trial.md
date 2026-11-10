@@ -1,184 +1,70 @@
-# MOCKs do SERPRO em Ambiente TRIAL
+# Mocks do SERPRO em Trial
 
-## Configuração
+O simulador é controlado por `SERPRO_TRIAL_MOCK` e **só** pode ser usado quando o
+ambiente efetivo do escritório é `TRIAL`.
 
-O ambiente de mock do SERPRO é ativado pela combinação de duas variáveis de ambiente:
+- Padrão: `true` quando `SERPRO_TRIAL_BEARER_TOKEN` está ausente; `false` quando o token
+  está presente.
+- `SERPRO_TRIAL_MOCK=false` desliga o simulador mesmo em Trial.
+- Em `PRODUCAO` o simulador nunca é usado, independentemente da variável
+  (`infrastructure::serpro::mock::mock_ativo` garante isso e há teste unitário).
 
-- `SERPRO_TRIAL_BEARER_TOKEN`: Se ausente, o mock está ativo (`SERPRO_TRIAL_MOCK=true`). Se presente, o mock está desativado (`SERPRO_TRIAL_MOCK=false`).
-- `SERPRO_TRIAL_MOCK`: Define explicitamente se o mock deve ser usado. Padrão: `true` quando `SERPRO_TRIAL_BEARER_TOKEN` não está definido.
+As respostas são determinísticas e derivadas do **último dígito** do documento
+(CPF/CNPJ do devedor, do contribuinte ou do número da inscrição).
 
-**Exemplo .env:**
+## Dívida Ativa (`GET /devedor/{documento}` e `GET /inscricao/{numero}`)
 
-```
-SERPRO_TRIAL_BEARER_TOKEN=  # Deixa em branco ou remove para ativar mock
-SERPRO_TRIAL_MOCK=true
-```
+| Último dígito | Resultado | HTTP/código observável no portal |
+| --- | --- | --- |
+| 0–1 | Com pendências (duas inscrições simuladas) | 200 `COM_PENDENCIAS` |
+| 2–3 | Sem pendências | 200 `SEM_PENDENCIAS` |
+| 4 | Não encontrado | 404 `SERPRO_NOT_FOUND` |
+| 5 | Procuração/acesso negado | 403 `SERPRO_PROXY_DENIED` |
+| 6 | Limite excedido | 429 `SERPRO_RATE_LIMITED` |
+| 7 | Indisponível | 503 `SERPRO_UNAVAILABLE` |
+| 8 | Indeterminado (sem retry) | 504 `SERPRO_INDETERMINATE` |
+| 9 | Resposta inválida | 502 `SERPRO_BAD_RESPONSE` |
 
-**Exemplo docker-compose.yml:**
+## Integra Contador / Procurações
 
-```yaml
-environment:
-  SERPRO_TRIAL_MOCK: true
-```
+| Último dígito | Resultado |
+| --- | --- |
+| 0–3, 5 | Execução concluída; `dados` contém `{"origem":"MOCK", ...}` |
+| 4 | `403 ACESSO_NEGADO` (OBTERPROCURACAO41/autenticar) |
+| 6 | `429 LIMITE_EXCEDIDO` |
+| 7 | `503 INDISPONIVEL` |
+| 8 | `504 INDETERMINADO` |
+| 9 | `502 RESPOSTA_INVALIDA` |
 
-## Cenários Disponíveis
+O `ENVIOXMLASSINADO81` é simulado sem certificado A1 real e sem mTLS; devolve um
+`jwt_procurador` fictício válido até a meia-noite seguinte. Nenhuma resposta contém
+segredos, certificados ou URLs internas.
 
-Os mocks retornam respostas determinísticas baseadas no último dígito do documento fornecido (CPF/CNPJ/Inscrição). Cada cenário tem um resultado esperado definido:
+## Endpoint de cenários
 
-| Últ. dígito | Cenário Dívida Ativa | Cenário Integra Contador | Resultado |
-| ------------- | --------------------- | ------------------------- | ----------- |
-| 0, 1, 2 | Sem pendências | Sucesso (consulta) | SUCESSO |
-| 3, 4 | Com pendências | Consulta sucesso | SUCESSO |
-| 5, 6 | Não encontrado | Não encontrado | NAO_ENCONTRADO |
-| 7, 8 | Acesso negado | Acesso negado (sem certificado) | ACESSO_NEGADO |
-| 9 | Limite excedido | Limite excedido | LIMITE_EXCEDIDO |
-| 9 (var.) | - | Indisponível | INDISPONIVEL |
-| 9 (var.) | - | ENVIOXMLASSINADO81 | SUCESSO |
-| 9 (var.) | - | OBTERPROCURACAO41 | SUCESSO |
-
-## Cenários Detalhados
-
-### Dívida Ativa
-
-| Cenário | Descrição | Código Result | Quando ocorrer |
-| --------- | ----------- | -------------- | ---------------- |
-| **Sem pendências** | Devedor com inscrição regular, sem protestos ou penhoras | SUCESSO | Últimos dígitos 0, 1, 2 |
-| **Com pendências** | Devedor com protestos ou penhoras ativos | SUCESSO | Últimos dígitos 3, 4 |
-| **Não encontrado** | Inscrição/devedor não encontrado na base | NAO_ENCONTRADO | Últimos dígitos 5, 6 |
-| **Acesso negado** | Procuração negada ou inválida | ACESSO_NEGADO | Últimos dígitos 7, 8 |
-| **Limite excedido** | Limite de consultas mensais excedido | LIMITE_EXCEDIDO | Último dígito 9 |
-
-### Integra Contador
-
-| Cenário | Descrição | Código Result | Quando ocorrer |
-| --------- | ----------- | -------------- | ---------------- |
-| **Sucesso (consulta)** | Consulta realizada com sucesso | SUCESSO | Último dígito 0, 1 |
-| **Não encontrado** | Procuração ou inscrição não encontrada | NAO_ENCONTRADO | Último dígito 2 |
-| **Acesso negado** | Procuração negada - certificado A1 inválido ou inexistente | ACESSO_NEGADO | Último dígito 3 |
-| **Limite excedido** | Limite de chamadas/mês excedido | LIMITE_EXCEDIDO | Último dígito 4 |
-| **Indisponível** | Serviço temporariamente indisponível | INDISPONIVEL | Último dígito 5 |
-| **ENVIOXMLASSINADO81** | XML assinado (simulado) enviado com sucesso | SUCESSO | Último dígito 6 |
-| **OBTERPROCURACAO41** | Procuração encontrada e validada com sucesso | SUCESSO | Último dígito 7 |
-| **Resposta inválida** | Resposta do serviço inválida | RESPOSTA_INVALIDA | Último dígito >= 8 (default) |
-
-## Uso no Frontend
-
-### Banner "Ambiente Trial — respostas simuladas"
-
-Quando o ambiente for TRIAL e o mock estiver ativo, exibir um banner no cliente:
-
-```
-┌─────────────────────────────────────────┐
-│ AVISO: Ambiente Trial — respostas simuladas │
-│ As respostas dos serviços SERPRO são simuladas. │
-│ Para produção, configure credenciais reais. │
-└─────────────────────────────────────────┘
-```
-
-### Painel "Cenários de teste"
-
-Nas telas de consulta (Dívida Ativa, Integra Contador e detalhes do cliente), exibir um painel/drawer com:
-
-1. Seleção de cenário (ou aleatório)
-2. Botão "Usar documento" que preenche o campo de documento com o documento de exemplo do cenário selecionado
-3. Selo "Simulado" nos resultados
-
-### Serviço `trial-mock.service.ts` (frontend)
-
-Serviço centralizado que:
-
-1. Verifica se o ambiente é TRIAL e o mock está ativo
-2. Redireciona chamadas SERPRO para respostas mock
-3. Faz cache das respostas para evitar chamadas repetidas
-4. Em caso de falha silenciosa, passa para o handler real
-
-```typescript
-// trial-mock.service.ts
-import { injectable, inject } from 'inversify';
-import { HttpClient } from '@angular/common/http';
-import { Observable, of, throwError } from 'rxjs';
-import { catchError, map, tap } from 'rxjs/operators';
-
-@injectable()
-export class TrialMockService {
-  private readonly http = inject(HttpClient);
-  private readonly baseUrl = '/api/v1/serpro/mock';
-  private readonly cache = new Map<string, any>();
-  private readonly ambiente = 'TRIAL'; // definido pelo contexto
-
-  listarCenarios(): Observable<{ id: string; servico: string; titulo: string }[]> {
-    return this.http.get<{ ativo: boolean; cenarios: any }>(`${this.baseUrl}/cenarios`).pipe(
-      map(res => res.cenarios?.map((c: any) => ({
-        id: c.id,
-        servico: c.servico,
-        titulo: c.titulo,
-      }))) || [],
-      catchError(() => of([]))
-    );
-  }
-
-  usarCenario(servico: string, documento: string): Observable<any> {
-    // Busca o cenário correspondente e retorna a resposta mock
-    const cacheKey = `${servico}:${documento}`;
-    
-    if (this.cache.has(cacheKey)) {
-      return of(this.cache.get(cacheKey));
-    }
-    
-    return this.http.post<any>(`${this.baseUrl}/executar`, {
-      servico,
-      documento,
-    }).pipe(
-      tap(res => this.cache.set(cacheKey, res)),
-      catchError(() => this.mockFallback(servico, documento))
-    );
-  }
-
-  private mockFallback(servico: string, documento: string) {
-    // Em caso de falha do mock, tenta o handler real
-    // Isso garante que o fluxo não quebre completamente
-    return of(null);
-  }
-}
-```
-
-## Registro de Consultas e Auditoria
-
-Mesmo quando usando mock, é importante registrar as consultas e auditoria normalmente com ambiente TRIAL e origem MOCK. Isso permite:
-
-1. Estatísticas de uso durante o período de teste
-2. Identificação de quais cenários são mais acionados
-3. Comprovamento para habilitação da produção
-
-**Registro de auditoria (exemplo):**
+`GET /api/v1/serpro/mock/cenarios` (audiência `client`) devolve:
 
 ```json
 {
-  "escritorio_id": "...",
-  "administrador_id": "...",
-  "acao": "CONSULTA_SERPRO_MOCK",
-  "entidade": "divida_ativa|integra_contador|procuracao",
-  "entidade_id": "...",
-  "valor_anterior": null,
-  "valor_novo": {
-    "servico": "DIVIDA_ATIVA",
-    "cenario": "SUCESSO",
-    "ultimo_digito": 2,
-    "ambiente": "TRIAL",
-    "origem": "MOCK"
-  },
-  "ip": "...",
+  "ativo": true,
+  "cenarios": [
+    {
+      "id": "divida-com-pendencias",
+      "servico": "DIVIDA_ATIVA",
+      "titulo": "Dívida Ativa — com pendências",
+      "descricao": "Devedor com inscrições ativas; documento terminado em 0 ou 1.",
+      "documentoExemplo": "52998224725",
+      "resultadoEsperado": "COM_PENDENCIAS"
+    }
+  ]
 }
 ```
 
-## Limitações e Considerações
+Fora de Trial ou com o mock desativado: `{"ativo": false, "cenarios": []}`.
 
-1. **Nunca use mock em ambiente PRODUÇÃO** - O mock só deve ser ativado quando `SERPRO_TRIAL_MOCK=true` e o ambiente for TRIAL.
+## Medição e auditoria
 
-2. **Mock não substitui integração real** - Os mocks são para desenvolvimento e testes apenas. A integração com a SERPRO real deve ser concluída antes do go-live.
-
-3. **Documentação de cenários** - Cada novo cenário deve ser documentado aqui com seu código de resultado e condição de acionamento.
-
-4. **Consistência com medição (G.1)** - As chamadas mock devem passar pelo mesmo ponto de cliente da medição de chamadas, de modo que também sejam contadas com ambiente TRIAL para fins de relatório e cobrança (quando aplicável).
-
-5. **Tipos de documento** - Os mocks aceitam CPF (11 dígitos), CNPJ (14 dígitos) e inscrições estaduais. O cenário é determinado pelo último dígito numérico do documento.
+As chamadas simuladas atravessam o mesmo ponto de cliente que a medição decora
+(`ClienteDividaAtivaMock`/`ClienteIntegraContadorMock` em volta do cliente HTTP). Por
+isso continuam sendo registradas em `chamadas_serpro`/`consultas_fiscais` com
+`ambiente = TRIAL`, e a UI exibe o selo **Simulado**.

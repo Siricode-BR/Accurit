@@ -192,6 +192,20 @@ impl CertificadoRepositorio for CertificadoRepositorioDiesel {
 
         Ok(())
     }
+
+    fn buscar_cnpj_escritorio(
+        &self,
+        escritorio_alvo: EscritorioId,
+    ) -> Result<Option<String>, RepositorioError> {
+        use crate::infrastructure::persistence::schema::escritorios::dsl as e;
+        let mut conn = self.obter_conexao()?;
+        e::escritorios
+            .filter(e::id.eq(escritorio_alvo.as_uuid()))
+            .select(e::cnpj)
+            .first(&mut conn)
+            .optional()
+            .map_err(|_| RepositorioError::Dados)
+    }
 }
 
 impl CertificadoRepositorioDiesel {

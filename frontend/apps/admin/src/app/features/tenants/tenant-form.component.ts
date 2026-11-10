@@ -7,7 +7,7 @@ import {
   Validators,
 } from '@angular/forms';
 import { CriarTenantResponseDto } from '@accurit/core';
-import { isValidCPF, sanitizeDocument } from '@accurit/shared';
+import { isValidCNPJ, isValidCPF, sanitizeDocument } from '@accurit/shared';
 import { AccButtonComponent, AccDocumentMaskDirective } from '@accurit/ui';
 import { mensagemDeErro } from '../../core/http/mensagem-erro';
 import { TenantService } from '../../data/tenant.service';
@@ -91,7 +91,7 @@ export class TenantFormComponent implements OnInit {
 
   protected readonly form = inject(FormBuilder).nonNullable.group(
     {
-      cnpj: ['', [Validators.required, Validators.pattern(/^[0-9]{14}$/)]],
+      cnpj: ['', [Validators.required, (c: AbstractControl) => (isValidCNPJ(sanitizeDocument(c.value ?? '')) ? null : { cnpj: true })]],
       nome: ['', [Validators.required, Validators.maxLength(200)]],
       emailTitular: ['', [Validators.required, Validators.email]],
       cpfTitular: ['', [Validators.required, (c: AbstractControl) => (isValidCPF(sanitizeDocument(c.value ?? '')) ? null : { cpf: true })]],

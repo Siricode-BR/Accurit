@@ -11,7 +11,7 @@ use diesel::prelude::*;
 use uuid::Uuid;
 
 use crate::domain::relatorios::entidades::{
-    LinkCompartilhamento, NovoLinkCompartilhamento, NovoRelatorio, Relatorio,
+    LinkCompartilhamento, NovoLinkCompartilhamento, NovoRelatorio, Relatorio, hash_token,
 };
 use crate::domain::relatorios::enums::{FormatoRelatorio, StatusRelatorio, TipoRelatorio};
 use crate::domain::relatorios::erros::ErroRelatorio;
@@ -108,8 +108,11 @@ impl RelatorioRow {
 struct LinkCompartilhamentoRow {
     id: Uuid,
     relatorio_id: Uuid,
-    token: String,
+    token_hash: String,
     expira_em: DateTime<Utc>,
+    max_acessos: i32,
+    acessos: i32,
+    revogado_em: Option<DateTime<Utc>>,
     acessado_em: Option<DateTime<Utc>>,
     criado_em: DateTime<Utc>,
 }
@@ -119,8 +122,11 @@ impl LinkCompartilhamentoRow {
         LinkCompartilhamento {
             id: self.id,
             relatorio_id: self.relatorio_id,
-            token: self.token,
+            token_hash: self.token_hash,
             expira_em: self.expira_em,
+            max_acessos: self.max_acessos,
+            acessos: self.acessos,
+            revogado_em: self.revogado_em,
             acessado_em: self.acessado_em,
             criado_em: self.criado_em,
         }
@@ -147,6 +153,7 @@ impl RepositorioRelatorios for RelatoriosDiesel {
                     relatorios::status.eq(StatusRelatorio::Gerando.as_str()),
                     relatorios::nome_arquivo.eq::<Option<String>>(None),
                     relatorios::competencia.eq(novo.competencia),
+                    relatorios::expira_em.eq(Utc::now() + chrono::Duration::days(30)),
                 ))
                 .get_result::<RelatorioRow>(&mut conexao)
                 .map_err(|_| ErroRelatorio::Persistencia("inserir relatório".into()))?
@@ -249,8 +256,9 @@ impl RepositorioLinksCompartilhamento for RelatoriosDiesel {
                 .values((
                     links_compartilhamento_relatorios::id.eq(Uuid::now_v7()),
                     links_compartilhamento_relatorios::relatorio_id.eq(novo.relatorio_id),
-                    links_compartilhamento_relatorios::token.eq(Uuid::now_v7().to_string()),
+                    links_compartilhamento_relatorios::token_hash.eq(novo.token_hash),
                     links_compartilhamento_relatorios::expira_em.eq(novo.expira_em),
+                    links_compartilhamento_relatorios::max_acessos.eq(novo.max_acessos),
                 ))
                 .get_result::<LinkCompartilhamentoRow>(&mut conexao)
                 .map_err(|_| ErroRelatorio::Persistencia("inserir link".into()))?
@@ -266,14 +274,14 @@ impl RepositorioLinksCompartilhamento for RelatoriosDiesel {
         token: &str,
     ) -> Result<Option<LinkCompartilhamento>, ErroRelatorio> {
         let pool = self.pool.clone();
-        let token_owned = token.to_owned();
+        let token_hash = hash_token(token);
         tokio::task::spawn_blocking(
             move || -> Result<Option<LinkCompartilhamento>, ErroRelatorio> {
                 let mut conexao = pool
                     .get()
                     .map_err(|_| ErroRelatorio::Persistencia("pool".into()))?;
                 let linha = links_compartilhamento_relatorios::table
-                    .filter(links_compartilhamento_relatorios::token.eq(token_owned))
+                    .filter(links_compartilhamento_relatorios::token_hash.eq(token_hash))
                     .select(LinkCompartilhamentoRow::as_select())
                     .first(&mut conexao)
                     .optional()
@@ -292,17 +300,68 @@ impl RepositorioLinksCompartilhamento for RelatoriosDiesel {
             let mut conexao = pool
                 .get()
                 .map_err(|_| ErroRelatorio::Persistencia("pool".into()))?;
+            let agora = Utc::now();
             let atualizados = diesel::update(
                 links_compartilhamento_relatorios::table
-                    .filter(links_compartilhamento_relatorios::id.eq(id)),
+                    .filter(links_compartilhamento_relatorios::id.eq(id))
+                    .filter(links_compartilhamento_relatorios::revogado_em.is_null())
+                    .filter(links_compartilhamento_relatorios::expira_em.gt(agora))
+                    .filter(
+                        links_compartilhamento_relatorios::acessos
+                            .lt(links_compartilhamento_relatorios::max_acessos),
+                    ),
             )
-            .set(links_compartilhamento_relatorios::acessado_em.eq(Utc::now()))
+            .set((
+                links_compartilhamento_relatorios::acessado_em.eq(agora),
+                links_compartilhamento_relatorios::acessos
+                    .eq(links_compartilhamento_relatorios::acessos + 1),
+            ))
             .execute(&mut conexao)
             .map_err(|_| ErroRelatorio::Persistencia("registrar acesso".into()))?;
             if atualizados != 1 {
-                return Err(ErroRelatorio::LinkNaoEncontrado);
+                return Err(ErroRelatorio::LinkLimiteAtingido);
             }
             Ok(())
+        })
+        .await
+        .map_err(|_| ErroRelatorio::Persistencia("spawn_blocking".into()))?
+    }
+
+    async fn revogar(&self, id: Uuid) -> Result<bool, ErroRelatorio> {
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || -> Result<bool, ErroRelatorio> {
+            let mut conexao = pool
+                .get()
+                .map_err(|_| ErroRelatorio::Persistencia("pool".into()))?;
+            let atualizados = diesel::update(
+                links_compartilhamento_relatorios::table
+                    .filter(links_compartilhamento_relatorios::id.eq(id))
+                    .filter(links_compartilhamento_relatorios::revogado_em.is_null()),
+            )
+            .set(links_compartilhamento_relatorios::revogado_em.eq(Utc::now()))
+            .execute(&mut conexao)
+            .map_err(|_| ErroRelatorio::Persistencia("revogar link".into()))?;
+            Ok(atualizados == 1)
+        })
+        .await
+        .map_err(|_| ErroRelatorio::Persistencia("spawn_blocking".into()))?
+    }
+
+    async fn revogar_por_relatorio(&self, relatorio_alvo: Uuid) -> Result<u64, ErroRelatorio> {
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || -> Result<u64, ErroRelatorio> {
+            let mut conexao = pool
+                .get()
+                .map_err(|_| ErroRelatorio::Persistencia("pool".into()))?;
+            let atualizados = diesel::update(
+                links_compartilhamento_relatorios::table
+                    .filter(links_compartilhamento_relatorios::relatorio_id.eq(relatorio_alvo))
+                    .filter(links_compartilhamento_relatorios::revogado_em.is_null()),
+            )
+            .set(links_compartilhamento_relatorios::revogado_em.eq(Utc::now()))
+            .execute(&mut conexao)
+            .map_err(|_| ErroRelatorio::Persistencia("revogar links".into()))?;
+            Ok(atualizados as u64)
         })
         .await
         .map_err(|_| ErroRelatorio::Persistencia("spawn_blocking".into()))?

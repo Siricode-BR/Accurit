@@ -2,6 +2,11 @@
   <p class="aviso-consultivo" role="note">{{ aviso }}</p>
 }
 
+<app-trial-mock-panel
+  [servicos]="['DIVIDA_ATIVA']"
+  (documentoSelecionado)="usarDocumentoTrial($event)"
+/>
+
 <section class="section">
   <div class="modos" role="group" aria-label="Forma de consulta">
     @for (m of modos; track m.id) {
@@ -54,6 +59,7 @@
 }
 
 @if (devedor(); as d) {
+  @if (isTrial()) { <p class="selo-simulado" role="status">Simulado</p> }
   <acc-card class="resultado-card">
     <h2 class="resultado-titulo">Devedor</h2>
     <dl class="resultado-lista">
@@ -85,6 +91,7 @@
 }
 
 @if (inscricaoResultado(); as i) {
+  @if (isTrial()) { <p class="selo-simulado" role="status">Simulado</p> }
   <acc-card class="resultado-card">
     <h2 class="resultado-titulo">Inscrição</h2>
     <dl class="resultado-lista">

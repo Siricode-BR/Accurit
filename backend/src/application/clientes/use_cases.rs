@@ -17,6 +17,7 @@ pub struct CriarClienteUseCase {
     repositorio: Arc<dyn ClienteRepositorio>,
     auditoria: Arc<dyn AuditoriaClienteRepositorio>,
     politica: PoliticaClientes,
+    limites: Option<Arc<dyn crate::application::serpro::medicao::use_cases::LimitesPlano>>,
 }
 
 impl CriarClienteUseCase {
@@ -29,13 +30,35 @@ impl CriarClienteUseCase {
             repositorio,
             auditoria,
             politica,
+            limites: None,
         }
+    }
+
+    #[must_use]
+    pub fn com_limites(
+        mut self,
+        limites: Arc<dyn crate::application::serpro::medicao::use_cases::LimitesPlano>,
+    ) -> Self {
+        self.limites = Some(limites);
+        self
     }
 
     pub async fn executar(
         &self,
         comando: CriarClienteCommand,
     ) -> Result<ClientePublico, ClienteError> {
+        if let Some(limites) = &self.limites
+            && !limites
+                .pode_criar_cliente(comando.escritorio_id)
+                .await
+                .map_err(|_| {
+                    ClienteError::Validacao("limite de clientes do plano atingido".into())
+                })?
+        {
+            return Err(ClienteError::Validacao(
+                "limite de clientes do plano atingido".into(),
+            ));
+        }
         let cpf_cnpj = CpfCnpj::novo(&comando.cpf_cnpj)?;
         let documento_normalizado = cpf_cnpj.como_str().to_owned();
 

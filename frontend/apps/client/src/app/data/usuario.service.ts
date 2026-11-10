@@ -10,6 +10,7 @@ import {
   DefinirCarteiraRequestDto,
   AcessoUsuarioDto,
 } from '@accurit/core';
+import { mensagemDeErro } from '../core/http/mensagem-erro';
 
 interface UsuariosState {
   itens: UsuarioDto[];
@@ -88,7 +89,7 @@ export class UsuarioService {
         this.#state.update((s) => ({
           ...s,
           carregando: false,
-          erro: err.message ?? 'Falha ao carregar a lista de usuários.',
+          erro: mensagemDeErro(err, 'Falha ao carregar a lista de usuários.'),
         })),
     });
   }

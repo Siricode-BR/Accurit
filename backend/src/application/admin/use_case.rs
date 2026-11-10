@@ -61,6 +61,13 @@ impl ProvisionarTenantUseCase {
         validar_cpf(&comando.cpf_titular)?;
         validar_senha(&comando.senha_titular)?;
 
+        // O CNPJ é armazenado apenas com dígitos (o value object normaliza a
+        // máscara recebida do formulário).
+        let cnpj_normalizado = crate::domain::tenancy::Cnpj::novo(&comando.cnpj)
+            .map_err(|_| ProvisionarError::Validacao("CNPJ inv\u{00e1}lido".into()))?
+            .como_str()
+            .to_owned();
+
         // O e-mail identifica o usuário no login, então precisa ser único na plataforma.
         // Verifica antes de criar o escritório para não deixar um tenant órfão.
         let email_titular = comando.email_titular.trim().to_ascii_lowercase();
@@ -74,15 +81,16 @@ impl ProvisionarTenantUseCase {
             ));
         }
 
-        let escritorio_id = if let Some(id) = self.escritorio_repo.buscar_por_cnpj(&comando.cnpj)? {
-            id
-        } else {
-            let escritorio = EscritorioNovo {
-                cnpj: comando.cnpj.clone(),
-                nome: comando.nome.clone(),
+        let escritorio_id =
+            if let Some(id) = self.escritorio_repo.buscar_por_cnpj(&cnpj_normalizado)? {
+                id
+            } else {
+                let escritorio = EscritorioNovo {
+                    cnpj: cnpj_normalizado.clone(),
+                    nome: comando.nome.clone(),
+                };
+                self.escritorio_repo.criar(&escritorio)?
             };
-            self.escritorio_repo.criar(&escritorio)?
-        };
 
         let senha_hash = self
             .argon2
@@ -111,7 +119,7 @@ impl ProvisionarTenantUseCase {
             entidade_id: escritorio_id,
             valor_anterior: None,
             valor_novo: Some(serde_json::json!({
-                "cnpj": comando.cnpj,
+                "cnpj": cnpj_normalizado,
                 "nome": comando.nome,
                 "titular_id": titular_id,
                 "email_titular": comando.email_titular,
@@ -121,7 +129,7 @@ impl ProvisionarTenantUseCase {
 
         Ok(ProvisionarTenantResultado {
             escritorio_id,
-            cnpj: comando.cnpj,
+            cnpj: cnpj_normalizado,
             titular_id,
             email_titular: comando.email_titular,
         })
@@ -129,7 +137,7 @@ impl ProvisionarTenantUseCase {
 }
 
 pub(crate) fn validar_cnpj(cnpj: &str) -> Result<(), ProvisionarError> {
-    match crate::domain::auth::Cnpj::novo(cnpj) {
+    match crate::domain::tenancy::Cnpj::novo(cnpj) {
         Ok(_) => Ok(()),
         Err(_) => Err(ProvisionarError::Validacao("CNPJ inv\u{00e1}lido".into())),
     }

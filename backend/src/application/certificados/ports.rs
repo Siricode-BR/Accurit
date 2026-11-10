@@ -29,6 +29,8 @@ pub enum CertificadoError {
     Criptografia,
     #[error("acesso negado")]
     AcessoNegado,
+    #[error("o CNPJ do certificado diverge do CNPJ do escritório")]
+    TitularDivergente,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -155,6 +157,12 @@ pub trait CertificadoRepositorio: Send + Sync {
         escritorio_id: EscritorioId,
         certificado: &Certificado,
     ) -> Result<(), RepositorioError>;
+
+    /// CNPJ do escritório, para conferir o titular de um certificado A1 PJ.
+    fn buscar_cnpj_escritorio(
+        &self,
+        escritorio_id: EscritorioId,
+    ) -> Result<Option<String>, RepositorioError>;
 }
 
 pub trait AuditoriaCertificadoRepositorio: Send + Sync {

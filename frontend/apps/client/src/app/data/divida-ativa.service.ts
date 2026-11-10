@@ -1,6 +1,7 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
+import { mensagemDeErro } from '../core/http/mensagem-erro';
 
 export interface ConsultaDevedorResponse {
   ambiente: string;
@@ -70,7 +71,7 @@ export class DividaAtivaService {
       this.#ultimoDevedor.set(resposta);
     } catch (err: any) {
       this.#erro.set(
-        err.error?.message ?? err.message ?? 'Falha ao consultar devedor na Dívida Ativa.'
+        mensagemDeErro(err, 'Falha ao consultar devedor na Dívida Ativa.')
       );
       throw err;
     } finally {
@@ -91,7 +92,7 @@ export class DividaAtivaService {
       this.#ultimaInscricao.set(resposta);
     } catch (err: any) {
       this.#erro.set(
-        err.error?.message ?? err.message ?? 'Falha ao consultar inscrição na Dívida Ativa.'
+        mensagemDeErro(err, 'Falha ao consultar inscrição na Dívida Ativa.')
       );
       throw err;
     } finally {

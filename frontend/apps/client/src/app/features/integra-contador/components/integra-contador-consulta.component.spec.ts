@@ -36,12 +36,12 @@ describe('IntegraContadorConsultaComponent', () => {
 
   it('permite trocar o verbo e repopula o sistema', async () => {
     const [verbo, sistema] = selects();
-    expect(valores(sistema)).toEqual(['', 'PROCURACOES', 'PGDASD']);
+    expect(valores(sistema)).toEqual(['', 'PROCURACOES', 'PGDASD', 'CAIXAPOSTAL', 'PARCSN']);
 
     await escolher(verbo, 'Emitir');
 
     expect(selects()[0].value).toBe('Emitir');
-    expect(valores(selects()[1])).toEqual(['', 'SITFIS', 'DCTFWEB']);
+    expect(valores(selects()[1])).toEqual(['', 'SITFIS', 'PGDASD', 'PGMEI', 'DCTFWEB']);
   });
 
   it('preenche serviço e versão conforme o sistema escolhido', async () => {
@@ -65,9 +65,9 @@ describe('IntegraContadorConsultaComponent', () => {
     await escolher(selects()[0], 'Declarar');
 
     const [, sistema, servico, versao] = selects();
-    expect(valores(sistema)).toEqual(['', 'PGDASD']);
-    expect(sistema.value).toBe('PGDASD'); // única opção é preenchida
-    expect(servico.value).toBe('TRANSDECLARACAO11');
+    expect(valores(sistema)).toEqual(['']);
+    expect(sistema.value).toBe('');
+    expect(servico.value).toBe('');
     expect(versao.disabled).toBe(true);
   });
 

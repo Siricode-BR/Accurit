@@ -86,12 +86,19 @@ struct Contagem {
     total: i64,
 }
 
+fn cnpj_de_slug(slug: &str) -> String {
+    let valor = slug.bytes().fold(0u64, |acc, b| {
+        acc.wrapping_mul(31).wrapping_add(u64::from(b))
+    });
+    format!("{:014}", valor % 100_000_000_000_000)
+}
+
 fn semear_escritorio(banco: &BancoTemporario, slug: &str) -> Uuid {
     let mut conexao = banco.conexao();
     let id = Uuid::now_v7();
-    sql_query("INSERT INTO escritorios (id, slug, nome) VALUES ($1, $2, $3)")
+    sql_query("INSERT INTO escritorios (id, cnpj, nome) VALUES ($1, $2, $3)")
         .bind::<SqlUuid, _>(id)
-        .bind::<Text, _>(slug)
+        .bind::<Text, _>(cnpj_de_slug(slug))
         .bind::<Text, _>(format!("Escritório {slug}"))
         .execute(&mut conexao)
         .expect("escritório deve ser inserido");
@@ -99,8 +106,8 @@ fn semear_escritorio(banco: &BancoTemporario, slug: &str) -> Uuid {
 }
 
 fn id_do_escritorio(banco: &BancoTemporario, slug: &str) -> Uuid {
-    sql_query("SELECT id FROM escritorios WHERE slug = $1")
-        .bind::<Text, _>(slug)
+    sql_query("SELECT id FROM escritorios WHERE cnpj = $1")
+        .bind::<Text, _>(cnpj_de_slug(slug))
         .get_result::<IdRow>(&mut banco.conexao())
         .expect("escritório deve existir")
         .id
@@ -115,10 +122,11 @@ fn semear_gestor(banco: &BancoTemporario) {
         .expect("hash deve ser gerado");
 
     sql_query(
-        "INSERT INTO administradores (id, email, cpf, senha_hash, ativo) \
-         VALUES ($1, $2, $3, $4, $5)",
+        "INSERT INTO administradores (id, nome, email, cpf, senha_hash, ativo) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
     )
     .bind::<SqlUuid, _>(Uuid::now_v7())
+    .bind::<Text, _>("Gestor de teste")
     .bind::<Text, _>(EMAIL_GESTOR)
     .bind::<Text, _>("52998224725")
     .bind::<Text, _>(hash)
@@ -474,11 +482,11 @@ async fn troca_para_producao_bloqueada_sem_credencial() {
     let troca = alterar_modo_trial(&ambiente.app, &token, escritorio, false, 1).await;
     assert_eq!(
         troca.status(),
-        StatusCode::BAD_REQUEST,
+        StatusCode::UNPROCESSABLE_ENTITY,
         "sem credencial de produção a troca é bloqueada"
     );
     let corpo = corpo_json(troca).await;
-    assert_eq!(codigo_de_erro(&corpo), "VALIDACAO");
+    assert_eq!(codigo_de_erro(&corpo), "PRODUCAO_BLOQUEADA");
     assert!(
         corpo["error"]["message"]
             .as_str()
@@ -508,11 +516,11 @@ async fn troca_para_producao_bloqueada_sem_certificado_valido() {
     let troca = alterar_modo_trial(&ambiente.app, &token, escritorio, false, 1).await;
     assert_eq!(
         troca.status(),
-        StatusCode::BAD_REQUEST,
+        StatusCode::UNPROCESSABLE_ENTITY,
         "sem certificado A1 em validade a troca é bloqueada"
     );
     let corpo = corpo_json(troca).await;
-    assert_eq!(codigo_de_erro(&corpo), "VALIDACAO");
+    assert_eq!(codigo_de_erro(&corpo), "PRODUCAO_BLOQUEADA");
 
     let estado = sql_query("SELECT modo_trial_serpro, versao FROM escritorios WHERE id = $1")
         .bind::<SqlUuid, _>(escritorio)
@@ -750,15 +758,11 @@ async fn gestor_lista_escritorios_paginado_com_modo_trial_e_versao() {
     assert_eq!(corpo["itens"].as_array().expect("itens").len(), 3);
     for item in corpo["itens"].as_array().expect("itens") {
         assert!(item["id"].as_str().is_some());
-        assert!(item["slug"].as_str().is_some());
+        assert!(item["cnpj"].as_str().is_some());
         assert!(item["nome"].as_str().is_some());
         assert!(item["modoTrialSerpro"].is_boolean());
         assert_eq!(item["versao"], 1);
         assert!(item["atualizadoEm"].as_str().is_some());
-        assert!(
-            item.as_object().expect("objeto").get("cnpj").is_none(),
-            "listagem só traz metadados: sem CNPJ"
-        );
     }
 
     // Página de tamanho 1 na segunda janela: determinística e paginada.
@@ -773,4 +777,131 @@ async fn gestor_lista_escritorios_paginado_com_modo_trial_e_versao() {
     let destino = listar_escritorios(&ambiente.app, &token, Some(1), Some(5000)).await;
     let corpo = corpo_json(destino).await;
     assert_eq!(corpo["pageSize"], 100);
+}
+
+#[tokio::test]
+async fn backoffice_administradores_crud_e_isolamento_de_audiencia() {
+    let ambiente = ambiente();
+    semear_gestor(&ambiente.banco);
+    let login = entrar_gestor(&ambiente.app).await;
+    let token = token_de(&login);
+    let gestor_id = login["usuario"]["id"]
+        .as_str()
+        .expect("id do gestor")
+        .to_owned();
+
+    let lista = enviar(
+        &ambiente.app,
+        pedido(
+            Method::GET,
+            "/api/v1/admin/administradores",
+            None,
+            Some(&token),
+        ),
+    )
+    .await;
+    assert_eq!(lista.status(), StatusCode::OK);
+
+    let criacao = enviar(
+        &ambiente.app,
+        pedido(
+            Method::POST,
+            "/api/v1/admin/administradores",
+            Some(serde_json::json!({
+                "nome": "Segundo Gestor",
+                "email": "Segundo@Accurit.Test",
+                "cpf": "11144477735",
+                "senha": "senha-forte-456",
+            })),
+            Some(&token),
+        ),
+    )
+    .await;
+    assert_eq!(criacao.status(), StatusCode::CREATED);
+    let criado = corpo_json(criacao).await;
+    assert_eq!(criado["email"], "segundo@accurit.test");
+    assert_eq!(criado["ativo"], true);
+    let criado_id = criado["id"].as_str().expect("id").to_owned();
+
+    let busca = enviar(
+        &ambiente.app,
+        pedido(
+            Method::GET,
+            "/api/v1/admin/administradores?q=segundo",
+            None,
+            Some(&token),
+        ),
+    )
+    .await;
+    let corpo = corpo_json(busca).await;
+    assert_eq!(corpo["total"], 1);
+    assert_eq!(corpo["itens"][0]["id"], criado_id);
+
+    let edicao = enviar(
+        &ambiente.app,
+        pedido(
+            Method::PATCH,
+            &format!("/api/v1/admin/administradores/{criado_id}"),
+            Some(serde_json::json!({ "nome": "Gestor Editado" })),
+            Some(&token),
+        ),
+    )
+    .await;
+    assert_eq!(edicao.status(), StatusCode::OK);
+    assert_eq!(corpo_json(edicao).await["nome"], "Gestor Editado");
+
+    let desativar_outro = enviar(
+        &ambiente.app,
+        pedido(
+            Method::PATCH,
+            &format!("/api/v1/admin/administradores/{criado_id}"),
+            Some(serde_json::json!({ "ativo": false })),
+            Some(&token),
+        ),
+    )
+    .await;
+    assert_eq!(desativar_outro.status(), StatusCode::OK);
+    assert_eq!(corpo_json(desativar_outro).await["ativo"], false);
+
+    // Não pode desativar a si mesmo.
+    let auto = enviar(
+        &ambiente.app,
+        pedido(
+            Method::PATCH,
+            &format!("/api/v1/admin/administradores/{gestor_id}"),
+            Some(serde_json::json!({ "ativo": false })),
+            Some(&token),
+        ),
+    )
+    .await;
+    assert_eq!(auto.status(), StatusCode::CONFLICT);
+    assert_eq!(codigo_de_erro(&corpo_json(auto).await), "CONFLITO");
+
+    // A rota antiga (usuários de escritório) não existe mais no backoffice.
+    let legado = enviar(
+        &ambiente.app,
+        pedido(Method::GET, "/api/v1/administradores", None, Some(&token)),
+    )
+    .await;
+    assert_eq!(legado.status(), StatusCode::NOT_FOUND);
+
+    // Token do client não acessa /admin/*.
+    let escritorio = semear_escritorio(&ambiente.banco, "alfa");
+    semear_operador(&ambiente.banco, escritorio, "operador@alfa.test");
+    let token_client = token_de(&entrar_portal(&ambiente.app, "operador@alfa.test").await);
+    let sem_permissao = enviar(
+        &ambiente.app,
+        pedido(
+            Method::GET,
+            "/api/v1/admin/administradores",
+            None,
+            Some(&token_client),
+        ),
+    )
+    .await;
+    assert_eq!(sem_permissao.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        codigo_de_erro(&corpo_json(sem_permissao).await),
+        "AUTH_AUDIENCE_MISMATCH"
+    );
 }

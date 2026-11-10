@@ -52,6 +52,9 @@ pub struct SerproConfig {
     pub divida_ativa_trial_url: Url,
     pub divida_ativa_prod_url: Option<Url>,
     pub trial_bearer_token: Option<SecretString>,
+    /// Simulador determinístico do SERPRO usado **somente** em TRIAL
+    /// (`SERPRO_TRIAL_MOCK`; padrão: ativo quando não há bearer token).
+    pub trial_mock: bool,
     pub consumer_key: Option<SecretString>,
     pub consumer_secret: Option<SecretString>,
     /// Identidade da Software House no modelo C — Contratante do Termo de
@@ -198,6 +201,9 @@ impl Config {
             )?,
         };
 
+        let trial_bearer_token = segredo_opcional(&mapa, "SERPRO_TRIAL_BEARER_TOKEN");
+        let trial_mock = booleano(&mapa, "SERPRO_TRIAL_MOCK", trial_bearer_token.is_none())?;
+
         let serpro = SerproConfig {
             token_url: url_https_obrigatoria(&mapa, "SERPRO_TOKEN_URL")?,
             sapi_auth_url: url_https_obrigatoria(&mapa, "SERPRO_SAPI_AUTH_URL")?,
@@ -206,6 +212,7 @@ impl Config {
             divida_ativa_trial_url: url_https_obrigatoria(&mapa, "SERPRO_DIVIDA_ATIVA_TRIAL_URL")?,
             divida_ativa_prod_url: url_https_opcional(&mapa, "SERPRO_DIVIDA_ATIVA_PROD_URL")?,
             trial_bearer_token: segredo_opcional(&mapa, "SERPRO_TRIAL_BEARER_TOKEN"),
+            trial_mock,
             consumer_key: segredo_opcional(&mapa, "SERPRO_CONSUMER_KEY"),
             consumer_secret: segredo_opcional(&mapa, "SERPRO_CONSUMER_SECRET"),
             contratante_cnpj: validar_contratante_cnpj(opcional(&mapa, "SERPRO_CONTRATANTE_CNPJ"))?,

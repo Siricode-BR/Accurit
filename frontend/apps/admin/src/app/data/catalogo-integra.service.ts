@@ -2,6 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, tap } from 'rxjs';
 import { LinhaCatalogoServicoDto, RequisicaoHabilitarServicoDto } from '@accurit/core';
+import { mensagemDeErro } from '../core/http/mensagem-erro';
 
 @Injectable({ providedIn: 'root' })
 export class CatalogoIntegraService {
@@ -22,7 +23,7 @@ export class CatalogoIntegraService {
           this.carregando.set(false);
         },
         error: (err: { error?: { message?: string } }) => {
-          this.erro.set(err?.error?.message ?? 'Falha ao carregar catálogo.');
+          this.erro.set(mensagemDeErro(err, 'Falha ao carregar catálogo.'));
           this.carregando.set(false);
         },
       }),

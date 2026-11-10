@@ -51,6 +51,8 @@ pub struct RelatorioDto {
 #[serde(rename_all = "camelCase")]
 pub struct CriarLinkCompartilhamentoRequest {
     pub expira_em: DateTime<Utc>,
+    #[serde(default)]
+    pub max_acessos: Option<i32>,
 }
 
 /// DTO de um link de compartilhamento.
@@ -61,6 +63,9 @@ pub struct LinkCompartilhamentoDto {
     pub relatorio_id: Uuid,
     pub token: String,
     pub expira_em: DateTime<Utc>,
+    pub max_acessos: i32,
+    pub acessos: i32,
+    pub revogado_em: Option<DateTime<Utc>>,
     pub acessado_em: Option<DateTime<Utc>>,
     pub criado_em: DateTime<Utc>,
 }
@@ -83,13 +88,37 @@ impl From<crate::domain::relatorios::entidades::Relatorio> for RelatorioDto {
     }
 }
 
+impl LinkCompartilhamentoDto {
+    /// Monta o DTO devolvendo o token em claro **apenas nesta resposta** de criação.
+    pub fn de_criacao(
+        l: crate::domain::relatorios::entidades::LinkCompartilhamento,
+        token: String,
+    ) -> Self {
+        Self {
+            id: l.id,
+            relatorio_id: l.relatorio_id,
+            token,
+            expira_em: l.expira_em,
+            max_acessos: l.max_acessos,
+            acessos: l.acessos,
+            revogado_em: l.revogado_em,
+            acessado_em: l.acessado_em,
+            criado_em: l.criado_em,
+        }
+    }
+}
+
 impl From<crate::domain::relatorios::entidades::LinkCompartilhamento> for LinkCompartilhamentoDto {
     fn from(l: crate::domain::relatorios::entidades::LinkCompartilhamento) -> Self {
         Self {
             id: l.id,
             relatorio_id: l.relatorio_id,
-            token: l.token,
+            // O token em claro não é recuperável do banco (apenas hash).
+            token: String::new(),
             expira_em: l.expira_em,
+            max_acessos: l.max_acessos,
+            acessos: l.acessos,
+            revogado_em: l.revogado_em,
             acessado_em: l.acessado_em,
             criado_em: l.criado_em,
         }
@@ -128,6 +157,7 @@ impl TryFrom<CriarLinkCompartilhamentoRequest> for ComandoCriarLink {
     fn try_from(req: CriarLinkCompartilhamentoRequest) -> Result<Self, Self::Error> {
         Ok(Self {
             expira_em: req.expira_em,
+            max_acessos: req.max_acessos.unwrap_or(50).clamp(1, 1000),
             ..Default::default()
         })
     }
@@ -157,6 +187,7 @@ impl Default for ComandoCriarLink {
             relatorio_id: Uuid::nil(),
             escritorio_id: Uuid::nil(),
             expira_em: Utc::now() + chrono::Duration::days(7),
+            max_acessos: 50,
         }
     }
 }

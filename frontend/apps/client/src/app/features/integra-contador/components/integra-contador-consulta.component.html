@@ -1,4 +1,8 @@
 <section class="section">
+  <app-trial-mock-panel
+    [servicos]="['INTEGRA_CONTADOR', 'PROCURACAO']"
+    (documentoSelecionado)="documento.set($event)"
+  />
   <form (ngSubmit)="executar()" class="consulta-form" novalidate>
     <div class="grid">
       <acc-select
@@ -81,6 +85,7 @@
 }
 
 @if (resultado(); as r) {
+  @if (isTrial()) { <p class="selo-simulado" role="status">Simulado</p> }
   <acc-card class="resultado-card">
     <h2 class="resultado-titulo">Resultado da execução</h2>
     <dl class="resultado-lista">

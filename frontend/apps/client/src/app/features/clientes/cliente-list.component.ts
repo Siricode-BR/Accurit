@@ -13,6 +13,7 @@ import { ClienteFormComponent } from './cliente-form.component';
 import { CommonModule } from '@angular/common';
 import { ClienteService } from '../../data/cliente.service';
 import { ProcuracaoService } from '../../data/procuracao.service';
+import { mensagemDeErro } from '../../core/http/mensagem-erro';
 import {
   AccButtonComponent,
   AccBadgeComponent,
@@ -191,10 +192,10 @@ export class ClienteListComponent implements OnInit {
         next: () => {
           this.marcarValidando(cliente.id, false);
         },
-        error: (erro: { error?: { message?: string }; message?: string }) => {
+        error: (erro: unknown) => {
           this.marcarValidando(cliente.id, false);
           this.erroValidacao.set(
-            erro?.error?.message ?? erro?.message ?? 'Falha ao validar a procuração e-CAC.',
+            mensagemDeErro(erro, 'Falha ao validar a procuração e-CAC.'),
           );
         },
       });

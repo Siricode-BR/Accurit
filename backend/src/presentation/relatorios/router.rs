@@ -7,19 +7,20 @@ use axum::routing::{get, post};
 use crate::presentation::auth::{ExigirAudiencia, exigir};
 use crate::presentation::relatorios::handlers::{
     baixar_relatorio, buscar_relatorio, criar_link_compartilhamento, criar_relatorio,
-    listar_relatorios, obter_relatorio_por_link,
+    listar_relatorios, obter_relatorio_por_link, revogar_links_compartilhamento,
 };
 use crate::presentation::relatorios::state::EstadoRelatorios;
 
 /// Rotas autenticadas (audiência `client`) de relatórios.
 pub fn construir(estado: EstadoRelatorios, exigir_audiencia: ExigirAudiencia) -> Router {
     Router::new()
-        .route("/relatorios", post(criar_relatorio).get(listar_relatorios))
-        .route("/relatorios/{id}", get(buscar_relatorio))
-        .route("/relatorios/{id}/baixar", get(baixar_relatorio))
+        .route("/", post(criar_relatorio).get(listar_relatorios))
+        .route("/{id}", get(buscar_relatorio))
+        .route("/{id}/baixar", get(baixar_relatorio))
+        .route("/{id}/compartilhar", post(criar_link_compartilhamento))
         .route(
-            "/relatorios/{id}/compartilhar",
-            post(criar_link_compartilhamento),
+            "/{id}/compartilhamento",
+            axum::routing::delete(revogar_links_compartilhamento),
         )
         .route_layer(axum_middleware::from_fn_with_state(
             exigir_audiencia,

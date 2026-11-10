@@ -43,12 +43,19 @@ struct Total {
     total: bool,
 }
 
+fn cnpj_de_slug(slug: &str) -> String {
+    let valor = slug.bytes().fold(0u64, |acc, b| {
+        acc.wrapping_mul(31).wrapping_add(u64::from(b))
+    });
+    format!("{:014}", valor % 100_000_000_000_000)
+}
+
 fn semear_escritorio(banco: &BancoTemporario, slug: &str) -> Uuid {
     let mut conexao = banco.conexao();
     let id = Uuid::now_v7();
-    sql_query("INSERT INTO escritorios (id, slug, nome) VALUES ($1, $2, $3)")
+    sql_query("INSERT INTO escritorios (id, cnpj, nome) VALUES ($1, $2, $3)")
         .bind::<SqlUuid, _>(id)
-        .bind::<Text, _>(slug)
+        .bind::<Text, _>(cnpj_de_slug(slug))
         .bind::<Text, _>(format!("Escritório {slug}"))
         .execute(&mut conexao)
         .expect("escritório deve ser inserido");

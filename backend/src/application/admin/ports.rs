@@ -16,6 +16,10 @@ pub enum RepositorioError {
     EscritorioExistente,
     #[error("usuario j\u{00e1} existe neste escrit\u{00f3}rio")]
     UsuarioExistente,
+    #[error("n\u{00e3}o \u{00e9} poss\u{00ed}vel desativar o pr\u{00f3}prio administrador")]
+    AutoDesativacao,
+    #[error("n\u{00e3}o \u{00e9} poss\u{00ed}vel desativar o \u{00fa}ltimo administrador ativo")]
+    UltimoAdministradorAtivo,
     #[error("valida\u{00e7}\u{00e3}o: {0}")]
     Validacao(String),
 }
@@ -184,21 +188,26 @@ pub struct AdministradorNovo {
 pub struct AdministradorAtualizar {
     pub nome: Option<String>,
     pub email: Option<String>,
+    pub ativo: Option<bool>,
 }
 
 pub trait AdministradorRepositorio: Send + Sync {
     fn criar(&self, admin: &AdministradorNovo, senha_hash: &str) -> Result<Uuid, RepositorioError>;
 
-    /// Listagem paginada; devolve os itens da página e o total.
+    /// Listagem paginada; devolve os itens da página e o total. `busca`
+    /// filtra por nome ou e-mail (case-insensitive).
     fn listar(
         &self,
         paginacao: &Paginacao,
+        busca: Option<&str>,
     ) -> Result<(Vec<AdministradorDto>, usize), RepositorioError>;
 
     fn buscar_por_id(&self, id: Uuid) -> Result<Option<AdministradorDto>, RepositorioError>;
 
     /// E-mail é único na plataforma (sem diferenciar maiúsculas).
     fn buscar_por_email(&self, email: &str) -> Result<Option<AdministradorDto>, RepositorioError>;
+
+    fn contar_ativos(&self) -> Result<i64, RepositorioError>;
 
     fn atualizar(
         &self,
@@ -211,4 +220,7 @@ pub trait AdministradorRepositorio: Send + Sync {
         id: Uuid,
         senha_hash: &str,
     ) -> Result<Option<AdministradorDto>, RepositorioError>;
+
+    /// Revoga todas as sessões ativas do administrador (usado ao desativar).
+    fn revogar_sessoes(&self, id: Uuid) -> Result<(), RepositorioError>;
 }

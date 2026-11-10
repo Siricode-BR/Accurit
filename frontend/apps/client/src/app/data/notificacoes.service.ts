@@ -11,6 +11,7 @@ import {
   RespostaContagemNaoLidas,
   TemplateNotificacaoDto,
 } from '@accurit/core';
+import { mensagemDeErro } from '../core/http/mensagem-erro';
 
 /**
  * Serviço de notificações (FASE C).
@@ -53,7 +54,7 @@ export class NotificacoesService {
       );
     } catch (err: any) {
       this.#erro.set(
-        err.error?.message ?? err.message ?? 'Falha ao carregar notificações.',
+        mensagemDeErro(err, 'Falha ao carregar notificações.'),
       );
     } finally {
       this.#carregando.set(false);
@@ -82,7 +83,7 @@ export class NotificacoesService {
       this.#contagemNaoLidas.update((c) => Math.max(0, c - 1));
     } catch (err: any) {
       this.#erro.set(
-        err.error?.message ?? err.message ?? 'Falha ao marcar como lida.',
+        mensagemDeErro(err, 'Falha ao marcar como lida.'),
       );
       throw err;
     }
@@ -99,7 +100,7 @@ export class NotificacoesService {
       this.#contagemNaoLidas.set(0);
     } catch (err: any) {
       this.#erro.set(
-        err.error?.message ?? err.message ?? 'Falha ao marcar todas como lidas.',
+        mensagemDeErro(err, 'Falha ao marcar todas como lidas.'),
       );
       throw err;
     }

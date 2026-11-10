@@ -67,7 +67,11 @@ fn map_alterar_para_api(erro: crate::application::serpro::AlterarModoTrialError)
             ApiError::conflito("versão do escritório divergiu; recarregue e tente novamente")
         }
         AlterarModoTrialError::Ambiente(ErroAmbiente::ProducaoBloqueada(mensagem)) => {
-            ApiError::validacao(mensagem)
+            ApiError::nova(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "PRODUCAO_BLOQUEADA",
+                mensagem,
+            )
         }
         AlterarModoTrialError::Ambiente(ErroAmbiente::EscritorioNaoEncontrado(_)) => {
             ApiError::nao_encontrado("escritório")

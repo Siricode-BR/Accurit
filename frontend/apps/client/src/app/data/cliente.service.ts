@@ -22,6 +22,7 @@ import {
   AcessoUsuarioDto,
 } from '@accurit/core';
 import { sanitizeDocument } from '@accurit/shared';
+import { mensagemDeErro } from '../core/http/mensagem-erro';
 
 interface ClientesState {
   itens: ClienteDto[];
@@ -80,7 +81,7 @@ export class ClienteService {
         this.#state.update((s) => ({
           ...s,
           carregando: false,
-          erro: err.message ?? 'Falha ao carregar lista de clientes.',
+          erro: mensagemDeErro(err, 'Falha ao carregar lista de clientes.'),
         }));
       },
     });
@@ -103,7 +104,7 @@ export class ClienteService {
           this.#state.update((s) => ({
             ...s,
             carregando: false,
-            erro: err.error?.message ?? err.message ?? 'Falha ao cadastrar cliente.',
+            erro: mensagemDeErro(err, 'Falha ao cadastrar cliente.'),
           }));
           reject(err);
         },
@@ -129,7 +130,7 @@ export class ClienteService {
       this.http.get<ClienteDto>(`${this.baseUrl}/${id}`).subscribe({
         next: (cliente) => resolve(cliente),
         error: (err) =>
-          reject(err.error?.message ?? err.message ?? 'Falha ao obter detalhes do cliente.'),
+          reject(mensagemDeErro(err, 'Falha ao obter detalhes do cliente.')),
       });
     });
   }
@@ -153,7 +154,7 @@ export class ClienteService {
           this.#state.update((s) => ({
             ...s,
             carregando: false,
-            erro: err.error?.message ?? err.message ?? 'Falha ao atualizar cliente.',
+            erro: mensagemDeErro(err, 'Falha ao atualizar cliente.'),
           }));
           reject(err);
         },
@@ -177,7 +178,7 @@ export class ClienteService {
           this.#state.update((s) => ({
             ...s,
             carregando: false,
-            erro: err.error?.message ?? err.message ?? 'Falha ao excluir cliente.',
+            erro: mensagemDeErro(err, 'Falha ao excluir cliente.'),
           }));
           reject(err);
         },

@@ -120,32 +120,27 @@ pub async fn revogar_certificado(
 }
 
 pub fn erro_para_resposta(erro: crate::application::certificados::CertificadoError) -> Response {
-    match erro {
-        crate::application::certificados::CertificadoError::Dominio(e) => {
-            ApiError::validacao(e.to_string()).resposta("")
-        }
-        crate::application::certificados::CertificadoError::Repositorio(e) => match e {
-            crate::application::certificados::RepositorioError::Indisponivel => {
-                ApiError::indisponivel().resposta("")
-            }
-            crate::application::certificados::RepositorioError::Dados => {
-                ApiError::erro_interno().resposta("")
-            }
-            crate::application::certificados::RepositorioError::NaoEncontrado => {
-                ApiError::nao_encontrado("certificado").resposta("")
-            }
-            crate::application::certificados::RepositorioError::FingerprintDuplicado => {
-                ApiError::conflito("Certificado com este fingerprint já existe").resposta("")
+    use crate::application::certificados::{CertificadoError, RepositorioError};
+
+    let api = match erro {
+        CertificadoError::Dominio(e) => ApiError::validacao(e.to_string()),
+        CertificadoError::Repositorio(e) => match e {
+            RepositorioError::Indisponivel => ApiError::indisponivel(),
+            RepositorioError::Dados => ApiError::erro_interno(),
+            RepositorioError::NaoEncontrado => ApiError::nao_encontrado("certificado"),
+            RepositorioError::FingerprintDuplicado => {
+                ApiError::conflito("Certificado com este fingerprint já existe")
             }
         },
-        crate::application::certificados::CertificadoError::Criptografia => {
-            ApiError::erro_interno().resposta("")
-        }
-        crate::application::certificados::CertificadoError::AcessoNegado => {
-            ApiError::proibido().resposta("")
-        }
-        crate::application::certificados::CertificadoError::Fingerprint(e) => {
-            ApiError::validacao(e.to_string()).resposta("")
-        }
-    }
+        CertificadoError::Criptografia => ApiError::erro_interno(),
+        CertificadoError::AcessoNegado => ApiError::proibido(),
+        CertificadoError::TitularDivergente => ApiError::nova(
+            axum::http::StatusCode::UNPROCESSABLE_ENTITY,
+            "VALIDACAO",
+            "O CNPJ do certificado A1 não corresponde ao CNPJ deste escritório",
+        ),
+        CertificadoError::Fingerprint(e) => ApiError::validacao(e.to_string()),
+    };
+
+    api.into_response()
 }

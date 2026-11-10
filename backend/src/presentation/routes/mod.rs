@@ -196,6 +196,7 @@ where
     let serpro_state = SerproState::novo(
         std::sync::Arc::new(obter_config_serpro),
         std::sync::Arc::new(alterar_modo_serpro),
+        config.serpro.trial_mock,
     );
 
     // Provider de credenciais com fallback DA decisão D6: globais de
@@ -236,12 +237,13 @@ where
             pool.clone(),
         ),
     );
-    let _gestao_usuarios = crate::application::usuarios::GestaoUsuariosUseCase::novo(
+    let gestao_usuarios = crate::application::usuarios::GestaoUsuariosUseCase::novo(
         usuarios_gestao_repo,
         argon2.clone(),
     );
 
     let gestao_administradores = crate::application::admin::GestaoAdministradoresUseCase::novo(
+        std::sync::Arc::new(admin_repo.clone()),
         std::sync::Arc::new(admin_repo.clone()),
         argon2.clone(),
     );
@@ -297,6 +299,13 @@ where
                         crate::presentation::admin::serpro::handlers::alterar_modo_trial_serpro,
                     ),
                 )
+                .route_layer(axum_middleware::from_fn_with_state(
+                    ExigirAudiencia::novo(
+                        auth_state.tokens.clone(),
+                        crate::domain::auth::Audiencia::Admin,
+                    ),
+                    exigir,
+                ))
                 .with_state(admin_state.clone()),
         );
 
@@ -319,6 +328,10 @@ where
             "/serpro",
             Router::new()
                 .route("/ambiente", get(obter_ambiente))
+                .route(
+                    "/mock/cenarios",
+                    get(crate::presentation::serpro::handlers::listar_cenarios_mock),
+                )
                 // Ordem dos route_layer: o último adicionado é o mais externo.
                 // `exigir` (audiência client) deve rodar primeiro para inserir
                 // o RequestContext; o snapshot entra logo depois, mais interno.
@@ -367,10 +380,15 @@ where
             ),
         );
         let cliente_integra_contador = std::sync::Arc::new(
-            crate::infrastructure::integra_contador::ClienteIntegraContadorImpl::novo(
-                http_integra_contador,
-                endpoints_integra_contador,
-                config.serpro.operator_header_enabled,
+            crate::infrastructure::serpro::mock::ClienteIntegraContadorMock::novo(
+                std::sync::Arc::new(
+                    crate::infrastructure::integra_contador::ClienteIntegraContadorImpl::novo(
+                        http_integra_contador,
+                        endpoints_integra_contador,
+                        config.serpro.operator_header_enabled,
+                    ),
+                ),
+                config.serpro.trial_mock,
             ),
         );
         let executar_integra_contador = std::sync::Arc::new(
@@ -412,22 +430,29 @@ where
         let criptografia_integra =
             criar_criptografia(config.certificate_master_key.expose_secret())
                 .expect("criptografia Integra deve inicializar");
-        let autentica_procurador_http_cliente = std::sync::Arc::new(
-            crate::infrastructure::integra_contador::AutenticaProcuradorClienteImpl::novo(
-                reqwest::Client::builder()
-                    .connect_timeout(std::time::Duration::from_secs(
-                        config.serpro.http_connect_timeout_secs,
-                    ))
-                    .timeout(std::time::Duration::from_secs(
-                        config.serpro.http_request_timeout_secs,
-                    ))
-                    .build()
-                    .expect("cliente HTTP AUTENTICAPROCURADOR deve inicializar"),
+        let autentica_procurador_http_cliente: std::sync::Arc<
+            dyn crate::application::integra_contador::ports::AutenticaProcuradorCliente,
+        > = std::sync::Arc::new(
+            crate::infrastructure::serpro::mock::AutenticaProcuradorMock::novo(
                 std::sync::Arc::new(
-                    crate::infrastructure::serpro::SerproEndpointResolverImpl::novo(
-                        config.serpro.clone(),
+                    crate::infrastructure::integra_contador::AutenticaProcuradorClienteImpl::novo(
+                        reqwest::Client::builder()
+                            .connect_timeout(std::time::Duration::from_secs(
+                                config.serpro.http_connect_timeout_secs,
+                            ))
+                            .timeout(std::time::Duration::from_secs(
+                                config.serpro.http_request_timeout_secs,
+                            ))
+                            .build()
+                            .expect("cliente HTTP AUTENTICAPROCURADOR deve inicializar"),
+                        std::sync::Arc::new(
+                            crate::infrastructure::serpro::SerproEndpointResolverImpl::novo(
+                                config.serpro.clone(),
+                            ),
+                        ),
                     ),
                 ),
+                config.serpro.trial_mock,
             ),
         );
         let certificado_provider_integra = std::sync::Arc::new(
@@ -539,8 +564,13 @@ where
         );
         let consultas_repositorio_trait = consultas_repo.clone();
         let cliente_http_divida = std::sync::Arc::new(
-            crate::infrastructure::divida_ativa::cliente_http::ClienteDividaAtivaHttp::novo(
-                http_serpro,
+            crate::infrastructure::serpro::mock::ClienteDividaAtivaMock::novo(
+                std::sync::Arc::new(
+                    crate::infrastructure::divida_ativa::cliente_http::ClienteDividaAtivaHttp::novo(
+                        http_serpro,
+                    ),
+                ),
+                config.serpro.trial_mock,
             ),
         );
         let catalogo_clientes_consulta = std::sync::Arc::new(
@@ -833,6 +863,12 @@ where
             relatorios_repo.clone() as std::sync::Arc<dyn RepositorioLinksCompartilhamento>,
             relatorios_repo.clone() as std::sync::Arc<dyn RepositorioRelatorios>,
         ));
+        let revogar_links_uc = std::sync::Arc::new(
+            crate::application::relatorios::use_cases::RevogarLinksRelatorioUseCase::novo(
+                relatorios_repo.clone() as std::sync::Arc<dyn RepositorioLinksCompartilhamento>,
+                relatorios_repo.clone() as std::sync::Arc<dyn RepositorioRelatorios>,
+            ),
+        );
         let estado_relatorios = EstadoRelatorios::novo(
             gerar_relatorio_uc,
             listar_relatorios_uc,
@@ -840,6 +876,7 @@ where
             criar_link_uc,
             validar_link_uc,
             acessar_por_link_uc,
+            revogar_links_uc,
         );
 
         api = api.nest(

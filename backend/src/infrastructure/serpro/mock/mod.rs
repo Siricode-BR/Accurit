@@ -1,262 +1,477 @@
-use crate::application::serpro::ports::{
-    CertificadosSerproConsulta, ErroTokenSerpro, EscritorioSerproRepositorio,
-    FornecedorTokenSerpro, InvalicadorCachesSerpro, RepositorioError,
+//! Simulador determinístico do SERPRO para o ambiente TRIAL.
+//!
+//! Ativado por `SERPRO_TRIAL_MOCK` **apenas** quando o ambiente efetivo do
+//! escritório é TRIAL. Em PRODUÇÃO o wrapper sempre delega ao cliente real.
+//! Os cenários são derivados do último dígito do documento, conforme a
+//! tabela documentada em `docs/Serpro/mocks-trial.md`.
+
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use chrono::{TimeZone, Utc};
+use rust_decimal::Decimal;
+use secrecy::SecretString;
+
+use crate::application::integra_contador::ports::{
+    AutenticaProcuradorCliente, AutenticarProcuradorResultado, ClienteIntegraContador,
+    EntregaIntegraContador,
 };
+use crate::domain::clientes::CpfCnpj;
+use crate::domain::divida_ativa::devedor::{
+    EstadoConsulta, FonteConsulta, InscricaoDetalhe, InscricaoResumo, ResultadoConsultaDevedor,
+};
+use crate::domain::divida_ativa::erros::ErroDividaAtiva;
+use crate::domain::divida_ativa::ports::ClienteDividaAtiva;
+use crate::domain::integra_contador::envelope::{
+    IntegraContadorRequest, IntegraContadorResponse, VerboIntegraContador,
+};
+use crate::domain::integra_contador::erros::ErroIntegraContador;
 use crate::domain::serpro::ambiente::AmbienteSerpro;
-use crate::domain::serpro::produto::ProdutoSerpro;
-use chrono::Utc;
-use serde_json::Value;
-use uuid::Uuid;
+use crate::domain::serpro::endpoints::EndpointSerpro;
 
-// --- Mock Serpro Service ---
-
-/// Mock service for SERPRO gateway in TRIAL environment.
-/// Retorna respostas determinísticas baseadas em cenários definidos.
-/// Só deve ser ativado quando SERPRO_TRIAL_MOCK=true e ambiente = TRIAL.
-pub struct MockSerproService;
-
-impl MockSerproService {
-    /// Verifica se o mock deve ser ativado
-    pub fn esta_ativo(ambiente: AmbienteSerpro, mock_ativo: bool) -> bool {
-        ambiente == AmbienteSerpro::Trial && mock_ativo
-    }
-
-    /// Obtém o cenário esperado para um serviço específico
-    pub fn obter_cenario(servico: &str) -> Option<MockCenario> {
-        match servico {
-            "DIVIDA_ATIVA" => Some(MockCenario::DividaAtiva),
-            "INTEGRA_CONTADOR" => Some(MockCenario::IntegraContador),
-            "PROCURACAO" => Some(MockCenario::Procuracao),
-            _ => None,
-        }
-    }
-
-    /// Obtém todas as cenários disponíveis para a API de listagem
-    pub fn obter_todos_cenarios() -> Vec<MockCenarioInfo> {
-        vec![
-            MockCenarioInfo {
-                id: "cenario_1".into(),
-                servico: "DIVIDA_ATIVA".into(),
-                titulo: "Consulta de Dívida Ativa - Sem pendências".into(),
-                descricao: "Devedor com inscrição regular, sem protestos ou penhoras".into(),
-                documento_exemplo: "12345678901".into(),
-                resultado_esperado: "SUCESSO".into(),
-            },
-            MockCenarioInfo {
-                id: "cenario_2".into(),
-                servico: "DIVIDA_ATIVA".into(),
-                titulo: "Consulta de Dívida Ativa - Com pendências".into(),
-                descricao: "Devedor com protestos ou penhoras ativos".into(),
-                documento_exemplo: "12345678901".into(),
-                resultado_esperado: "COM_PENDENCIAS".into(),
-            },
-            MockCenarioInfo {
-                id: "cenario_3".into(),
-                servico: "DIVIDA_ATIVA".into(),
-                titulo: "Consulta de Dívida Ativa - Não encontrado".into(),
-                descricao: "Inscrição/devedor não encontrado na base".into(),
-                documento_exemplo: "98765432109".into(),
-                resultado_esperado: "NAO_ENCONTRADO".into(),
-            },
-            MockCenarioInfo {
-                id: "cenario_4".into(),
-                servico: "INTEGRA_CONTADOR".into(),
-                titulo: "Executar procuração - Sucesso".into(),
-                descricao: "Procuração válida, execução concluída com sucesso".into(),
-                documento_exemplo: "12345678901".into(),
-                resultado_esperado: "SUCESSO".into(),
-            },
-            MockCenarioInfo {
-                id: "cenario_5".into(),
-                servico: "INTEGRA_CONTADOR".into(),
-                titulo: "Executar procuração - Acesso negado".into(),
-                descricao: "Procuração negada ou sem validade".into(),
-                documento_exemplo: "12345678901".into(),
-                resultado_esperado: "ACESSO_NEGADO".into(),
-            },
-            MockCenarioInfo {
-                id: "cenario_6".into(),
-                servico: "INTEGRA_CONTADOR".into(),
-                titulo: "Executar procuração - Limite excedido".into(),
-                descricao: "Limite de chamadas/mês excedido".into(),
-                documento_exemplo: "12345678901".into(),
-                resultado_esperado: "LIMITE_EXCEDIDO".into(),
-            },
-            MockCenarioInfo {
-                id: "cenario_7".into(),
-                servico: "INTEGRA_CONTADOR".into(),
-                titulo: "Executar procuração - Indisponível".into(),
-                descricao: "Serviço temporariamente indisponível".into(),
-                documento_exemplo: "12345678901".into(),
-                resultado_esperado: "INDISPONIVEL".into(),
-            },
-            MockCenarioInfo {
-                id: "cenario_8".into(),
-                servico: "PROCURACAO".into(),
-                titulo: "OBTERPROCURACAO41 - Encontrado".into(),
-                descricao: "Procuração encontrada com todos os dados válidos".into(),
-                documento_exemplo: "12345678901".into(),
-                resultado_esperado: "SUCESSO".into(),
-            },
-            MockCenarioInfo {
-                id: "cenario_9".into(),
-                servico: "PROCURACAO".into(),
-                titulo: "OBTERPROCURACAO41 - Negado (403)".into(),
-                descricao: "Procuração negada ou sem certificado A1".into(),
-                documento_exemplo: "12345678901".into(),
-                resultado_esperado: "ACESSO_NEGADO".into(),
-            },
-            MockCenarioInfo {
-                id: "cenario_10".into(),
-                servico: "PROCURACAO".into(),
-                titulo: "ENVIOXMLASSINADO81 - Sucesso".into(),
-                descricao: "XML assinado (simulado) enviado com sucesso".into(),
-                documento_exemplo: "12345678901".into(),
-                resultado_esperado: "SUCESSO".into(),
-            },
-        ]
-    }
-}
-
-// --- Mock Cenários ---
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MockCenario {
+#[derive(Debug, Clone, Copy)]
+pub enum ServicoMock {
     DividaAtiva,
     IntegraContador,
     Procuracao,
 }
 
+impl ServicoMock {
+    pub const fn como_str(self) -> &'static str {
+        match self {
+            Self::DividaAtiva => "DIVIDA_ATIVA",
+            Self::IntegraContador => "INTEGRA_CONTADOR",
+            Self::Procuracao => "PROCURACAO",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
-pub struct MockCenarioInfo {
-    pub id: String,
-    pub servico: String,
-    pub titulo: String,
-    pub descricao: String,
-    pub documento_exemplo: String,
-    pub resultado_esperado: String,
+pub struct CenarioMock {
+    pub id: &'static str,
+    pub servico: ServicoMock,
+    pub titulo: &'static str,
+    pub descricao: &'static str,
+    pub documento_exemplo: &'static str,
+    pub resultado_esperado: &'static str,
 }
 
-// --- Mock Implementations for Ports ---
-// (ainda não plugarão o trial — ficam disponíveis para as próximas etapas)
+/// Documentos de exemplo válidos (CPF/CNPJ) por cenário.
+pub fn cenarios() -> Vec<CenarioMock> {
+    vec![
+        CenarioMock {
+            id: "divida-com-pendencias",
+            servico: ServicoMock::DividaAtiva,
+            titulo: "Dívida Ativa — com pendências",
+            descricao: "Devedor com inscrições ativas; documento terminado em 0 ou 1.",
+            documento_exemplo: "52998224725",
+            resultado_esperado: "COM_PENDENCIAS",
+        },
+        CenarioMock {
+            id: "divida-sem-pendencias",
+            servico: ServicoMock::DividaAtiva,
+            titulo: "Dívida Ativa — sem pendências",
+            descricao: "Devedor regular, sem inscrições; documento terminado em 2 ou 3.",
+            documento_exemplo: "11144477735",
+            resultado_esperado: "SEM_PENDENCIAS",
+        },
+        CenarioMock {
+            id: "divida-nao-encontrado",
+            servico: ServicoMock::DividaAtiva,
+            titulo: "Dívida Ativa — não encontrado",
+            descricao: "Documento terminado em 4.",
+            documento_exemplo: "12345678909",
+            resultado_esperado: "NAO_ENCONTRADO",
+        },
+        CenarioMock {
+            id: "divida-limite",
+            servico: ServicoMock::DividaAtiva,
+            titulo: "Dívida Ativa — limite excedido",
+            descricao: "Documento terminado em 6 retorna HTTP 429.",
+            documento_exemplo: "39053344705",
+            resultado_esperado: "LIMITE_EXCEDIDO",
+        },
+        CenarioMock {
+            id: "divida-indisponivel",
+            servico: ServicoMock::DividaAtiva,
+            titulo: "Dívida Ativa — indisponível",
+            descricao: "Documento terminado em 7 retorna HTTP 503.",
+            documento_exemplo: "86288366757",
+            resultado_esperado: "INDISPONIVEL",
+        },
+        CenarioMock {
+            id: "divida-indeterminado",
+            servico: ServicoMock::DividaAtiva,
+            titulo: "Dívida Ativa — indeterminado",
+            descricao: "Documento terminado em 8 retorna HTTP 504 (estado indeterminado).",
+            documento_exemplo: "95835384068",
+            resultado_esperado: "INDETERMINADO",
+        },
+        CenarioMock {
+            id: "divida-resposta-invalida",
+            servico: ServicoMock::DividaAtiva,
+            titulo: "Dívida Ativa — resposta inválida",
+            descricao: "Documento terminado em 9 retorna resposta fora do contrato.",
+            documento_exemplo: "15350946056",
+            resultado_esperado: "RESPOSTA_INVALIDA",
+        },
+        CenarioMock {
+            id: "integra-sucesso",
+            servico: ServicoMock::IntegraContador,
+            titulo: "Integra Contador — execução concluída",
+            descricao: "Documento terminado em 0 ou 1.",
+            documento_exemplo: "52998224725",
+            resultado_esperado: "SUCESSO",
+        },
+        CenarioMock {
+            id: "integra-acesso-negado",
+            servico: ServicoMock::Procuracao,
+            titulo: "Procuração — acesso negado",
+            descricao: "Documento terminado em 4: OBTERPROCURACAO41/autenticar retorna 403.",
+            documento_exemplo: "12345678909",
+            resultado_esperado: "ACESSO_NEGADO",
+        },
+        CenarioMock {
+            id: "integra-limite",
+            servico: ServicoMock::IntegraContador,
+            titulo: "Integra Contador — limite excedido",
+            descricao: "Documento terminado em 6 retorna HTTP 429.",
+            documento_exemplo: "39053344705",
+            resultado_esperado: "LIMITE_EXCEDIDO",
+        },
+        CenarioMock {
+            id: "integra-indisponivel",
+            servico: ServicoMock::IntegraContador,
+            titulo: "Integra Contador — indisponível",
+            descricao: "Documento terminado em 7 retorna HTTP 503.",
+            documento_exemplo: "86288366757",
+            resultado_esperado: "INDISPONIVEL",
+        },
+        CenarioMock {
+            id: "integra-indeterminado",
+            servico: ServicoMock::IntegraContador,
+            titulo: "Integra Contador — indeterminado",
+            descricao: "Documento terminado em 8 retorna HTTP 504.",
+            documento_exemplo: "95835384068",
+            resultado_esperado: "INDETERMINADO",
+        },
+    ]
+}
 
-/// Mock implementation of FornecedorTokenSerpro
-/// Retorna token mock quando ativo, senão retorna erro
-#[allow(dead_code)]
-struct MockTokenFornecedor;
+pub fn mock_ativo(ambiente: AmbienteSerpro, configurado: bool) -> bool {
+    configurado && ambiente == AmbienteSerpro::Trial
+}
 
-impl FornecedorTokenSerpro for MockTokenFornecedor {
-    fn obter_token(
+fn ultimo_digito(documento: &str) -> u32 {
+    documento
+        .chars()
+        .rfind(|c| c.is_ascii_digit())
+        .and_then(|c| c.to_digit(10))
+        .unwrap_or(0)
+}
+
+fn mascarar(documento: &str) -> String {
+    let digitos: String = documento.chars().filter(char::is_ascii_digit).collect();
+    if digitos.len() <= 4 {
+        return "***".to_owned();
+    }
+    format!("***{}", &digitos[digitos.len() - 4..])
+}
+
+fn valor(centavos: i64) -> Decimal {
+    Decimal::new(centavos, 2)
+}
+
+// ===== Dívida Ativa =====
+
+pub struct ClienteDividaAtivaMock {
+    interno: Arc<dyn ClienteDividaAtiva>,
+    ativo: bool,
+}
+
+impl ClienteDividaAtivaMock {
+    pub fn novo(interno: Arc<dyn ClienteDividaAtiva>, ativo: bool) -> Self {
+        Self { interno, ativo }
+    }
+}
+
+#[async_trait]
+impl ClienteDividaAtiva for ClienteDividaAtivaMock {
+    async fn consultar_devedor(
         &self,
-        _escritorio_id: Uuid,
-        _produto: ProdutoSerpro,
-        _ambiente: AmbienteSerpro,
-    ) -> impl std::future::Future<Output = Result<String, ErroTokenSerpro>> + Send {
-        let fut = async move {
-            if MockSerproService::esta_ativo(_ambiente, true) {
-                Ok("mock-token-12345".to_string())
-            } else {
-                Err(ErroTokenSerpro::Indisponivel)
+        endpoint: &EndpointSerpro,
+        chave: &CpfCnpj,
+        cpf_operador: Option<String>,
+        request_id: &str,
+    ) -> Result<ResultadoConsultaDevedor, ErroDividaAtiva> {
+        if !mock_ativo(endpoint.ambiente, self.ativo) {
+            return self
+                .interno
+                .consultar_devedor(endpoint, chave, cpf_operador, request_id)
+                .await;
+        }
+
+        let documento = chave.como_str();
+        match ultimo_digito(documento) {
+            4 => Err(ErroDividaAtiva::NaoEncontrado),
+            5 => Err(ErroDividaAtiva::ProxyNegado),
+            6 => Err(ErroDividaAtiva::LimiteSerproAtingido),
+            7 => Err(ErroDividaAtiva::ServicoIndisponivel),
+            8 => Err(ErroDividaAtiva::Indeterminado),
+            9 => Err(ErroDividaAtiva::RespostaInvalida),
+            digito => {
+                let com_pendencias = digito <= 1;
+                let inscricoes = if com_pendencias {
+                    vec![
+                        InscricaoResumo {
+                            numero_inscricao: "9061700096419".to_owned(),
+                            numero_processo: Some("10880.000000/2024-10".to_owned()),
+                            situacao_inscricao: Some("ATIVA".to_owned()),
+                            situacao_descricao: "Inscrição ativa em cobrança".to_owned(),
+                            nome_devedor: Some("Contribuinte Simulado Ltda".to_owned()),
+                            tipo_devedor: "PJ".to_owned(),
+                            valor_total_consolidado: valor(150_000),
+                            cpf_cnpj: Some(documento.to_owned()),
+                            nome_unidade: Some("PFN Simulada".to_owned()),
+                        },
+                        InscricaoResumo {
+                            numero_inscricao: "9061700096427".to_owned(),
+                            numero_processo: None,
+                            situacao_inscricao: Some("ATIVA".to_owned()),
+                            situacao_descricao: "Inscrição ativa em cobrança".to_owned(),
+                            nome_devedor: Some("Contribuinte Simulado Ltda".to_owned()),
+                            tipo_devedor: "PJ".to_owned(),
+                            valor_total_consolidado: valor(32_000),
+                            cpf_cnpj: Some(documento.to_owned()),
+                            nome_unidade: Some("PFN Simulada".to_owned()),
+                        },
+                    ]
+                } else {
+                    Vec::new()
+                };
+
+                Ok(ResultadoConsultaDevedor {
+                    ambiente: AmbienteSerpro::Trial,
+                    estado: if com_pendencias {
+                        EstadoConsulta::ComPendencias
+                    } else {
+                        EstadoConsulta::SemPendencias
+                    },
+                    fonte: FonteConsulta::CpfCnpj,
+                    chave_mascarada: mascarar(documento),
+                    horario_consulta: Utc::now(),
+                    tentativas: 1,
+                    inscricoes,
+                })
             }
-        };
-        fut
+        }
     }
-}
 
-/// Mock implementation of CertificadosSerproConsulta
-/// Retorna certificado mock ou None
-#[allow(dead_code)]
-struct MockCertificados;
-
-impl CertificadosSerproConsulta for MockCertificados {
-    fn buscar_certificado_em_validade(
+    async fn consultar_inscricao(
         &self,
-        _escritorio_id: Uuid,
-        _agora: chrono::DateTime<chrono::Utc>,
-    ) -> Result<Option<crate::application::serpro::ports::CertificadoAtivoResumo>, RepositorioError>
-    {
-        // No mock, não retornamos certificado real
-        // Apenas indicamos que não há certificado A1 no trial
-        Ok(None)
+        endpoint: &EndpointSerpro,
+        numero_inscricao: &str,
+        cpf_operador: Option<String>,
+        request_id: &str,
+    ) -> Result<InscricaoDetalhe, ErroDividaAtiva> {
+        if !mock_ativo(endpoint.ambiente, self.ativo) {
+            return self
+                .interno
+                .consultar_inscricao(endpoint, numero_inscricao, cpf_operador, request_id)
+                .await;
+        }
+
+        match ultimo_digito(numero_inscricao) {
+            4 => Err(ErroDividaAtiva::NaoEncontrado),
+            6 => Err(ErroDividaAtiva::LimiteSerproAtingido),
+            7 => Err(ErroDividaAtiva::ServicoIndisponivel),
+            8 => Err(ErroDividaAtiva::Indeterminado),
+            9 => Err(ErroDividaAtiva::RespostaInvalida),
+            digito => {
+                let com_pendencias = digito <= 1;
+                Ok(InscricaoDetalhe {
+                    ambiente: AmbienteSerpro::Trial,
+                    estado: if com_pendencias {
+                        EstadoConsulta::ComPendencias
+                    } else {
+                        EstadoConsulta::SemPendencias
+                    },
+                    fonte: FonteConsulta::CpfCnpj,
+                    chave_mascarada: mascarar(numero_inscricao),
+                    horario_consulta: Utc::now(),
+                    tentativas: 1,
+                    numero_inscricao: numero_inscricao.to_owned(),
+                    processo_administrativo: Some("10880.000000/2024-10".to_owned()),
+                    situacao: if com_pendencias {
+                        "ATIVA".to_owned()
+                    } else {
+                        "REGULAR".to_owned()
+                    },
+                    data_inscricao: Some("2024-01-15".to_owned()),
+                    orgao_origem: Some("Receita Federal do Brasil".to_owned()),
+                    codigo_natureza_receita: Some("1210".to_owned()),
+                    nome_receita: Some("Multa por atraso".to_owned()),
+                    valor_total_inscrito: Some(valor(150_000)),
+                    valor_total_consolidado: Some(valor(150_000)),
+                    valor_remanescente: Some(valor(120_000)),
+                    indicador_prescricao: Some(false),
+                    nome_unidade: Some("PFN Simulada".to_owned()),
+                })
+            }
+        }
     }
 }
 
-/// Mock implementation of InvalicadorCachesSerpro
-/// Registra que caches foram invalidados (no mock, apenas registra)
-#[allow(dead_code)]
-struct MockInvalidador;
+// ===== Integra Contador =====
 
-impl InvalicadorCachesSerpro for MockInvalidador {
-    fn invalidar_todos_do_tenant(&self, _escritorio_id: Uuid) -> Result<(), RepositorioError> {
-        // No mock, apenas registra que invalidou
-        Ok(())
+pub struct ClienteIntegraContadorMock {
+    interno: Arc<dyn ClienteIntegraContador>,
+    ativo: bool,
+}
+
+impl ClienteIntegraContadorMock {
+    pub fn novo(interno: Arc<dyn ClienteIntegraContador>, ativo: bool) -> Self {
+        Self { interno, ativo }
     }
 }
 
-/// Mock implementation of EscritorioSerproRepositorio
-/// Versão mock que retorna modo trial simulado
-#[allow(dead_code)]
-struct MockEscritorioRepositorio;
-
-impl EscritorioSerproRepositorio for MockEscritorioRepositorio {
-    fn buscar_modo_trial(
+#[async_trait]
+impl ClienteIntegraContador for ClienteIntegraContadorMock {
+    async fn executar(
         &self,
-        _escritorio_id: Uuid,
-    ) -> Result<Option<(bool, i64, chrono::DateTime<chrono::Utc>)>, RepositorioError> {
-        Ok(Some((true, 1, Utc::now())))
-    }
+        verbo: VerboIntegraContador,
+        request: &IntegraContadorRequest,
+        ambiente: AmbienteSerpro,
+        cpf_operador: Option<&str>,
+        request_id: &str,
+    ) -> Result<EntregaIntegraContador, ErroIntegraContador> {
+        if !mock_ativo(ambiente, self.ativo) {
+            return self
+                .interno
+                .executar(verbo, request, ambiente, cpf_operador, request_id)
+                .await;
+        }
 
-    fn atualizar_modo_trial(
-        &self,
-        _escritorio_id: Uuid,
-        _modo_trial: bool,
-        _versao_esperada: i64,
-    ) -> Result<(i64, chrono::DateTime<chrono::Utc>), RepositorioError> {
-        Ok((1, Utc::now()))
-    }
-
-    fn buscar_credencial(
-        &self,
-        _escritorio_id: Uuid,
-        _produto: ProdutoSerpro,
-        _ambiente: AmbienteSerpro,
-    ) -> Result<Option<crate::application::serpro::ports::CredencialArmazenada>, RepositorioError>
-    {
-        Ok(None)
+        match ultimo_digito(&request.contribuinte.numero) {
+            4 => Err(ErroIntegraContador::AcessoNegado),
+            6 => Err(ErroIntegraContador::LimiteExcedido),
+            7 => Err(ErroIntegraContador::Indisponivel),
+            8 => Err(ErroIntegraContador::Indeterminado),
+            9 => Err(ErroIntegraContador::RespostaInvalida),
+            _ => Ok(EntregaIntegraContador {
+                http_status: 200,
+                estado: "CONCLUIDO".to_owned(),
+                resposta: Some(IntegraContadorResponse {
+                    status: 200,
+                    mensagens: Vec::new(),
+                    dados: Some(
+                        serde_json::json!({
+                            "origem": "MOCK",
+                            "idServico": request.pedido_dados.id_servico,
+                            "verbo": verbo.como_str(),
+                            "procuracao": "ENCONTRADA",
+                            "validade": "2026-12-31",
+                        })
+                        .to_string(),
+                    ),
+                }),
+                referencia_resposta: Some("MOCK-INTEGRA-001".to_owned()),
+                tempo_espera_segundos: None,
+                etag: None,
+                expires: None,
+            }),
+        }
     }
 }
 
-// --- Mock HTTP Handlers ---
-
-/// Handler para GET /api/v1/serpro/mock/cenarios
-/// Retorna a lista de cenários de teste disponíveis
-pub async fn handler_mock_cenarios() -> Result<Value, axum::Error> {
-    let cenarios = MockSerproService::obter_todos_cenarios();
-    let json = serde_json::json!({
-        "ativo": true,
-        "cenarios": cenarios.iter().map(|c| serde_json::json!({
-            "id": c.id,
-            "servico": c.servico,
-            "titulo": c.titulo,
-            "descricao": c.descricao,
-            "documentoExemplo": c.documento_exemplo,
-            "resultadoEsperado": c.resultado_esperado,
-        })).collect::<Vec<_>>()
-    });
-    Ok(json)
+pub struct AutenticaProcuradorMock {
+    interno: Arc<dyn AutenticaProcuradorCliente>,
+    ativo: bool,
 }
 
-/// Handler para chamadas mockadas do SERPRO
-/// Redireciona chamadas para respostas determinísticas quando em trial mock mode
-pub async fn handler_mock_redirect(_caminho: String) -> Result<Value, axum::Error> {
-    // Parse the path to determine the service and scenario
-    // This is a simplified mock redirection
-    // Na implementação real, isso seria mais sofisticado
-    // e integraria com o mesmo ponto de cliente da medição (G.1)
+impl AutenticaProcuradorMock {
+    pub fn novo(interno: Arc<dyn AutenticaProcuradorCliente>, ativo: bool) -> Self {
+        Self { interno, ativo }
+    }
+}
 
-    // Por enquanto, retorna um erro indicando que a rota mock
-    // precisa de implementação mais detalhada
-    Ok(serde_json::json!({
-        "erro": "Rota mock requer implementação específica por serviço"
-    }))
+#[async_trait]
+impl AutenticaProcuradorCliente for AutenticaProcuradorMock {
+    async fn enviar_xml_assinado(
+        &self,
+        request: &IntegraContadorRequest,
+        xml_base64: &str,
+        ambiente: AmbienteSerpro,
+        request_id: &str,
+    ) -> Result<AutenticarProcuradorResultado, ErroIntegraContador> {
+        if !mock_ativo(ambiente, self.ativo) {
+            return self
+                .interno
+                .enviar_xml_assinado(request, xml_base64, ambiente, request_id)
+                .await;
+        }
+
+        match ultimo_digito(&request.contribuinte.numero) {
+            4 => Err(ErroIntegraContador::AcessoNegado),
+            6 => Err(ErroIntegraContador::LimiteExcedido),
+            7 => Err(ErroIntegraContador::Indisponivel),
+            _ => {
+                let amanha = Utc::now().date_naive() + chrono::Days::new(1);
+                let expira_em = Utc.from_utc_datetime(
+                    &amanha
+                        .and_hms_opt(0, 0, 0)
+                        .ok_or(ErroIntegraContador::RespostaInvalida)?,
+                );
+                Ok(AutenticarProcuradorResultado {
+                    jwt_token: SecretString::from("mock-procurador-jwt"),
+                    expira_em,
+                })
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mock_so_existe_em_trial() {
+        assert!(mock_ativo(AmbienteSerpro::Trial, true));
+        assert!(!mock_ativo(AmbienteSerpro::Trial, false));
+        assert!(
+            !mock_ativo(AmbienteSerpro::Producao, true),
+            "produção nunca pode usar o simulador"
+        );
+    }
+
+    #[test]
+    fn cenarios_cobrem_todos_os_servicos_e_documentos_sao_digitos() {
+        let cenarios = cenarios();
+        assert!(
+            cenarios
+                .iter()
+                .any(|c| matches!(c.servico, ServicoMock::DividaAtiva))
+        );
+        assert!(
+            cenarios
+                .iter()
+                .any(|c| matches!(c.servico, ServicoMock::IntegraContador))
+        );
+        assert!(
+            cenarios
+                .iter()
+                .any(|c| matches!(c.servico, ServicoMock::Procuracao))
+        );
+        for cenario in cenarios {
+            assert!(
+                cenario.documento_exemplo.len() >= 11
+                    && cenario
+                        .documento_exemplo
+                        .bytes()
+                        .all(|b| b.is_ascii_digit()),
+                "documento de exemplo deve conter apenas dígitos"
+            );
+        }
+    }
 }
