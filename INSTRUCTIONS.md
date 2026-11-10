@@ -100,6 +100,7 @@ Copie `.env.example` para `.env` e preencha os valores. Nunca versione `.env`, c
 | `SERPRO_INTEGRA_PROD_URL` | Produção | `https://gateway.apiserpro.serpro.gov.br/integra-contador/v1` |
 | `SERPRO_DIVIDA_ATIVA_PROD_URL` | Produção | Indefinida; vazia bloqueia com `SERPRO_PROD_NOT_CONFIGURED` |
 | `SERPRO_TRIAL_BEARER_TOKEN` | Trial | Chave Bearer pública de demonstração fornecida pela SERPRO |
+| `SERPRO_TRIAL_MOCK` | Não | `true`/`false`; padrão `true` quando `SERPRO_TRIAL_BEARER_TOKEN` está ausente. Simulador determinístico usado **somente** em TRIAL (ver `docs/Serpro/mocks-trial.md`); nunca em produção |
 | `SERPRO_CONSUMER_KEY` / `SERPRO_CONSUMER_SECRET` | Não | Fallback global de desenvolvimento; produção usa `credenciais_serpro` por escritório |
 | `SERPRO_CONTRATANTE_CNPJ` | Não | CNPJ da Software House (Contratante no modelo C); sem ela o AUTENTICAPROCURADOR falha com 503 |
 | `SERPRO_CONTRATANTE_NOME` | Não | Razão social da Software House usada no Termo de Autorização; sem ele a validação falha fechado |
@@ -110,6 +111,7 @@ Copie `.env.example` para `.env` e preencha os valores. Nunca versione `.env`, c
 | `SERPRO_HTTP_REQUEST_TIMEOUT_SECS` | Não | Timeout de requisição (padrão 30) |
 | `SERPRO_PROCURACAO_CACHE_TTL_SECS` | Não | TTL do cache de procuração (padrão 300) |
 | `RUST_LOG` | Não | Nível de log (`info`, `debug`, `warn`) |
+| `METRICS_TOKEN` | Produção | Token Bearer para `GET /api/v1/metrics`; sem ele a rota responde 403 |
 
 > O Compose usa `APP_ENV=production` quando a variável não está definida. O `.env` gerado pelo
 > `init-env` usa `development` para o ambiente local. `DATABASE_URL` deve apontar para

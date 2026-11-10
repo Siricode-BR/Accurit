@@ -65,7 +65,7 @@
 | `SERPRO_INTEGRA_PROD_URL` | Sim | `https://...` | URL produção do Integra Contador. |
 | `SERPRO_DIVIDA_ATIVA_TRIAL_URL` | Sim | `https://...` | URL trial da Dívida Ativa. |
 | `SERPRO_DIVIDA_ATIVA_PROD_URL` | Não | `https://...` | URL produção da Dívida Ativa (pendente de confirmação SERPRO). |
-| `SERPRO_TRIAL_BEARER_TOKEN` | Não | `Bearer ...` | Token bearer do trial (opcional; sem ele, trial falha fechado). |
+| `SERPRO_TRIAL_BEARER_TOKEN` | Não | `Bearer ...` | Token bearer do trial. Sem ele, o simulador `SERPRO_TRIAL_MOCK` entra em ação por padrão (somente em TRIAL). |
 | `SERPRO_CONSUMER_KEY` | Não | `...` | Consumer key para OAuth2 produção. |
 | `SERPRO_CONSUMER_SECRET` | Não | `...` | Consumer secret para OAuth2 produção. |
 | `SERPRO_CONTRATANTE_CNPJ` | Não | `12345678000199` | CNPJ da Software House (Contratante no modelo C). |
@@ -94,7 +94,15 @@ A contagem de chamadas SERPRO distingue automaticamente `TRIAL` de `PRODUCAO` no
 
 Consulte [`docs/ADR/0018-medicao-uso-serpro.md`](ADR/0018-medicao-uso-serpro.md) para a decisão arquitetural de medição.
 
-## 5. Auditoria
+## 5. Consumo, planos, LGPD e observabilidade
+
+- Consumo por escritório/produto/ambiente no admin (`/consumo`) e no client (`/consumo`), com exportação CSV.
+- Planos com limites de chamadas/clientes/usuários e assinatura por escritório; bloqueio configurável ao exceder.
+- LGPD: retenção por escritório, exportação JSON, anonimização auditada e consentimentos (`docs/LGPD.md`).
+- `/api/v1/metrics` protegido por `METRICS_TOKEN` e `/api/v1/health/detalhado` (`docs/OBSERVABILIDADE.md`).
+- Pendências externas: confirmação SERPRO (D5/P5/P4/D2), teste live de mTLS/SAPI e runbook de backup/restore validado em ambiente real.
+
+## 6. Auditoria
 
 Toda troca de Trial → Produção é auditada na tabela `auditoria_eventos` com ação `INTEGRA_MODO_TRIAL_ALTERADO` (ou equivalente), registrando:
 

@@ -48,6 +48,16 @@ XMLDSig e serviços adicionais sem versão confirmada (P4) permanecem bloqueados
 
 ---
 
+## Etapa 2 — Fase G (consumo, planos, LGPD e observabilidade)
+
+- [x] **G.1 Consumo**: endpoints `GET /api/v1/consumo`, `GET /api/v1/admin/consumo`, exportação CSV, filtros por período/produto/ambiente/escritório, ranking, série diária, taxa de erro e duração média.
+- [x] **G.1 Frontend**: painel admin `/consumo` (consumo + planos) e painel client `/consumo` (mês corrente, limites, avisos 80%/100%, histórico).
+- [x] **G.2 Planos e assinatura**: planos com limites de chamadas, clientes e usuários; criação e atribuição pelo admin; visão do plano no client. O bloqueio de chamadas ao exceder continua no backend.
+- [x] **G.3 LGPD**: política de retenção por escritório, exportação JSON do cliente, anonimização com auditoria, registro/listagem de consentimentos e documentação em `docs/LGPD.md`.
+- [x] **G.4 Observabilidade**: `/api/v1/metrics` protegido por `METRICS_TOKEN`, health detalhado, contadores HTTP/SERPRO, logs com request-id e documentação/alertas em `docs/OBSERVABILIDADE.md`.
+- [x] **G.5 Dívida técnica**: pasta duplicada `presentation/integra-contador` removida; paginação de usuários já existente no servidor.
+- [x] **G.2 Verificação de limites**: chamadas SERPRO bloqueadas no backend; limite de clientes e de usuários verificado nos casos de uso de cadastro quando há plano atribuído.
+
 ## Fase 0 — Reconciliação documental e configuração
 
 - [x] Corrigir contratos oficiais da Dívida Ativa e do Integra Contador em `README`, `SPEC` e ADRs.
@@ -55,7 +65,7 @@ XMLDSig e serviços adicionais sem versão confirmada (P4) permanecem bloqueados
 - [x] Registrar D1–D5 e pendências de confirmação em `docs/ADR/0007-modelo-contratacao-serpro.md` e `docs/DECISOES-PENDENTES.md`.
 - [x] Atualizar `.env.example`, `docker-compose.yml`, `nginx/nginx.conf`, `.gitattributes` e renomear `backend/Diesel.toml` para `backend/diesel.toml`.
 - [x] Validar referências, encoding e ausência de segredos; emitir commits da fase.
-- [x] Substituir `slug` por `CNPJ` (14 dígitos com validação) em `escritorios` table, domínio, schema.rs, repositórios, bootstrap, login/auth, rate limit, usuários, testes e docs. CNPJ é o identificador fiscal; login continua por e-mail. ADR registrada.
+- [x] Substituir `slug` por `CNPJ` (14 dígitos com validação) em `escritorios` table, domínio, schema.rs, repositórios, bootstrap, login/auth, rate limit, usuários, testes e docs. CNPJ é o identificador fiscal; login continua por e-mail. ADR-0019 registrada.
 
 ---
 
@@ -267,9 +277,19 @@ A **FASE D (emissão de guias e documentos) foi concluída**: ADR-0014 autorizan
 
 A **FASE E (Gestão de carteira) foi concluída**: sócios/contatos com representante principal, filiais/unidades, tags, responsável interno e observações por cliente; importação em massa CSV/XLSX com prévia, validação de CPF/CNPJ e relatório de erros; permissões granulares por função (gestor/analista/operador leitura) e carteira de clientes, com guards no backend e frontend; usuários do escritório com paginação e busca no servidor.
 
-A **FASE F (Relatórios e portal do cliente final) foi concluída**: exportação PDF/XLSX de situação fiscal, histórico de consultas e pendências por carteira; link seguro e expirável para compartilhar relatório com o cliente final (somente leitura).
+A **FASE F (Relatórios e portal do cliente final) foi concluída**: exportação PDF/XLSX de situação fiscal, histórico de consultas e pendências por carteira; link seguro e expirável para compartilhar relatório com o cliente final (somente leitura), com token opaco, hash SHA-256 no banco, expiração, limite de acessos, revogação auditável, rate limit e página pública sem login.
 
-A **FASE H (Produção) foi concluída**: medição de uso SERPRO distinguindo TRIAL de PRODUCAO para cobrança; checklist de go-live documentado (D5, P5, P4, D2/P2/P3); scripts e documentação para cadastro de certificado A1, credenciais SERPRO, validação de procuração e troca segura Trial→Produção com confirmação e auditoria; dependente de confirmação externa da SERPRO para habilitar ambiente de produção.
+A **FASE H (Produção) está implementada no escopo interno**: medição TRIAL/PRODUCAO, consumo/cotas, planos e assinaturas, LGPD (retenção, exportação, anonimização e consentimento), métricas Prometheus protegidas, health detalhado, CI e documentação de go-live. **Pendentes externos**: confirmação SERPRO de D5/P5/P4/D2, teste live de mTLS/SAPI e runbook de backup/restore validado em ambiente real.
+
+---
+
+## Correções obrigatórias (Etapa 0)
+
+- [x] **0.1 — CNPJ no lugar do slug**: `escritorios.cnpj` único, value object `domain::tenancy::Cnpj` com dígitos verificadores, provisionamento normaliza máscara, login continua por e-mail; ADR-0019; frontend com máscara e busca por nome/CNPJ.
+- [x] **0.2 — Backoffice somente administradores do SaaS**: `/api/v1/admin/administradores` com `page`/`pageSize`/`q`, CRUD, ativação/desativação, redefinição de senha, proteção contra auto-desativação e último ativo, revogação de `sessoes_admin` e auditoria; rotas de usuários de escritório removidas do admin.
+- [x] **0.3 — Erros sem vazamento**: envelope `{ error: { code, message, requestId } }`, sem `details`, 5xx genérico, rejeições de extratores do Axum convertidas, `ErrorHandler` silencioso e `mensagemDeErro` centralizada no frontend.
+- [x] **0.4 — Contratos corrigidos**: `PATCH /admin/escritorios/{id}/serpro/trial` usa `{ modoTrialSerpro, versao }`, `422 PRODUCAO_BLOQUEADA` para produção bloqueada e `409` para versão divergente; catálogo admin consolidado sob `/admin/integra-contador`.
+- [x] **0.5 — Mocks SERPRO em Trial**: `SERPRO_TRIAL_MOCK` (padrão ligado sem bearer token), adapters determinísticos atrás das mesmas portas, nunca em produção, `GET /api/v1/serpro/mock/cenarios`, banner/painel no client e texto no admin; tabela em `docs/Serpro/mocks-trial.md`.
 
 ---
 

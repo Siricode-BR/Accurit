@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: accurit
+          POSTGRES_PASSWORD: accurit
+          POSTGRES_DB: accurit
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U accurit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DATABASE_ADMIN_URL: postgres://accurit:accurit@127.0.0.1:5432/accurit
+      DATABASE_URL: postgres://accurit:accurit@127.0.0.1:5432/accurit
+      JWT_SECRET: ci-secret-with-at-least-32-bytes-long!!
+      CERTIFICATE_MASTER_KEY: BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=
+      SERPRO_TOKEN_URL: https://gateway.apiserpro.serpro.gov.br/token
+      SERPRO_SAPI_AUTH_URL: https://autenticacao.sapi.serpro.gov.br/authenticate
+      SERPRO_INTEGRA_TRIAL_URL: https://gateway.apiserpro.serpro.gov.br/integra-contador-trial/v1
+      SERPRO_DIVIDA_ATIVA_TRIAL_URL: https://gateway.apiserpro.serpro.gov.br/consulta-divida-ativa-trial/api/v1
+      SERPRO_INTEGRA_PROD_URL: https://gateway.apiserpro.serpro.gov.br/integra-contador/v1
+      RUST_LOG: error
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+      - run: cargo fmt --all --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked -- --test-threads=1
+      - run: cargo install cargo-audit --locked
+      - run: cargo audit
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.3.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter admin test
+      - run: pnpm --filter client test
+      - run: pnpm --filter client test:vitest
+      - run: pnpm --filter admin build
+      - run: pnpm --filter client build
+      - run: pnpm --filter web build
+      - run: pnpm audit --audit-level=high
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - run: docker compose build

@@ -73,6 +73,7 @@ services:
       SERPRO_HTTP_REQUEST_TIMEOUT_SECS: ${SERPRO_HTTP_REQUEST_TIMEOUT_SECS:-30}
       SERPRO_PROCURACAO_CACHE_TTL_SECS: ${SERPRO_PROCURACAO_CACHE_TTL_SECS:-300}
       RUST_LOG: ${RUST_LOG:-info}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy

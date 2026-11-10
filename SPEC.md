@@ -684,7 +684,6 @@ inacessível. Fallback estático somente quando o provedor é `None` (testes ant
 
 ---
 
-
 ## 7. Assinatura eletrônica, XML e formatação de payload
 
 ### 7.1 Assinatura digital de XML
@@ -911,7 +910,7 @@ redigido (JSONB) e mensagem de erro. Itens são listáveis por lote.
 ### 8.5.5 Contrato da API (Fase B)
 
 | Método | Rota | Descrição |
-|---|---|---|
+| --- | --- | --- |
 | `POST` | `/api/v1/trabalhos` | Cria um trabalho agendado (corpo: `{ nome, tipo, produto, ambiente, cron_expression }`) |
 | `GET` | `/api/v1/trabalhos` | Lista trabalhos agendados do escritório autenticado |
 | `GET` | `/api/v1/trabalhos/{id}` | Busca um trabalho agendado por ID |
@@ -957,7 +956,7 @@ Os seguintes gatilhos geram notificações automaticamente:
 #### 8.6.3 Contrato da API (Fase C)
 
 | Método | Rota | Descrição |
-|---|---|---|
+| --- | --- | --- |
 | `POST` | `/api/v1/notificacoes` | Cria uma notificação |
 | `GET` | `/api/v1/notificacoes` | Lista notificações do usuário |
 | `GET` | `/api/v1/notificacoes/contagem-nao-lidas` | Conta notificações não lidas |
@@ -990,7 +989,7 @@ retornam a mesma guia previamente emitida, sem nova chamada ao SERPRO.
 #### 8.7.3 Contrato da API (Fase D)
 
 | Método | Rota | Descrição |
-|---|---|---|
+| --- | --- | --- |
 | `POST` | `/api/v1/guias` | Emite uma guia (corpo: `{ clienteId, tipoGuia, competencia, valorTotal, idempotenciaChave }`) |
 | `GET` | `/api/v1/guias` | Lista guias do usuário autenticado |
 | `GET` | `/api/v1/guias/{id}` | Busca uma guia por ID |
@@ -1050,7 +1049,7 @@ tags a clientes (idempotente).
 #### 8.8.3 Contrato da API (Fase E)
 
 | Método | Rota | Descrição |
-|---|---|---|
+| --- | --- | --- |
 | `GET` | `/api/v1/clientes/{id}/socios-contatos` | Lista sócios/contatos do cliente |
 | `POST` | `/api/v1/clientes/{id}/socios-contatos` | Cadastra sócio/contato |
 | `DELETE` | `/api/v1/clientes/{id}/socios-contatos/{socioId}` | Remove sócio/contato |
@@ -1146,7 +1145,7 @@ CREATE INDEX idx_links_compartilhamento_relatorios_expira_em ON links_compartilh
 #### 8.9.3 Contrato da API (Fase F)
 
 | Método | Rota | Descrição |
-|---|---|---|
+| --- | --- | --- |
 | `POST` | `/api/v1/relatorios` | Gera um relatório (corpo: `{ tipoRelatorio, formato, clienteId?, competencia? }`) |
 | `GET` | `/api/v1/relatorios` | Lista relatórios do escritório autenticado |
 | `GET` | `/api/v1/relatorios/{id}` | Busca um relatório por ID |
@@ -1169,9 +1168,8 @@ Todas as tabelas de negócio são isoladas por `escritorio_id`. Índices compost
 ```sql
 CREATE TABLE escritorios (
     id UUID PRIMARY KEY,
-    slug VARCHAR(40) NOT NULL UNIQUE CHECK (slug ~ '^[a-z0-9-]{3,40}$'),
     nome TEXT NOT NULL,
-    cnpj VARCHAR(14) UNIQUE CHECK (cnpj IS NULL OR cnpj ~ '^[0-9]{14}$'),
+    cnpj VARCHAR(14) UNIQUE NOT NULL CHECK (cnpj ~ '^[0-9]{14}$'),
     modo_trial_serpro BOOLEAN NOT NULL DEFAULT TRUE,
     versao BIGINT NOT NULL DEFAULT 1,
     atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1179,9 +1177,9 @@ CREATE TABLE escritorios (
 );
 ```
 
-O `slug` é o identificador público estável do escritório, normalizado na aplicação e validado pelo
-`CHECK`. O CNPJ é opcional no cadastro inicial, mas, quando informado, contém exatamente 14 dígitos.
-`versao` é reservado para concorrência otimista nas fases seguintes.
+O CNPJ é o identificador fiscal e público do escritório (ADR-0019), armazenado somente com
+14 dígitos e validado por dígitos verificadores no value object `domain::tenancy::Cnpj`.
+O login continua exclusivamente por e-mail. `versao` é usada para concorrência otimista.
 
 ### 9.2 `usuarios`
 
@@ -1636,6 +1634,7 @@ nenhum escritório e `email` é único globalmente (ADR-0010, D2).
 ```sql
 CREATE TABLE administradores (
     id UUID PRIMARY KEY,
+    nome TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
     cpf VARCHAR(11) NOT NULL UNIQUE,
     senha_hash TEXT NOT NULL,
@@ -1644,16 +1643,16 @@ CREATE TABLE administradores (
     falhas_consecutivas INTEGER NOT NULL DEFAULT 0,
     bloqueado_ate TIMESTAMPTZ,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CHECK (cpf ~ '^[0-9]{11}$'),
     CHECK (email ~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$')
 );
 ```
 
-O CPF segue as mesmas regras de `usuarios` (obrigatório, 11 dígitos, dígitos verificadores na
-aplicação). O login/lockout usa `falhas_consecutivas`/`bloqueado_ate` com a mesma política dos
-usuários (5 falhas, 900 s). O primeiro administrador é criado no bootstrap (
-`cargo run --bootstrap-admin`, [INSTRUCTIONS §3.3](INSTRUCTIONS.md)); o provisionamento de novos
-administradores no backoffice `/admin` é tarefa da Fase 2B.
+O backoffice gerencia **somente** `administradores` em `/api/v1/admin/administradores`
+(`GET` com `page`/`pageSize`/`q`, `POST`, `GET /{id}`, `PATCH /{id}` e `PUT /{id}/senha`).
+Usuários de escritório são geridos apenas no app `client`. Não é permitido desativar a si
+mesmo nem o último administrador ativo; desativar revoga `sessoes_admin` e gera auditoria.
 
 ### 9.13 `sessoes_admin`
 
@@ -1847,15 +1846,22 @@ Link seguro e expirável para compartilhamento de um relatório com o cliente fi
 CREATE TABLE links_compartilhamento_relatorios (
     id UUID PRIMARY KEY,
     relatorio_id UUID NOT NULL REFERENCES relatorios(id) ON DELETE CASCADE,
-    token VARCHAR(64) NOT NULL UNIQUE,
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
     expira_em TIMESTAMPTZ NOT NULL,
+    max_acessos INTEGER NOT NULL DEFAULT 50 CHECK (max_acessos > 0),
+    acessos INTEGER NOT NULL DEFAULT 0 CHECK (acessos >= 0),
+    revogado_em TIMESTAMPTZ NULL,
     acessado_em TIMESTAMPTZ NULL,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_links_compartilhamento_relatorios_relatorio_id ON links_compartilhamento_relatorios(relatorio_id);
-CREATE INDEX idx_links_compartilhamento_relatorios_token ON links_compartilhamento_relatorios(token);
+CREATE INDEX idx_links_compartilhamento_relatorios_token_hash ON links_compartilhamento_relatorios(token_hash);
 CREATE INDEX idx_links_compartilhamento_relatorios_expira_em ON links_compartilhamento_relatorios(expira_em);
 ```
+
+O token opaco em claro só é devolvido na resposta de criação; o banco guarda apenas seu
+hash SHA-256. O acesso público é somente leitura, limitado por `max_acessos`, expiração e
+revogação, e `DELETE /relatorios/{id}/compartilhamento` revoga os links do escritório.
 
 ---
 
@@ -1927,17 +1933,17 @@ Todos os endpoints de domínio validam o tenant no repositório e ignoram qualqu
 ```json
 {
   "error": {
-    "code": "SERPRO_AUTH_INVALID",
+    "code": "SERPRO_UNAUTHORIZED",
     "message": "Falha de autenticação junto ao SERPRO.",
-    "requestId": "01J9Z8Y6Q4W3T2S1R0P9N8M7K6",
-    "details": []
+    "requestId": "01J9Z8Y6Q4W3T2S1R0P9N8M7K6"
   }
 }
 ```
 
-- `code` é estável e documentado; `message` é segura para o usuário.
-- Detalhes internos, stack traces, tokens e payloads nunca são retornados.
-- Mapear 401/403 do SERPRO para códigos distintos (`SERPRO_UNAUTHORIZED`, `SERPRO_PROXY_DENIED`).
+- `code` é estável e documentado; `message` é segura para o usuário e em pt-BR.
+- O envelope não possui `details`: detalhes internos, stack traces, SQL/Diesel, hosts,
+  caminhos, tokens e payloads nunca são retornados; ficam apenas em log redigido.
+- 5xx devolvem mensagem genérica + `requestId` (exibido no frontend como "Código de suporte").
 - Paginação usa `page`/`pageSize` com limite máximo e ordenação determinística.
 
 ### 10.4 Health check
@@ -1984,7 +1990,7 @@ da aplicação antes de retornar ao chamador.
 ### Campos registrados por chamada
 
 | Campo | Descrição |
-|-------|-----------|
+| ------- | ----------- |
 | `escritorio_id` | Escritório proprietário da chamada (isolamento multi-tenant). |
 | `produto` | `INTEGRA_CONTADOR` ou `DIVIDA_ATIVA`. |
 | `verbo` | Verbo do Integra Contador (`Apoiar`, `Consultar`, `Declarar`, `Emitir`, `Monitorar`) ou serviço da Dívida Ativa (`devedor`, `inscricao`). |
@@ -2025,6 +2031,38 @@ na tabela `bloqueios_serpro` para diagnóstico.
 - [`docs/ADR/0018-medicao-uso-serpro.md`](docs/ADR/0018-medicao-uso-serpro.md) — Decisão arquitetural de medição.
 
 ---
+
+## 10.6 Consumo e planos na API
+
+- `GET /api/v1/consumo` (client): mês corrente, limite do plano, limites de clientes/usuários,
+  aviso em 80%/100%, agregados e chamadas recentes.
+- `GET /api/v1/admin/consumo?inicio&fim&produto&ambiente&escritorioId` (admin): totais, taxa de
+  erro, duração média, ranking, série diária e linhas por escritório.
+- `GET /api/v1/admin/consumo/export.csv` (admin): exportação auditável em CSV.
+- `GET/POST /api/v1/admin/planos` e `PUT /api/v1/admin/planos/escritorios/{id}` (admin):
+  planos com limites de chamadas/clientes/usuários e atribuição ao escritório.
+- Planos e assinaturas também alimentam avisos in-app nos marcos de 80% e 100%.
+
+## 10.7 LGPD
+
+| Recurso | Endpoint |
+| --- | --- |
+| Exportação (portabilidade) | `GET /api/v1/lgpd/clientes/{id}/export` |
+| Anonimização | `DELETE /api/v1/lgpd/clientes/{id}` |
+| Consentimentos | `GET/POST /api/v1/lgpd/clientes/{id}/consentimentos` |
+| Retenção por escritório | `GET/PUT /api/v1/lgpd/retencao` |
+
+A anonimização substitui PII do cliente e contatos, preserva o histórico operacional sem os
+dados pessoais e grava `LGPD_CLIENTE_ANONIMIZADO` em `auditoria_eventos`. Perfil `CLIENTE`
+não pode anonimizar nem alterar retenção.
+
+## 10.8 Observabilidade
+
+- `GET /api/v1/metrics` (Bearer `METRICS_TOKEN`, fail closed) expõe métricas Prometheus de
+  requisições, latência, chamadas/erros SERPRO, uptime e versão/ambiente.
+- `GET /api/v1/health/detalhado` expõe versão, ambiente, uptime, banco e contadores.
+- Logs são estruturados com `request_id` e sem PII; detalhes internos nunca retornam ao cliente.
+  Ver [`docs/OBSERVABILIDADE.md`](docs/OBSERVABILIDADE.md).
 
 ## 11. Startup, migrations e operação
 
