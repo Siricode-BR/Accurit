@@ -1,4 +1,4 @@
-﻿//! RepositÃ³rio Diesel de preferÃªncias de notificaÃ§Ã£o.
+//! RepositÃ³rio Diesel de preferÃªncias de notificaÃ§Ã£o.
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -6,9 +6,7 @@ use diesel::prelude::*;
 use diesel::sql_types::{Bool, Timestamptz, Uuid as SqlUuid};
 use uuid::Uuid;
 
-use crate::domain::notificacoes::entidades::{
-    PreferenciaNotificacao, NovoPreferenciaNotificacao,
-};
+use crate::domain::notificacoes::entidades::{NovoPreferenciaNotificacao, PreferenciaNotificacao};
 use crate::domain::notificacoes::erros::ErroNotificacao;
 use crate::domain::notificacoes::ports::RepositorioPreferenciasNotificacao;
 use crate::infrastructure::persistence::pool::DbPool;
@@ -59,9 +57,14 @@ struct PreferenciaRow {
 
 impl PreferenciaRow {
     fn para_entidade(self) -> PreferenciaNotificacao {
-        let tipos: Vec<String> = self.tipos_ativados
+        let tipos: Vec<String> = self
+            .tipos_ativados
             .as_array()
-            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
         PreferenciaNotificacao {
             id: self.id,
@@ -83,24 +86,26 @@ impl RepositorioPreferenciasNotificacao for PreferenciasNotificacaoDiesel {
         usuario_id: Uuid,
     ) -> Result<Option<PreferenciaNotificacao>, ErroNotificacao> {
         let pool = self.pool.clone();
-        tokio::task::spawn_blocking(move || -> Result<Option<PreferenciaNotificacao>, ErroNotificacao> {
-            let mut conexao = pool
-                .get()
-                .map_err(|_| ErroNotificacao::Persistencia("pool".into()))?;
-            let linha = diesel::sql_query(
-                "SELECT id, usuario_id, canal_email, canal_whatsapp, canal_in_app, \
+        tokio::task::spawn_blocking(
+            move || -> Result<Option<PreferenciaNotificacao>, ErroNotificacao> {
+                let mut conexao = pool
+                    .get()
+                    .map_err(|_| ErroNotificacao::Persistencia("pool".into()))?;
+                let linha = diesel::sql_query(
+                    "SELECT id, usuario_id, canal_email, canal_whatsapp, canal_in_app, \
                          tipos_ativados, criado_em, atualizado_em \
                   FROM preferencias_notificacao \
                   WHERE usuario_id = $1",
-            )
-            .bind::<SqlUuid, _>(usuario_id)
-            .get_result::<PreferenciaRow>(&mut conexao)
-            .optional()
-            .map_err(|_| ErroNotificacao::Persistencia("buscar preferÃªncias".into()))?
-            .map(|row| row.para_entidade())
-            .ok_or(ErroNotificacao::PreferenciaNaoEncontrada)?;
-            Ok(Some(linha))
-        })
+                )
+                .bind::<SqlUuid, _>(usuario_id)
+                .get_result::<PreferenciaRow>(&mut conexao)
+                .optional()
+                .map_err(|_| ErroNotificacao::Persistencia("buscar preferÃªncias".into()))?
+                .map(|row| row.para_entidade())
+                .ok_or(ErroNotificacao::PreferenciaNaoEncontrada)?;
+                Ok(Some(linha))
+            },
+        )
         .await
         .map_err(|_| ErroNotificacao::Persistencia("spawn_blocking".into()))?
     }

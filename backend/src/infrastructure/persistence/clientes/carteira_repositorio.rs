@@ -14,7 +14,7 @@ use crate::application::clientes::{
 use crate::domain::auth::Papel;
 use crate::domain::clientes::{
     AtualizarCarteiraCliente, CarteiraCliente, ClienteFilial, ClienteTag, CpfCnpj, FuncaoUsuario,
-    NovoClienteFilial, NovoSocioContato, NovaClienteTag, PapelSocioContato, SocioContato,
+    NovaClienteTag, NovoClienteFilial, NovoSocioContato, PapelSocioContato, SocioContato,
 };
 
 use crate::infrastructure::persistence::pool::DbPool;
@@ -191,7 +191,11 @@ impl RepositorioCarteiraClientes for CarteiraClientesRepositorioDiesel {
                 papel.eq(novo.papel.como_str()),
                 nome.eq(novo.nome.trim()),
                 cpf_cnpj.eq(novo.documento.as_ref().map(|d| d.como_str())),
-                email.eq(novo.email.as_deref().map(str::trim).filter(|e| !e.is_empty())),
+                email.eq(novo
+                    .email
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|e| !e.is_empty())),
                 telefone.eq(novo
                     .telefone
                     .as_deref()
@@ -677,7 +681,10 @@ impl RepositorioAcessoUsuarios for CarteiraClientesRepositorioDiesel {
                     .filter(escritorio_id.eq(escritorio_id_alvo))
                     .filter(usuario_id.eq(usuario_id_alvo)),
             )
-            .set((funcao.eq(nova_funcao.como_str()), atualizado_em.eq(Utc::now())))
+            .set((
+                funcao.eq(nova_funcao.como_str()),
+                atualizado_em.eq(Utc::now()),
+            ))
             .execute(&mut conexao)
             .map(|_| ())
             .map_err(|_| RepositorioError::Dados)

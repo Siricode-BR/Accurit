@@ -1,17 +1,15 @@
 //! Fase D — Handlers de emissão de guias.
 
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::Json;
 use uuid::Uuid;
 
 use crate::domain::guias::enums::TipoGuia;
 use crate::domain::guias::erros::ErroGuia;
 use crate::presentation::auth::RequestContext;
 use crate::presentation::error::ApiError;
-use crate::presentation::guias::dto::{
-    RespostaGuiaEmissao, RequisicaoEmitirGuia,
-};
+use crate::presentation::guias::dto::{RequisicaoEmitirGuia, RespostaGuiaEmissao};
 use crate::presentation::guias::state::EstadoGuias;
 
 /// POST /guias — emitir uma guia (DAS ou DARF).
@@ -30,15 +28,13 @@ pub async fn emitir_guia(
         .emitir_guia
         .executar(crate::domain::guias::entidades::NovoGuiaEmissao {
             usuario_id: contexto.usuario_id,
-            escritorio_id: contexto
-                .escritorio_id
-                .ok_or_else(|| {
-                    ApiError::nova(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "CONTEXTO_TOKEN_INVALIDO",
-                        "Token sem escritório",
-                    )
-                })?,
+            escritorio_id: contexto.escritorio_id.ok_or_else(|| {
+                ApiError::nova(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "CONTEXTO_TOKEN_INVALIDO",
+                    "Token sem escritório",
+                )
+            })?,
             cliente_id: requisicao.cliente_id,
             tipo_guia,
             competencia: requisicao.competencia,
@@ -82,10 +78,20 @@ pub async fn buscar_guia(
         .executar(id)
         .await
         .map_err(mapear_erro_guia)?
-        .ok_or_else(|| ApiError::nova(StatusCode::NOT_FOUND, "GUIA_NAO_ENCONTRADA", "Guia não encontrada"))?;
+        .ok_or_else(|| {
+            ApiError::nova(
+                StatusCode::NOT_FOUND,
+                "GUIA_NAO_ENCONTRADA",
+                "Guia não encontrada",
+            )
+        })?;
 
     if guia.usuario_id != usuario_id {
-        return Err(ApiError::nova(StatusCode::NOT_FOUND, "GUIA_NAO_ENCONTRADA", "Guia não encontrada"));
+        return Err(ApiError::nova(
+            StatusCode::NOT_FOUND,
+            "GUIA_NAO_ENCONTRADA",
+            "Guia não encontrada",
+        ));
     }
 
     Ok(Json(RespostaGuiaEmissao::from(guia)))
@@ -105,7 +111,11 @@ pub async fn baixar_guia(
         .map_err(mapear_erro_guia)?;
 
     if guia.usuario_id != usuario_id {
-        return Err(ApiError::nova(StatusCode::NOT_FOUND, "GUIA_NAO_ENCONTRADA", "Guia não encontrada"));
+        return Err(ApiError::nova(
+            StatusCode::NOT_FOUND,
+            "GUIA_NAO_ENCONTRADA",
+            "Guia não encontrada",
+        ));
     }
 
     Ok(Json(RespostaGuiaEmissao::from(guia)))
@@ -133,16 +143,12 @@ fn mapear_erro_guia(erro: ErroGuia) -> ApiError {
             "PROVEDOR_INDISPONIVEL",
             &msg,
         ),
-        ErroGuia::Persistencia(msg) => ApiError::nova(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "PERSISTENCIA",
-            &msg,
-        ),
-        ErroGuia::Interno(msg) => ApiError::nova(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "ERRO_INTERNO",
-            &msg,
-        ),
+        ErroGuia::Persistencia(msg) => {
+            ApiError::nova(StatusCode::INTERNAL_SERVER_ERROR, "PERSISTENCIA", &msg)
+        }
+        ErroGuia::Interno(msg) => {
+            ApiError::nova(StatusCode::INTERNAL_SERVER_ERROR, "ERRO_INTERNO", &msg)
+        }
     }
 }
 

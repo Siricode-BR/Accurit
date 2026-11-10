@@ -23,7 +23,7 @@ pub async fn provisionar_tenant(
     }
 
     let comando = crate::application::admin::ProvisionarTenantCommand {
-        slug: payload.slug,
+        cnpj: payload.cnpj,
         nome: payload.nome,
         email_titular: payload.email_titular,
         cpf_titular: payload.cpf_titular,
@@ -37,7 +37,7 @@ pub async fn provisionar_tenant(
         StatusCode::CREATED,
         Json(ProvisionarTenantResponse {
             escritorio_id: resultado.escritorio_id,
-            slug: resultado.slug,
+            cnpj: resultado.cnpj,
             titular_id: resultado.titular_id,
             email_titular: resultado.email_titular,
         }),
@@ -46,7 +46,7 @@ pub async fn provisionar_tenant(
 }
 
 /// GET /api/v1/admin/escritorios?page=...&pageSize=... — lista paginada de
-/// escritórios com apenas metadados (id, slug, nome, modoTrialSerpro,
+/// escritórios com apenas metadados (id, cnpj, nome, modoTrialSerpro,
 /// versao, atualizadoEm), fonte da tela do toggle SERPRO da Fase 3.
 pub async fn listar_escritorios(
     State(state): State<AdminState>,

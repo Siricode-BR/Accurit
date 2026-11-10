@@ -3,10 +3,10 @@
 //! `RepositorioAssinaturasEscritorio` e `RepositorioBloqueiosSerpro`.
 
 use chrono::{DateTime, Utc};
-use diesel::prelude::*;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel::RunQueryDsl;
+use diesel::prelude::*;
 use uuid::Uuid;
 
 use crate::domain::serpro::ambiente::AmbienteSerpro;
@@ -14,11 +14,13 @@ use crate::domain::serpro::medicao::entidades::{
     AgregadoConsumoSerpro, AssinaturaEscritorio, BloqueioSerpro, ChamadaSerpro,
     ComandoRegistrarBloqueio, ComandoRegistrarChamada, PlanoEscritorio,
 };
-use crate::domain::serpro::medicao::enums::{MotivoBloqueio, OrigemChamada, PeriodoAgregado, ResultadoChamada};
+use crate::domain::serpro::medicao::enums::{
+    MotivoBloqueio, OrigemChamada, PeriodoAgregado, ResultadoChamada,
+};
 use crate::domain::serpro::medicao::erros::ErroMedicao;
 use crate::domain::serpro::medicao::ports::{
-    RepositorioAgregadosConsumo, RepositorioAssinaturasEscritorio,
-    RepositorioBloqueiosSerpro, RepositorioChamadasSerpro, RepositorioPlanosEscritorio,
+    RepositorioAgregadosConsumo, RepositorioAssinaturasEscritorio, RepositorioBloqueiosSerpro,
+    RepositorioChamadasSerpro, RepositorioPlanosEscritorio,
 };
 use crate::domain::serpro::produto::ProdutoSerpro;
 use crate::infrastructure::persistence::pool::DbPool;
@@ -61,14 +63,20 @@ impl ChamadaSerproRow {
         ChamadaSerpro {
             id: self.id,
             escritorio_id: self.escritorio_id,
-            produto: self.produto.parse().unwrap_or(ProdutoSerpro::IntegraContador),
+            produto: self
+                .produto
+                .parse()
+                .unwrap_or(ProdutoSerpro::IntegraContador),
             verbo: self.verbo,
             servico: self.servico,
             ambiente: self.ambiente.parse().unwrap_or(AmbienteSerpro::Trial),
             cliente_id: self.cliente_id,
             usuario_id: self.usuario_id,
             origem: self.origem.parse().unwrap_or(OrigemChamada::Manual),
-            resultado: self.resultado.parse().unwrap_or(ResultadoChamada::Indeterminado),
+            resultado: self
+                .resultado
+                .parse()
+                .unwrap_or(ResultadoChamada::Indeterminado),
             status_http: self.status_http.map(|v| v as u16),
             duracao_ms: self.duracao_ms as u64,
             request_id: self.request_id,
@@ -102,7 +110,10 @@ impl AgregadoConsumoSerproRow {
         AgregadoConsumoSerpro {
             id: self.id,
             escritorio_id: self.escritorio_id,
-            produto: self.produto.parse().unwrap_or(ProdutoSerpro::IntegraContador),
+            produto: self
+                .produto
+                .parse()
+                .unwrap_or(ProdutoSerpro::IntegraContador),
             ambiente: self.ambiente.parse().unwrap_or(AmbienteSerpro::Trial),
             periodo: self.periodo.parse().unwrap_or(PeriodoAgregado::Dia),
             referencia_periodo: self.referencia_periodo,
@@ -193,8 +204,14 @@ impl BloqueioSerproRow {
         BloqueioSerpro {
             id: self.id,
             escritorio_id: self.escritorio_id,
-            produto: self.produto.parse().unwrap_or(ProdutoSerpro::IntegraContador),
-            motivo: self.motivo.parse().unwrap_or(MotivoBloqueio::ParametroInvalido),
+            produto: self
+                .produto
+                .parse()
+                .unwrap_or(ProdutoSerpro::IntegraContador),
+            motivo: self
+                .motivo
+                .parse()
+                .unwrap_or(MotivoBloqueio::ParametroInvalido),
             contexto: self.contexto,
             criado_em: self.criado_em,
         }
@@ -212,7 +229,9 @@ impl RepositorioChamadasSerpro for RepositorioMedicaoDiesel {
         let pool = self.pool.clone();
         let comando = comando.clone();
         tokio::task::spawn_blocking(move || -> Result<ChamadaSerpro, ErroMedicao> {
-            let mut conexao = pool.get().map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
+            let mut conexao = pool
+                .get()
+                .map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
             let id = Uuid::now_v7();
             let agora = Utc::now();
             let linha = diesel::insert_into(
@@ -293,7 +312,9 @@ impl RepositorioChamadasSerpro for RepositorioMedicaoDiesel {
     ) -> Result<Vec<ChamadaSerpro>, ErroMedicao> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || -> Result<Vec<ChamadaSerpro>, ErroMedicao> {
-            let mut conexao = pool.get().map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
+            let mut conexao = pool
+                .get()
+                .map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
             let mut consulta = crate::infrastructure::persistence::schema::chamadas_serpro::table
                 .filter(
                     crate::infrastructure::persistence::schema::chamadas_serpro::dsl::escritorio_id
@@ -315,7 +336,8 @@ impl RepositorioChamadasSerpro for RepositorioMedicaoDiesel {
             }
             if let Some(a) = ambiente {
                 consulta = consulta.filter(
-                    crate::infrastructure::persistence::schema::chamadas_serpro::dsl::ambiente.eq(a),
+                    crate::infrastructure::persistence::schema::chamadas_serpro::dsl::ambiente
+                        .eq(a),
                 );
             }
             if let Some(p) = periodo {
@@ -504,14 +526,17 @@ impl RepositorioPlanosEscritorio for RepositorioMedicaoDiesel {
     async fn listar_ativos(&self) -> Result<Vec<PlanoEscritorio>, ErroMedicao> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || -> Result<Vec<PlanoEscritorio>, ErroMedicao> {
-            let mut conexao = pool.get().map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
-            let linhas: Vec<PlanoEscritorioRow> = crate::infrastructure::persistence::schema::planos_escritorio::table
-                .filter(
-                    crate::infrastructure::persistence::schema::planos_escritorio::dsl::ativo
-                        .eq(true),
-                )
-                .load(&mut conexao)
+            let mut conexao = pool
+                .get()
                 .map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
+            let linhas: Vec<PlanoEscritorioRow> =
+                crate::infrastructure::persistence::schema::planos_escritorio::table
+                    .filter(
+                        crate::infrastructure::persistence::schema::planos_escritorio::dsl::ativo
+                            .eq(true),
+                    )
+                    .load(&mut conexao)
+                    .map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
             Ok(linhas.into_iter().map(|r| r.para_entidade()).collect())
         })
         .await
@@ -521,12 +546,18 @@ impl RepositorioPlanosEscritorio for RepositorioMedicaoDiesel {
     async fn buscar_por_id(&self, id: Uuid) -> Result<Option<PlanoEscritorio>, ErroMedicao> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || -> Result<Option<PlanoEscritorio>, ErroMedicao> {
-            let mut conexao = pool.get().map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
-            let linha: Option<PlanoEscritorioRow> = crate::infrastructure::persistence::schema::planos_escritorio::table
-                .filter(crate::infrastructure::persistence::schema::planos_escritorio::dsl::id.eq(id))
-                .first(&mut conexao)
-                .optional()
+            let mut conexao = pool
+                .get()
                 .map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
+            let linha: Option<PlanoEscritorioRow> =
+                crate::infrastructure::persistence::schema::planos_escritorio::table
+                    .filter(
+                        crate::infrastructure::persistence::schema::planos_escritorio::dsl::id
+                            .eq(id),
+                    )
+                    .first(&mut conexao)
+                    .optional()
+                    .map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
             Ok(linha.map(|r| r.para_entidade()))
         })
         .await
@@ -627,7 +658,7 @@ impl RepositorioAssinaturasEscritorio for RepositorioMedicaoDiesel {
                 .first(&mut conexao)
                 .optional()
                 .map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
-            Ok(linha.map(|r| r.para_entidade()).ok_or(ErroMedicao::RepositorioIndisponivel)?)
+            linha.map(|r| r.para_entidade()).ok_or(ErroMedicao::RepositorioIndisponivel)
         })
         .await
         .map_err(|_| ErroMedicao::RepositorioIndisponivel)?
@@ -643,7 +674,9 @@ impl RepositorioBloqueiosSerpro for RepositorioMedicaoDiesel {
         let pool = self.pool.clone();
         let comando = comando.clone();
         tokio::task::spawn_blocking(move || -> Result<BloqueioSerpro, ErroMedicao> {
-            let mut conexao = pool.get().map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
+            let mut conexao = pool
+                .get()
+                .map_err(|_| ErroMedicao::RepositorioIndisponivel)?;
             let linha = diesel::insert_into(
                 crate::infrastructure::persistence::schema::bloqueios_serpro::table,
             )

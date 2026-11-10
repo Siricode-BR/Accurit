@@ -5,7 +5,7 @@ use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use crate::application::clientes::{ClienteRepositorio};
+use crate::application::clientes::ClienteRepositorio;
 use crate::application::relatorios::gerador::gerar_conteudo;
 use crate::domain::clientes::{FiltroClientes, Paginacao};
 use crate::domain::relatorios::entidades::{
@@ -13,9 +13,7 @@ use crate::domain::relatorios::entidades::{
 };
 use crate::domain::relatorios::enums::{FormatoRelatorio, StatusRelatorio, TipoRelatorio};
 use crate::domain::relatorios::erros::ErroRelatorio;
-use crate::domain::relatorios::ports::{
-    RepositorioLinksCompartilhamento, RepositorioRelatorios,
-};
+use crate::domain::relatorios::ports::{RepositorioLinksCompartilhamento, RepositorioRelatorios};
 
 /// Gerar um relatório (situação fiscal, histórico de consultas ou
 /// pendências por carteira) para o escritório do usuário autenticado.
@@ -56,16 +54,18 @@ impl GerarRelatorioUseCase {
             .await?;
 
         // Busca os clientes do escritório (respeita a carteira do usuário quando informado).
-        let listagem = self.clientes.listar(
-            comando.escritorio_id,
-            FiltroClientes::Todos,
-            Paginacao {
-                pagina: 1,
-                tamanho: 10_000,
-            },
-            comando.apenas_ids.as_deref(),
-        )
-        .map_err(|e| ErroRelatorio::Persistencia(e.to_string()))?;
+        let listagem = self
+            .clientes
+            .listar(
+                comando.escritorio_id,
+                FiltroClientes::Todos,
+                Paginacao {
+                    pagina: 1,
+                    tamanho: 10_000,
+                },
+                comando.apenas_ids.as_deref(),
+            )
+            .map_err(|e| ErroRelatorio::Persistencia(e.to_string()))?;
 
         // Gera o conteúdo (PDF ou XLSX).
         let (conteudo, nome_arquivo) = gerar_conteudo(

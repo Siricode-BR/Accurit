@@ -91,10 +91,7 @@ impl ExecucaoRow {
 
 #[async_trait]
 impl RepositorioExecucoesTrabalho for ExecucoesTrabalhoDiesel {
-    async fn criar(
-        &self,
-        execucao: &ExecucaoTrabalho,
-    ) -> Result<Uuid, ErroTrabalho> {
+    async fn criar(&self, execucao: &ExecucaoTrabalho) -> Result<Uuid, ErroTrabalho> {
         let pool = self.pool.clone();
         let novo = execucao.clone();
         tokio::task::spawn_blocking(move || {

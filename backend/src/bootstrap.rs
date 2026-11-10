@@ -6,7 +6,7 @@ use diesel::sql_types::{Nullable, Text, Uuid as SqlUuid};
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::domain::auth::{Cpf, Papel};
+use crate::domain::auth::{Cnpj, Cpf, Papel};
 use crate::infrastructure::auth::HashArgon2;
 use crate::infrastructure::config::{Config, ConfigError};
 use crate::infrastructure::persistence::migrations::{
@@ -46,13 +46,14 @@ pub enum Alvo {
 }
 
 pub struct AdministradorOpcoes {
+    nome: String,
     email: String,
     cpf: Cpf,
     senha: String,
 }
 
 pub struct TenantOpcoes {
-    escritorio_slug: String,
+    escritorio_cnpj: Cnpj,
     escritorio_nome: String,
     email: String,
     cpf: Cpf,
@@ -63,6 +64,7 @@ pub struct TenantOpcoes {
 impl std::fmt::Debug for AdministradorOpcoes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AdministradorOpcoes")
+            .field("nome", &self.nome)
             .field("email", &self.email)
             .field("cpf", &self.cpf)
             .field("senha", &"REDACTED")
@@ -73,7 +75,7 @@ impl std::fmt::Debug for AdministradorOpcoes {
 impl std::fmt::Debug for TenantOpcoes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TenantOpcoes")
-            .field("escritorio_slug", &self.escritorio_slug)
+            .field("escritorio_cnpj", &self.escritorio_cnpj)
             .field("escritorio_nome", &self.escritorio_nome)
             .field("email", &self.email)
             .field("cpf", &self.cpf)
@@ -88,13 +90,14 @@ impl std::fmt::Debug for Alvo {
         match self {
             Alvo::Administrador(opcoes) => f
                 .debug_struct("bootstrap-admin")
+                .field("nome", &opcoes.nome)
                 .field("email", &opcoes.email)
                 .field("cpf", &opcoes.cpf)
                 .field("senha", &"REDACTED")
                 .finish(),
             Alvo::Tenant(opcoes) => f
                 .debug_struct("bootstrap-tenant")
-                .field("escritorio_slug", &opcoes.escritorio_slug)
+                .field("escritorio_cnpj", &opcoes.escritorio_cnpj)
                 .field("escritorio_nome", &opcoes.escritorio_nome)
                 .field("email", &opcoes.email)
                 .field("cpf", &opcoes.cpf)
@@ -107,11 +110,11 @@ impl std::fmt::Debug for Alvo {
 
 pub const AJUDA: &str = "\
 Uso:
-  bootstrap-admin --email <email> --cpf <cpf>
+  bootstrap-admin --nome <nome> --email <email> --cpf <cpf>
       Cria o primeiro gestor de tenants (backoffice /admin).
       A senha é lida da variável BOOTSTRAP_ADMIN_PASSWORD.
 
-  bootstrap-tenant --escritorio-slug <slug> --escritorio-nome <nome> \
+  bootstrap-tenant --escritorio-cnpj <cnpj> --escritorio-nome <nome> \
 --email <email> --cpf <cpf> --papel <CLIENTE|OPERADOR>
       Cria o escritório (quando inexistente) e um usuário da plataforma do \
 escritório (caminho de reserva; o provisionamento normal é feito no /admin).
@@ -130,14 +133,6 @@ fn email_valido(email: &str) -> bool {
         return false;
     };
     !local.is_empty() && dominio.contains('.') && email.len() <= 254
-}
-
-fn slug_valido(slug: &str) -> bool {
-    let tamanho = slug.len();
-    (3..=40).contains(&tamanho)
-        && slug
-            .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
 fn parse_email(args: &[String]) -> Result<String, BootstrapError> {
@@ -180,6 +175,29 @@ fn parse_cpf(args: &[String], label: &str) -> Result<Cpf, BootstrapError> {
     Cpf::novo(&valor_cpf).map_err(|_| BootstrapError::Opcoes(format!("{label} inválido")))
 }
 
+fn parse_nome(args: &[String]) -> Result<String, BootstrapError> {
+    let mut bruto = None;
+    let mut indice = 0;
+    while indice < args.len() {
+        match args[indice].as_str() {
+            "--nome" => {
+                bruto = Some(valor(args, indice + 1)?.to_owned());
+                indice += 2;
+            }
+            _ => indice += 1,
+        }
+    }
+
+    let nome = bruto
+        .ok_or_else(|| BootstrapError::Opcoes("--nome é obrigatório".into()))?
+        .trim()
+        .to_owned();
+    if nome.is_empty() || nome.chars().count() > 200 {
+        return Err(BootstrapError::Opcoes("--nome inválido".into()));
+    }
+    Ok(nome)
+}
+
 fn validar_senha(senha: &str, variavel: &str) -> Result<(), BootstrapError> {
     if senha.len() < SENHA_MINIMA {
         return Err(BootstrapError::Opcoes(format!(
@@ -194,6 +212,7 @@ impl AdministradorOpcoes {
         validar_senha(&senha, VARIAVEL_SENHA_ADMIN)?;
 
         Ok(Self {
+            nome: parse_nome(args)?,
             email: parse_email(args)?,
             cpf: parse_cpf(args, "--cpf")?,
             senha,
@@ -205,15 +224,15 @@ impl TenantOpcoes {
     fn parse(args: &[String], senha: String) -> Result<Self, BootstrapError> {
         validar_senha(&senha, VARIAVEL_SENHA_TENANT)?;
 
-        let mut escritorio_slug = None;
+        let mut escritorio_cnpj = None;
         let mut escritorio_nome = None;
         let mut papel = None;
 
         let mut indice = 0;
         while indice < args.len() {
             match args[indice].as_str() {
-                "--escritorio-slug" => {
-                    escritorio_slug = Some(valor(args, indice + 1)?.to_owned());
+                "--escritorio-cnpj" => {
+                    escritorio_cnpj = Some(valor(args, indice + 1)?.to_owned());
                     indice += 2;
                 }
                 "--escritorio-nome" => {
@@ -228,15 +247,12 @@ impl TenantOpcoes {
             }
         }
 
-        let escritorio_slug = escritorio_slug
-            .ok_or_else(|| BootstrapError::Opcoes("--escritorio-slug é obrigatório".into()))?
+        let escritorio_cnpj = escritorio_cnpj
+            .ok_or_else(|| BootstrapError::Opcoes("--escritorio-cnpj é obrigatório".into()))?
             .trim()
-            .to_ascii_lowercase();
-        if !slug_valido(&escritorio_slug) {
-            return Err(BootstrapError::Opcoes(
-                "--escritorio-slug deve ter de 3 a 40 caracteres [a-z0-9-]".into(),
-            ));
-        }
+            .replace(['.', '-', '/'], "");
+        let cnpj = Cnpj::novo(&escritorio_cnpj)
+            .map_err(|_| BootstrapError::Opcoes("--escritorio-cnpj inválido".into()))?;
 
         let escritorio_nome = escritorio_nome
             .ok_or_else(|| BootstrapError::Opcoes("--escritorio-nome é obrigatório".into()))?
@@ -256,7 +272,7 @@ impl TenantOpcoes {
         }
 
         Ok(Self {
-            escritorio_slug,
+            escritorio_cnpj: cnpj,
             escritorio_nome,
             email: parse_email(args)?,
             cpf: parse_cpf(args, "--cpf")?,
@@ -338,9 +354,10 @@ fn bootstrap_administrador(
         .map_err(|_| BootstrapError::Senha)?;
 
     diesel::sql_query(
-        "INSERT INTO administradores (id, email, cpf, senha_hash) VALUES ($1, $2, $3, $4)",
+        "INSERT INTO administradores (id, nome, email, cpf, senha_hash) VALUES ($1, $2, $3, $4, $5)",
     )
     .bind::<SqlUuid, _>(Uuid::now_v7())
+    .bind::<Text, _>(&opcoes.nome)
     .bind::<Text, _>(&opcoes.email)
     .bind::<Text, _>(opcoes.cpf.como_str())
     .bind::<Text, _>(senha_hash)
@@ -359,17 +376,17 @@ fn bootstrap_tenant(
 ) -> Result<(), BootstrapError> {
     let mut conexao = pool.get().map_err(|_| BootstrapError::Banco)?;
 
-    let escritorio_id = match diesel::sql_query("SELECT id FROM escritorios WHERE slug = $1")
-        .bind::<Text, _>(&opcoes.escritorio_slug)
+    let escritorio_id = match diesel::sql_query("SELECT id FROM escritorios WHERE cnpj = $1")
+        .bind::<Text, _>(opcoes.escritorio_cnpj.como_str())
         .get_result::<IdRow>(&mut conexao)
     {
         Ok(row) => row.id,
         Err(diesel::result::Error::NotFound) => {
             let id = Uuid::now_v7();
-            diesel::sql_query("INSERT INTO escritorios (id, slug, nome) VALUES ($1, $2, $3)")
+            diesel::sql_query("INSERT INTO escritorios (id, nome, cnpj) VALUES ($1, $2, $3)")
                 .bind::<SqlUuid, _>(id)
-                .bind::<Text, _>(&opcoes.escritorio_slug)
-                .bind::<Text, _>(&opcoes.escritorio_nome)
+                .bind::<Text, _>(opcoes.escritorio_nome.as_str())
+                .bind::<Text, _>(opcoes.escritorio_cnpj.como_str())
                 .execute(&mut conexao)
                 .map_err(|_| BootstrapError::Banco)?;
             id
@@ -405,7 +422,7 @@ fn bootstrap_tenant(
     .map_err(|_| BootstrapError::Banco)?;
 
     tracing::info!(
-        escritorio = %opcoes.escritorio_slug,
+        escritorio = %opcoes.escritorio_cnpj,
         papel = %opcoes.papel,
         "usuário de inicialização criado"
     );
@@ -433,7 +450,14 @@ mod tests {
         assert!(erro.to_string().contains("--email"));
 
         let opcoes = AdministradorOpcoes::parse(
-            &args(&["--email", "gestor@accurit.test", "--cpf", "52998224725"]),
+            &args(&[
+                "--nome",
+                "Gestor Demo",
+                "--email",
+                "gestor@accurit.test",
+                "--cpf",
+                "52998224725",
+            ]),
             "senha-forte-123".into(),
         )
         .expect("opções válidas");
@@ -444,8 +468,8 @@ mod tests {
     fn tenant_exige_cpf_para_todos_os_papeis() {
         let erro = TenantOpcoes::parse(
             &args(&[
-                "--escritorio-slug",
-                "demo",
+                "--escritorio-cnpj",
+                "52998224725896",
                 "--escritorio-nome",
                 "Demo",
                 "--email",
@@ -460,8 +484,8 @@ mod tests {
 
         let erro_admin = TenantOpcoes::parse(
             &args(&[
-                "--escritorio-slug",
-                "demo",
+                "--escritorio-cnpj",
+                "52998224725896",
                 "--escritorio-nome",
                 "Demo",
                 "--email",
@@ -481,8 +505,8 @@ mod tests {
     fn tenant_aceita_operador_e_papel_minusculo() {
         let opcoes = TenantOpcoes::parse(
             &args(&[
-                "--escritorio-slug",
-                "demo",
+                "--escritorio-cnpj",
+                "52998224725896",
                 "--escritorio-nome",
                 "Demo",
                 "--email",
@@ -495,17 +519,21 @@ mod tests {
             "senha-forte-123".into(),
         )
         .expect("opções válidas");
-        assert_eq!(opcoes.escritorio_slug, "demo");
+        assert_eq!(opcoes.escritorio_cnpj.como_str(), "52998224725896");
         assert_eq!(opcoes.papel, Papel::Operador);
     }
 
     #[test]
-    fn valida_slug_e_email() {
-        assert!(slug_valido("escritorio-1"));
-        assert!(!slug_valido("ab"));
-        assert!(!slug_valido("Escritorio"));
+    fn valida_cnpj_e_email() {
+        assert!(cnpj_valido("52998224725896"));
+        assert!(!cnpj_valido("12345678901234"));
+        assert!(!cnpj_valido("11111111111111"));
         assert!(email_valido("a@b.co"));
         assert!(!email_valido("a@b"));
         assert!(!email_valido("sem-arroba"));
+    }
+
+    fn cnpj_valido(cnpj: &str) -> bool {
+        Cnpj::novo(cnpj).is_ok()
     }
 }

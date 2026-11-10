@@ -1,7 +1,7 @@
 use axum::Router;
 use axum::http::Request;
 use axum::middleware as axum_middleware;
-use axum::routing::{get, post};
+use axum::routing::get;
 use tower_http::trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
@@ -19,10 +19,10 @@ use crate::application::divida_ativa::use_cases::{
     ConsultarDevedorUseCase, ConsultarInscricaoUseCase,
 };
 use crate::application::ports::SaudeBanco;
+use crate::application::serpro::medicao::ServicoMedicaoSerproImpl;
 use crate::application::serpro::{
     AlterarModoTrialSerproUseCase, CredencialFallbackGlobal, ObterConfiguracaoSerproUseCase,
 };
-use crate::application::serpro::medicao::ServicoMedicaoSerproImpl;
 use crate::infrastructure::auth::HashArgon2;
 use crate::infrastructure::config::{BURST_RATE_LIMIT, Config, REQUISICOES_POR_SEGUNDO};
 use crate::infrastructure::crypto::criar_criptografia;
@@ -31,25 +31,26 @@ use crate::infrastructure::persistence::certificados::CertificadoRepositorioDies
 use crate::infrastructure::persistence::clientes::ClienteRepositorioDiesel;
 use crate::infrastructure::persistence::serpro::medicao::RepositorioMedicaoDiesel;
 use crate::infrastructure::serpro::{SerproCriptografia, SerproRepositorioDiesel};
-use crate::presentation::admin::handlers::{listar_escritorios, provisionar_tenant};
-use crate::presentation::admin::serpro::handlers::alterar_modo_trial_serpro;
-use crate::presentation::admin::state::AdminState;
-use crate::presentation::auth::{AuthState, ExigirAudiencia, construir as construir_auth, exigir};
-use crate::presentation::certificados::construir_certificados;
-use crate::presentation::clientes::router::construir_clientes;
-use crate::presentation::handlers;
-use crate::presentation::middleware::{cors, rate_limit, request_id, security_headers};
-use crate::presentation::relatorios::router::{construir_publico, construir as construir_relatorios};
-use crate::presentation::relatorios::state::EstadoRelatorios;
-use crate::presentation::serpro::ambiente::{EstadoAmbiente, resolver_ambiente};
-use crate::presentation::serpro::handlers::obter_ambiente;
-use crate::presentation::serpro::state::SerproState;
+
 use crate::application::relatorios::use_cases::{
     AcessarRelatorioPorLinkUseCase, BuscarRelatorioUseCase, CriarLinkCompartilhamentoUseCase,
     GerarRelatorioUseCase, ListarRelatoriosUseCase, ValidarLinkCompartilhamentoUseCase,
 };
 use crate::domain::relatorios::ports::{RepositorioLinksCompartilhamento, RepositorioRelatorios};
 use crate::infrastructure::persistence::relatorios::RelatoriosDiesel;
+use crate::presentation::admin::state::AdminState;
+use crate::presentation::auth::{AuthState, ExigirAudiencia, construir as construir_auth, exigir};
+use crate::presentation::certificados::construir_certificados;
+use crate::presentation::clientes::router::construir_clientes;
+use crate::presentation::handlers;
+use crate::presentation::middleware::{cors, rate_limit, request_id, security_headers};
+use crate::presentation::relatorios::router::{
+    construir as construir_relatorios, construir_publico,
+};
+use crate::presentation::relatorios::state::EstadoRelatorios;
+use crate::presentation::serpro::ambiente::{EstadoAmbiente, resolver_ambiente};
+use crate::presentation::serpro::handlers::obter_ambiente;
+use crate::presentation::serpro::state::SerproState;
 use crate::presentation::state::AppState;
 use secrecy::ExposeSecret;
 
@@ -108,9 +109,9 @@ where
     let auditoria_clientes: std::sync::Arc<
         dyn crate::application::clientes::AuditoriaClienteRepositorio,
     > = std::sync::Arc::new(cliente_repo.clone());
-    let verificar_acesso = crate::application::clientes::VerificarAcessoUseCase::novo(
-        carteira_repo.clone() as std::sync::Arc<dyn crate::application::clientes::RepositorioAcessoUsuarios>,
-    );
+    let verificar_acesso =
+        crate::application::clientes::VerificarAcessoUseCase::novo(carteira_repo.clone()
+            as std::sync::Arc<dyn crate::application::clientes::RepositorioAcessoUsuarios>);
     let gestao_socios = crate::application::clientes::GestaoSociosContatosUseCase::novo(
         cliente_repo_trait.clone(),
         carteira_repo.clone(),
@@ -134,10 +135,9 @@ where
         std::sync::Arc::new(cliente_repo.clone()),
         std::sync::Arc::new(cliente_repo.clone()),
     );
-    let gestao_acesso_usuarios =
-        crate::application::clientes::GestaoAcessoUsuariosUseCase::novo(
-            carteira_repo.clone() as std::sync::Arc<dyn crate::application::clientes::RepositorioAcessoUsuarios>,
-        );
+    let _gestao_acesso_usuarios =
+        crate::application::clientes::GestaoAcessoUsuariosUseCase::novo(carteira_repo.clone()
+            as std::sync::Arc<dyn crate::application::clientes::RepositorioAcessoUsuarios>);
 
     let provisionar_tenant_uc = ProvisionarTenantUseCase::novo(
         std::sync::Arc::new(admin_repo.clone()),
@@ -173,8 +173,7 @@ where
     // Medição de uso SERPRO (Fase G/H): repositorio único implementa todas
     // as portas de medição (chamadas, agregados, planos, assinaturas,
     // bloqueios).
-    let repositorio_medicao =
-        std::sync::Arc::new(RepositorioMedicaoDiesel::novo(pool.clone()));
+    let repositorio_medicao = std::sync::Arc::new(RepositorioMedicaoDiesel::novo(pool.clone()));
     let servico_medicao = std::sync::Arc::new(ServicoMedicaoSerproImpl::novo(
         repositorio_medicao.clone(),
         repositorio_medicao.clone(),
@@ -237,8 +236,13 @@ where
             pool.clone(),
         ),
     );
-    let gestao_usuarios = crate::application::usuarios::GestaoUsuariosUseCase::novo(
+    let _gestao_usuarios = crate::application::usuarios::GestaoUsuariosUseCase::novo(
         usuarios_gestao_repo,
+        argon2.clone(),
+    );
+
+    let gestao_administradores = crate::application::admin::GestaoAdministradoresUseCase::novo(
+        std::sync::Arc::new(admin_repo.clone()),
         argon2.clone(),
     );
 
@@ -269,43 +273,31 @@ where
             ),
         );
 
-        api = api.nest(
-            "/usuarios",
-            crate::presentation::usuarios::construir_usuarios(
-                gestao_usuarios.clone(),
-                gestao_acesso_usuarios.clone(),
-                verificar_acesso.clone(),
-                &auth_state,
-            ),
-        );
+        let administradores_router =
+            crate::presentation::administradores::construir_administradores(
+                gestao_administradores.clone(),
+                auth_state.clone(),
+            );
+        api = api.nest("/administradores", administradores_router.clone());
+        api = api.nest("/admin/administradores", administradores_router);
 
+        // Etapa 0.2/0.4 — rotas de gestão de escritórios do backoffice SaaS.
+        // (provisionamento de tenant + alternância do modo Trial SERPRO)
         api = api.nest(
-            "/admin",
-            crate::presentation::usuarios::construir_usuarios_admin(
-                gestao_usuarios.clone(),
-                gestao_acesso_usuarios.clone(),
-                verificar_acesso.clone(),
-                &auth_state,
-            )
-            .merge(
-                Router::new()
-                    .route(
-                        "/escritorios",
-                        post(provisionar_tenant).get(listar_escritorios),
-                    )
-                    .route(
-                        "/escritorios/{id}/serpro/trial",
-                        axum::routing::patch(alterar_modo_trial_serpro),
-                    )
-                    .route_layer(axum_middleware::from_fn_with_state(
-                        ExigirAudiencia::novo(
-                            auth_state.tokens.clone(),
-                            crate::domain::auth::Audiencia::Admin,
-                        ),
-                        exigir,
-                    ))
-                    .with_state(admin_state),
-            ),
+            "/admin/escritorios",
+            axum::Router::new()
+                .route(
+                    "/",
+                    axum::routing::get(crate::presentation::admin::handlers::listar_escritorios)
+                        .post(crate::presentation::admin::handlers::provisionar_tenant),
+                )
+                .route(
+                    "/{id}/serpro/trial",
+                    axum::routing::patch(
+                        crate::presentation::admin::serpro::handlers::alterar_modo_trial_serpro,
+                    ),
+                )
+                .with_state(admin_state.clone()),
         );
 
         api = api.nest(
@@ -755,16 +747,17 @@ where
             ),
         );
 
-        let estado_notificacoes = crate::presentation::notificacoes::state::EstadoNotificacoes::novo(
-            criar_notificacao_uc,
-            listar_notificacoes_uc,
-            contar_nao_lidas_uc,
-            marcar_como_lida_uc,
-            marcar_todas_como_lidas_uc,
-            buscar_preferencia_uc,
-            criar_ou_atualizar_preferencia_uc,
-            listar_templates_uc,
-        );
+        let estado_notificacoes =
+            crate::presentation::notificacoes::state::EstadoNotificacoes::novo(
+                criar_notificacao_uc,
+                listar_notificacoes_uc,
+                contar_nao_lidas_uc,
+                marcar_como_lida_uc,
+                marcar_todas_como_lidas_uc,
+                buscar_preferencia_uc,
+                criar_ou_atualizar_preferencia_uc,
+                listar_templates_uc,
+            );
 
         api = api.nest(
             "/notificacoes",
@@ -779,33 +772,24 @@ where
 
         // ===== Fase D — Emissão de guias =====
         let guias_emissao_repo = std::sync::Arc::new(
-            crate::infrastructure::persistence::guias::GuiasEmissaoDiesel::novo(
-                pool.clone(),
-            ),
+            crate::infrastructure::persistence::guias::GuiasEmissaoDiesel::novo(pool.clone()),
         );
 
-        let emitir_guia_uc = std::sync::Arc::new(
-            crate::application::guias::EmitirGuiaUseCase::novo(
+        let emitir_guia_uc =
+            std::sync::Arc::new(crate::application::guias::EmitirGuiaUseCase::novo(
                 guias_emissao_repo.clone(),
                 std::sync::Arc::new(
                     crate::infrastructure::guias::ProvedorEmissaoGuiaNaoImplementado,
                 ),
-            ),
-        );
+            ));
         let listar_guias_uc = std::sync::Arc::new(
-            crate::application::guias::ListarGuiasUseCase::novo(
-                guias_emissao_repo.clone(),
-            ),
+            crate::application::guias::ListarGuiasUseCase::novo(guias_emissao_repo.clone()),
         );
         let buscar_guia_uc = std::sync::Arc::new(
-            crate::application::guias::BuscarGuiaUseCase::novo(
-                guias_emissao_repo.clone(),
-            ),
+            crate::application::guias::BuscarGuiaUseCase::novo(guias_emissao_repo.clone()),
         );
         let baixar_guia_uc = std::sync::Arc::new(
-            crate::application::guias::BaixarGuiaUseCase::novo(
-                guias_emissao_repo.clone(),
-            ),
+            crate::application::guias::BaixarGuiaUseCase::novo(guias_emissao_repo.clone()),
         );
 
         let estado_guias = crate::presentation::guias::state::EstadoGuias::novo(
@@ -828,39 +812,27 @@ where
 
         // ===== Fase F — Relatórios =====
         let relatorios_repo = std::sync::Arc::new(RelatoriosDiesel::novo(pool.clone()));
-        let gerar_relatorio_uc = std::sync::Arc::new(
-            GerarRelatorioUseCase::novo(
-                relatorios_repo.clone() as std::sync::Arc<dyn RepositorioRelatorios>,
-                cliente_repo_trait.clone(),
-            ),
-        );
-        let listar_relatorios_uc = std::sync::Arc::new(
-            ListarRelatoriosUseCase::novo(
-                relatorios_repo.clone() as std::sync::Arc<dyn RepositorioRelatorios>,
-            ),
-        );
-        let buscar_relatorio_uc = std::sync::Arc::new(
-            BuscarRelatorioUseCase::novo(
-                relatorios_repo.clone() as std::sync::Arc<dyn RepositorioRelatorios>,
-            ),
-        );
-        let criar_link_uc = std::sync::Arc::new(
-            CriarLinkCompartilhamentoUseCase::novo(
-                relatorios_repo.clone() as std::sync::Arc<dyn RepositorioLinksCompartilhamento>,
-                relatorios_repo.clone() as std::sync::Arc<dyn RepositorioRelatorios>,
-            ),
-        );
-        let validar_link_uc = std::sync::Arc::new(
-            ValidarLinkCompartilhamentoUseCase::novo(
-                relatorios_repo.clone() as std::sync::Arc<dyn RepositorioLinksCompartilhamento>,
-            ),
-        );
-        let acessar_por_link_uc = std::sync::Arc::new(
-            AcessarRelatorioPorLinkUseCase::novo(
-                relatorios_repo.clone() as std::sync::Arc<dyn RepositorioLinksCompartilhamento>,
-                relatorios_repo.clone() as std::sync::Arc<dyn RepositorioRelatorios>,
-            ),
-        );
+        let gerar_relatorio_uc = std::sync::Arc::new(GerarRelatorioUseCase::novo(
+            relatorios_repo.clone() as std::sync::Arc<dyn RepositorioRelatorios>,
+            cliente_repo_trait.clone(),
+        ));
+        let listar_relatorios_uc = std::sync::Arc::new(ListarRelatoriosUseCase::novo(
+            relatorios_repo.clone() as std::sync::Arc<dyn RepositorioRelatorios>,
+        ));
+        let buscar_relatorio_uc = std::sync::Arc::new(BuscarRelatorioUseCase::novo(
+            relatorios_repo.clone() as std::sync::Arc<dyn RepositorioRelatorios>,
+        ));
+        let criar_link_uc = std::sync::Arc::new(CriarLinkCompartilhamentoUseCase::novo(
+            relatorios_repo.clone() as std::sync::Arc<dyn RepositorioLinksCompartilhamento>,
+            relatorios_repo.clone() as std::sync::Arc<dyn RepositorioRelatorios>,
+        ));
+        let validar_link_uc = std::sync::Arc::new(ValidarLinkCompartilhamentoUseCase::novo(
+            relatorios_repo.clone() as std::sync::Arc<dyn RepositorioLinksCompartilhamento>,
+        ));
+        let acessar_por_link_uc = std::sync::Arc::new(AcessarRelatorioPorLinkUseCase::novo(
+            relatorios_repo.clone() as std::sync::Arc<dyn RepositorioLinksCompartilhamento>,
+            relatorios_repo.clone() as std::sync::Arc<dyn RepositorioRelatorios>,
+        ));
         let estado_relatorios = EstadoRelatorios::novo(
             gerar_relatorio_uc,
             listar_relatorios_uc,

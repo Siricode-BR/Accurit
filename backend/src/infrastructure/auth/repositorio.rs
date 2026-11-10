@@ -319,6 +319,8 @@ struct AdministradorRow {
     #[diesel(sql_type = SqlUuid)]
     id: Uuid,
     #[diesel(sql_type = Text)]
+    nome: String,
+    #[diesel(sql_type = Text)]
     email: String,
     #[diesel(sql_type = Text)]
     senha_hash: String,
@@ -356,13 +358,15 @@ struct SessaoAdminRow {
     ativo: bool,
     #[diesel(sql_type = Nullable<Timestamptz>)]
     bloqueado_ate: Option<DateTime<Utc>>,
+    #[diesel(sql_type = Text)]
+    nome: String,
 }
 
 impl AdministradorRepositorio for RepositorioDiesel {
     fn buscar_por_email(&self, email: &str) -> Result<Option<Administrador>, RepositorioError> {
         let mut conexao = self.conexao()?;
         let resultado = diesel::sql_query(
-            "SELECT id, email, senha_hash, ativo, bloqueado_ate \
+            "SELECT id, nome, email, senha_hash, ativo, bloqueado_ate \
              FROM administradores WHERE lower(email) = lower($1)",
         )
         .bind::<Text, _>(email)
@@ -372,7 +376,8 @@ impl AdministradorRepositorio for RepositorioDiesel {
         match resultado {
             Ok(Some(row)) => Ok(Some(Administrador {
                 id: row.id,
-                email: row.email,
+                nome: row.nome.clone(),
+                email: row.email.clone(),
                 senha_hash: row.senha_hash,
                 ativo: row.ativo,
                 bloqueado_ate: row.bloqueado_ate,
@@ -398,7 +403,8 @@ impl AdministradorRepositorio for RepositorioDiesel {
         match resultado {
             Ok(Some(row)) => Ok(Some(Administrador {
                 id: row.id,
-                email: row.email,
+                nome: row.nome.clone(),
+                email: row.email.clone(),
                 senha_hash: row.senha_hash,
                 ativo: row.ativo,
                 bloqueado_ate: row.bloqueado_ate,
@@ -476,7 +482,7 @@ impl SessaoAdminRepositorio for RepositorioDiesel {
         let resultado = diesel::sql_query(
             "SELECT s.id, s.administrador_id, s.familia_id, s.refresh_hash::text AS refresh_hash, \
              s.criado_em, s.expira_em, s.revogada_em, s.ip::text AS ip, s.user_agent, \
-             a.email, a.senha_hash, a.ativo, a.bloqueado_ate \
+             a.email, a.senha_hash, a.ativo, a.bloqueado_ate, a.nome \
              FROM sessoes_admin s \
              JOIN administradores a ON a.id = s.administrador_id \
              WHERE s.refresh_hash = $1",
@@ -500,7 +506,8 @@ impl SessaoAdminRepositorio for RepositorioDiesel {
                 },
                 administrador: Administrador {
                     id: row.administrador_id,
-                    email: row.email,
+                    nome: row.nome.clone(),
+                    email: row.email.clone(),
                     senha_hash: row.senha_hash,
                     ativo: row.ativo,
                     bloqueado_ate: row.bloqueado_ate,

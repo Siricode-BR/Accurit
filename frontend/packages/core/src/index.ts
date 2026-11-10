@@ -1,5 +1,6 @@
 export * from './common/api';
 export * from './auth/auth';
+export * from './administrador/administrador';
 export * from './cliente/cliente';
 export * from './cliente/consultas';
 export * from './tenant/tenant';

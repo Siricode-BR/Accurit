@@ -4,9 +4,7 @@
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use crate::domain::notificacoes::enums::{
-    CanalNotificacao, TipoNotificacao,
-};
+use crate::domain::notificacoes::enums::{CanalNotificacao, TipoNotificacao};
 
 /// Notificação enviada a um usuário do escritório.
 #[derive(Debug, Clone)]

@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { formatPtBrDateTime } from '@accurit/shared';
+import { formatDocument, formatPtBrDateTime } from '@accurit/shared';
 import {
   AccBackButtonComponent,
   AccBadgeComponent,
@@ -56,6 +56,10 @@ export class TenantDetalhesPage implements OnInit {
 
   protected formatarData(iso: string): string {
     return formatPtBrDateTime(iso);
+  }
+
+  protected formatarCnpj(cnpj: string): string {
+    return formatDocument(cnpj);
   }
 
   protected async alternarAmbiente(): Promise<void> {

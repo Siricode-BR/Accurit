@@ -16,10 +16,11 @@ pub use ports::{
     AtualizarClienteCommand, AuditoriaClienteRepositorio, ClienteError, ClientePublico,
     ClienteRepositorio, ConsultaFiscalDoCliente, CriarClienteCommand, EventoAuditoriaCliente,
     ExcluirClienteCommand, FiltroConsultasCliente, ListagemClientes, ListagemConsultasDoCliente,
-    ListarClientesCommand, ListarConsultasDoClienteCommand, NovoClienteFilialCommand,
-    NovaClienteTagCommand, NovoSocioContatoCommand, ObterClienteCommand, PapelSocioContatoDomain,
-    RepositorioAcessoUsuarios, RepositorioCarteiraClientes, RepositorioConsultasDoCliente,
-    RepositorioError, SituacaoFiscalDoClienteCommand, SituacaoFiscalServico,
+    ListarClientesCommand, ListarConsultasDoClienteCommand, NovaClienteTagCommand,
+    NovoClienteFilialCommand, NovoSocioContatoCommand, ObterClienteCommand,
+    PapelSocioContatoDomain, RepositorioAcessoUsuarios, RepositorioCarteiraClientes,
+    RepositorioConsultasDoCliente, RepositorioError, SituacaoFiscalDoClienteCommand,
+    SituacaoFiscalServico,
 };
 pub use use_cases::{
     AtualizarClienteUseCase, CriarClienteUseCase, ExcluirClienteUseCase, ListarClientesUseCase,

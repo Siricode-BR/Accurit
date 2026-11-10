@@ -55,6 +55,7 @@ XMLDSig e serviços adicionais sem versão confirmada (P4) permanecem bloqueados
 - [x] Registrar D1–D5 e pendências de confirmação em `docs/ADR/0007-modelo-contratacao-serpro.md` e `docs/DECISOES-PENDENTES.md`.
 - [x] Atualizar `.env.example`, `docker-compose.yml`, `nginx/nginx.conf`, `.gitattributes` e renomear `backend/Diesel.toml` para `backend/diesel.toml`.
 - [x] Validar referências, encoding e ausência de segredos; emitir commits da fase.
+- [x] Substituir `slug` por `CNPJ` (14 dígitos com validação) em `escritorios` table, domínio, schema.rs, repositórios, bootstrap, login/auth, rate limit, usuários, testes e docs. CNPJ é o identificador fiscal; login continua por e-mail. ADR registrada.
 
 ---
 
@@ -65,9 +66,12 @@ XMLDSig e serviços adicionais sem versão confirmada (P4) permanecem bloqueados
 - [x] Configurar PostgreSQL 16 (`postgres:16-alpine`), volume persistente, healthcheck e usuário de aplicação não-superuser (`POSTGRES_APP_USER`).
 - [x] Criar migrations iniciais para `escritorios`, `usuarios` e tabelas de suporte.
 - [x] Criar `modo_trial_serpro BOOLEAN NOT NULL DEFAULT TRUE` no `CREATE TABLE escritorios` (sem `ALTER`).
+- [x] **Substituir `slug` por `CNPJ`** (14 dígitos com validação em `CREATE TABLE escritorios`).
 - [x] Criar índices e constraints de isolamento por `escritorio_id`.
 - [x] Criar migration de `auditoria_eventos` para ações administrativas.
 - [x] Validar automaticamente a política "sem `ALTER`" e o par `up.sql`/`down.sql` das migrations.
+- [x] Remover coluna `slug` de `escritorios` (migration editada in place; banco dev recriado).
+- [x] Adicionar constraint `UNIQUE (cnpj)` em `escritorios` (já existente via migration).
 
 ### 2. Backend (Rust / DDD)
 
@@ -118,6 +122,7 @@ O recorte **2A — login por aplicação** (`/admin/login`, `/app/login` e `/log
 - [x] Implementar refresh opaco com rotação e família, reuso revogando a sessão, logout, lockout por tentativas, rate limit de login e auditoria (Fase 2A).
 - [x] Entregar o bootstrap do primeiro administrador (`bootstrap-admin`) e o provisionamento de tenants (`bootstrap-tenant`).
 - [x] Aplicar middleware de tenancy e enforcement nos repositórios Diesel (middleware de audiência e filtro por `escritorio_id` existem; enforcement comprovado por testes).
+- [x] **Remover rotas de usuários de escritórios do `/admin`** — o app admin agora gestiona apenas `administradores` (gestores SaaS), com CRUD: GET (page/pageSize/q), POST {nome,email,cpf,senha}, GET /{id}, PATCH /{id} {nome?,email?,ativo?}, PUT /{id}/senha {senha}.
 - [x] Implementar CRUD de clientes PF/PJ com validação de dígitos verificadores de CPF/CNPJ (código completo; testes de integração HTTP passando).
 - [x] Implementar filtros da API: `Todos`, `CPF`, `CNPJ - MEI`, `CNPJ - Simples Nacional`, `CNPJ - Lucro Presumido`, `CNPJ - Lucro Real` (implementados no domínio e repositório; testes de integração HTTP passando).
 - [x] Implementar armazenamento cifrado (AES-256-GCM) e gestão de validade do certificado A1.

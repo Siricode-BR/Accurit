@@ -30,7 +30,8 @@ impl ObterAdministradorAtual {
 
         Ok(AdministradorPublico {
             id: administrador.id,
-            email: administrador.email,
+            nome: administrador.nome.clone(),
+            email: administrador.email.clone(),
         })
     }
 }

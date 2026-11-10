@@ -134,10 +134,14 @@ impl NovoSocioContato {
         if nome.is_empty() || nome.chars().count() > 200 {
             return Err("nome deve ter entre 1 e 200 caracteres".into());
         }
-        if let Some(email) = self.email.as_deref().map(str::trim) && email.len() > 254 {
+        if let Some(email) = self.email.as_deref().map(str::trim)
+            && email.len() > 254
+        {
             return Err("e-mail deve ter no máximo 254 caracteres".into());
         }
-        if let Some(telefone) = self.telefone.as_deref().map(str::trim) && telefone.len() > 30 {
+        if let Some(telefone) = self.telefone.as_deref().map(str::trim)
+            && telefone.len() > 30
+        {
             return Err("telefone deve ter no máximo 30 caracteres".into());
         }
         Ok(())
@@ -170,13 +174,19 @@ pub struct NovoClienteFilial {
 
 impl NovoClienteFilial {
     pub fn validar(&self) -> Result<(), String> {
-        if let Some(n) = self.nome_unidade.as_deref().map(str::trim) && n.chars().count() > 200 {
+        if let Some(n) = self.nome_unidade.as_deref().map(str::trim)
+            && n.chars().count() > 200
+        {
             return Err("nome da unidade deve ter no máximo 200 caracteres".into());
         }
-        if let Some(e) = self.endereco.as_deref().map(str::trim) && e.chars().count() > 300 {
+        if let Some(e) = self.endereco.as_deref().map(str::trim)
+            && e.chars().count() > 300
+        {
             return Err("endereço deve ter no máximo 300 caracteres".into());
         }
-        if let Some(t) = self.telefone.as_deref().map(str::trim) && t.len() > 30 {
+        if let Some(t) = self.telefone.as_deref().map(str::trim)
+            && t.len() > 30
+        {
             return Err("telefone deve ter no máximo 30 caracteres".into());
         }
         Ok(())

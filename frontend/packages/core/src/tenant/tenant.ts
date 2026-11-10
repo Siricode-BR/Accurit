@@ -2,7 +2,7 @@ import { AmbienteSerpro } from '../serpro/serpro';
 
 export interface TenantDto {
   id: string;
-  slug: string;
+  cnpj: string;
   nome: string;
   modoTrialSerpro: boolean;
   versao: number;
@@ -17,7 +17,7 @@ export interface TenantAlteradoDto {
 }
 
 export interface CriarTenantRequestDto {
-  slug: string;
+  cnpj: string;
   nome: string;
   emailTitular: string;
   cpfTitular: string;
@@ -26,7 +26,7 @@ export interface CriarTenantRequestDto {
 
 export interface CriarTenantResponseDto {
   escritorioId: string;
-  slug: string;
+  cnpj: string;
   titularId: string;
   emailTitular: string;
 }

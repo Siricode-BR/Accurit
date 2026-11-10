@@ -248,5 +248,10 @@ async fn excluir_cliente(
 ) -> Result<Response, ApiError> {
     let acesso = acesso_do_contexto(&state.verificar, &contexto).await?;
     guardas::exigir_escrita(&acesso, Some(id))?;
-    handlers::excluir_cliente(State((*state.excluir).clone()), Extension(contexto), Path(id)).await
+    handlers::excluir_cliente(
+        State((*state.excluir).clone()),
+        Extension(contexto),
+        Path(id),
+    )
+    .await
 }

@@ -14,7 +14,7 @@ use axum::Router;
 use axum::routing::{get, patch, post};
 use std::sync::Arc;
 
-use crate::presentation::auth::ExigirAudiencia;
+use crate::presentation::auth::{ExigirAudiencia, exigir};
 use crate::presentation::serpro::ambiente::{EstadoAmbiente, resolver_ambiente};
 use crate::presentation::integra_contador::state::EstadoIntegraContador;
 
@@ -39,11 +39,31 @@ pub fn construir(
         // Ordem dos route_layer: o último adicionado é o mais externo.
         // `exigir` roda primeiro (insere RequestContext);
         // o snapshot entra logo depois, mais interno (SPEC §8).
-        .route_layer(axum_middleware::from_fn_with_state(
+        .route_layer(axum::middleware::from_fn_with_state(
             estado_ambiente,
             resolver_ambiente,
         ))
-        .route_layer(axum_middleware::from_fn_with_state(
+        .route_layer(axum::middleware::from_fn_with_state(
+            exigir_audiencia,
+            exigir,
+        ))
+        .with_state(estado)
+}
+
+pub fn construir_admin(
+    estado: Arc<EstadoIntegraContador>,
+    exigir_audiencia: ExigirAudiencia,
+) -> Router {
+    Router::new()
+        .route(
+            "/catalogo",
+            get(crate::presentation::integra_contador::handlers::catalogo),
+        )
+        .route(
+            "/catalogo/{id_sistema}/{id_servico}",
+            patch(crate::presentation::integra_contador::handlers::definir_habilitado_catalogo),
+        )
+        .route_layer(axum::middleware::from_fn_with_state(
             exigir_audiencia,
             exigir,
         ))

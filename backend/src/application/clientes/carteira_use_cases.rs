@@ -6,12 +6,12 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::application::clientes::ports::{
-    ClienteError, ClienteRepositorio, NovoClienteFilialCommand, NovaClienteTagCommand,
-    NovoSocioContatoCommand, RepositorioError,
-};
-use crate::application::clientes::ports::{
     AuditoriaClienteRepositorio, EventoAuditoriaCliente, RepositorioAcessoUsuarios,
     RepositorioCarteiraClientes,
+};
+use crate::application::clientes::ports::{
+    ClienteError, ClienteRepositorio, NovaClienteTagCommand, NovoClienteFilialCommand,
+    NovoSocioContatoCommand, RepositorioError,
 };
 use crate::domain::auth::Papel;
 use crate::domain::clientes::{
@@ -128,7 +128,9 @@ impl GestaoSociosContatosUseCase {
         escritorio_id: Uuid,
         cliente_id: Uuid,
     ) -> Result<Vec<crate::domain::clientes::SocioContato>, ClienteError> {
-        Ok(self.carteira.listar_socios_contatos(escritorio_id, cliente_id)?)
+        Ok(self
+            .carteira
+            .listar_socios_contatos(escritorio_id, cliente_id)?)
     }
 
     pub fn remover(
@@ -237,7 +239,9 @@ impl GestaoFiliaisUseCase {
         ip: Option<std::net::IpAddr>,
     ) -> Result<bool, ClienteError> {
         self.cliente_do_escritorio(escritorio_id, cliente_id)?;
-        let removido = self.carteira.remover_filial(escritorio_id, cliente_id, id)?;
+        let removido = self
+            .carteira
+            .remover_filial(escritorio_id, cliente_id, id)?;
         if removido {
             self.auditoria.registrar(&EventoAuditoriaCliente {
                 escritorio_id,
@@ -272,10 +276,7 @@ impl GestaoClienteTagsUseCase {
         }
     }
 
-    pub fn criar_tag(
-        &self,
-        comando: &NovaClienteTagCommand,
-    ) -> Result<ClienteTag, ClienteError> {
+    pub fn criar_tag(&self, comando: &NovaClienteTagCommand) -> Result<ClienteTag, ClienteError> {
         let nova = NovaClienteTag {
             escritorio_id: comando.escritorio_id,
             nome: comando.nome.clone(),
@@ -320,7 +321,8 @@ impl GestaoClienteTagsUseCase {
         if tags.iter().any(|t| t.id == tag_id) {
             return Ok(()); // idempotente
         }
-        self.carteira.vincular_tag(escritorio_id, cliente_id, tag_id)?;
+        self.carteira
+            .vincular_tag(escritorio_id, cliente_id, tag_id)?;
         self.auditoria.registrar(&EventoAuditoriaCliente {
             escritorio_id,
             usuario_id,
@@ -486,7 +488,8 @@ impl GestaoAcessoUsuariosUseCase {
         usuario_id: Uuid,
         funcao: FuncaoUsuario,
     ) -> Result<(), ClienteError> {
-        self.acesso.definir_funcao(escritorio_id, usuario_id, funcao)?;
+        self.acesso
+            .definir_funcao(escritorio_id, usuario_id, funcao)?;
         Ok(())
     }
 

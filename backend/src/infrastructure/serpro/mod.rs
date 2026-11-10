@@ -1,5 +1,6 @@
 pub mod credencial;
 pub mod endpoints;
+pub mod mock;
 pub mod repositorio;
 
 pub use credencial::SerproCriptografia;

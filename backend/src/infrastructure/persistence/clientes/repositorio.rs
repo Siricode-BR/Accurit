@@ -109,7 +109,9 @@ impl ClienteRepositorio for ClienteRepositorioDiesel {
         let mut conexao = self.conexao()?;
 
         // Restrição de carteira: lista vazia devolve página vazia.
-        if let Some(ids) = apenas_ids && ids.is_empty() {
+        if let Some(ids) = apenas_ids
+            && ids.is_empty()
+        {
             return Ok(ListagemClientes {
                 itens: Vec::new(),
                 total: 0,

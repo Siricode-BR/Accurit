@@ -95,10 +95,7 @@ impl LoteRow {
 
 #[async_trait]
 impl RepositorioConsultasLote for ConsultasLoteDiesel {
-    async fn criar(
-        &self,
-        lote: &NovoConsultaLote,
-    ) -> Result<ConsultaLote, ErroTrabalho> {
+    async fn criar(&self, lote: &NovoConsultaLote) -> Result<ConsultaLote, ErroTrabalho> {
         let pool = self.pool.clone();
         let novo = lote.clone();
         tokio::task::spawn_blocking(move || {

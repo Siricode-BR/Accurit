@@ -132,7 +132,8 @@ impl LoginAdministrador {
             refresh_ttl_secs,
             administrador: AdministradorPublico {
                 id: administrador.id,
-                email: administrador.email,
+                nome: administrador.nome.clone(),
+                email: administrador.email.clone(),
             },
         })
     }

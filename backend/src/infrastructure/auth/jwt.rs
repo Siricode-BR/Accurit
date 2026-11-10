@@ -224,6 +224,7 @@ mod tests {
     fn administrador() -> Administrador {
         Administrador {
             id: Uuid::now_v7(),
+            nome: "Gestor".into(),
             email: "gestor@accurit.test".into(),
             senha_hash: "hash".into(),
             ativo: true,

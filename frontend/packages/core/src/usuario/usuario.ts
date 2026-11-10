@@ -8,7 +8,7 @@ export interface UsuarioDto {
   id: string;
   escritorioId: string;
   escritorioNome: string;
-  escritorioSlug: string;
+  escritorioCnpj: string;
   nome: string;
   email: string;
   cpf: string;

@@ -1,12 +1,12 @@
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use super::{Audiencia, Papel};
+use super::{Audiencia, Cnpj, Papel};
 
 #[derive(Debug, Clone)]
 pub struct Escritorio {
     pub id: Uuid,
-    pub slug: String,
+    pub cnpj: Cnpj,
 }
 
 #[derive(Debug, Clone)]

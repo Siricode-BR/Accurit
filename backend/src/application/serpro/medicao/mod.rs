@@ -2,10 +2,8 @@
 
 pub mod use_cases;
 
+pub use use_cases::{AgregadoConsumoDto, ChamadaRecenteDto, ConsumoEscritorioDto};
 pub use use_cases::{
     CriarAtualizarAssinaturaUseCase, CriarPlanoEscritorioUseCase, ListarConsumoEscritorioUseCase,
     ListarPlanosUseCase, ServicoMedicaoSerproImpl,
-};
-pub use use_cases::{
-    AgregadoConsumoDto, ChamadaRecenteDto, ConsumoEscritorioDto,
 };

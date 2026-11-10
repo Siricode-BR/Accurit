@@ -13,10 +13,7 @@ use crate::domain::guias::erros::ErroGuia;
 pub trait RepositorioGuiasEmissao: Send + Sync {
     async fn criar(&self, guia: &NovoGuiaEmissao) -> Result<GuiaEmissao, ErroGuia>;
     async fn buscar_por_id(&self, id: Uuid) -> Result<Option<GuiaEmissao>, ErroGuia>;
-    async fn buscar_por_idempotencia(
-        &self,
-        chave: &str,
-    ) -> Result<Option<GuiaEmissao>, ErroGuia>;
+    async fn buscar_por_idempotencia(&self, chave: &str) -> Result<Option<GuiaEmissao>, ErroGuia>;
     async fn listar_por_usuario(
         &self,
         usuario_id: Uuid,

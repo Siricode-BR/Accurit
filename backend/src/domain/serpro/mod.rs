@@ -12,8 +12,7 @@ pub use endpoints::{EndpointError, EndpointSerpro, EstrategiaAutenticacaoSerpro}
 pub use erros::{ErroAmbiente, ErroCredencial, ErroEndpoint};
 pub use medicao::{
     AgregadoConsumoSerpro, AssinaturaEscritorio, BloqueioSerpro, ChamadaSerpro,
-    ComandoRegistrarBloqueio, ComandoRegistrarChamada, ErroMedicao, MotivoBloqueio,
-    OrigemChamada, PlanoEscritorio, ResultadoChamada, ResultadoRegistroChamada,
-    ServicoMedicaoSerpro,
+    ComandoRegistrarBloqueio, ComandoRegistrarChamada, ErroMedicao, MotivoBloqueio, OrigemChamada,
+    PlanoEscritorio, ResultadoChamada, ResultadoRegistroChamada, ServicoMedicaoSerpro,
 };
 pub use produto::{ProdutoSerpro, ProdutoSerproError};

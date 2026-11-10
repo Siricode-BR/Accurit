@@ -3,6 +3,7 @@
 diesel::table! {
     administradores (id) {
         id -> Uuid,
+        nome -> Text,
         email -> Text,
         #[max_length = 11]
         cpf -> Varchar,
@@ -250,11 +251,9 @@ diesel::table! {
 diesel::table! {
     escritorios (id) {
         id -> Uuid,
-        #[max_length = 40]
-        slug -> Varchar,
         nome -> Text,
         #[max_length = 14]
-        cnpj -> Nullable<Varchar>,
+        cnpj -> Varchar,
         modo_trial_serpro -> Bool,
         versao -> Int8,
         atualizado_em -> Timestamptz,

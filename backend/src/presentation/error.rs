@@ -233,11 +233,12 @@ impl From<ProvisionarError> for ApiError {
                 crate::application::admin::RepositorioError::Indisponivel => Self::indisponivel(),
                 crate::application::admin::RepositorioError::Dados => Self::erro_interno(),
                 crate::application::admin::RepositorioError::EscritorioExistente => {
-                    Self::conflito("Escritório com este slug já existe")
+                    Self::conflito("Escritório com este CNPJ já existe")
                 }
                 crate::application::admin::RepositorioError::UsuarioExistente => {
                     Self::conflito("Já existe um usuário com este e-mail")
                 }
+                crate::application::admin::RepositorioError::Validacao(msg) => Self::validacao(msg),
             },
             ProvisionarError::Validacao(msg) => Self::validacao(msg),
             ProvisionarError::Senha => Self::erro_interno(),

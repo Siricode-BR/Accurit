@@ -3,8 +3,8 @@
 pub mod use_cases;
 
 pub use use_cases::{
-    CriarNotificacaoUseCase, ListarNotificacoesUseCase, MarcarNotificacaoLidaUseCase,
-    MarcarTodasNotificacoesLidasUseCase, ContarNotificacoesNaoLidasUseCase,
-    CriarOuAtualizarPreferenciaUseCase, BuscarPreferenciaUseCase,
-    ListarTemplatesNotificacaoUseCase,
+    BuscarPreferenciaUseCase, ContarNotificacoesNaoLidasUseCase, CriarNotificacaoUseCase,
+    CriarOuAtualizarPreferenciaUseCase, ListarNotificacoesUseCase,
+    ListarTemplatesNotificacaoUseCase, MarcarNotificacaoLidaUseCase,
+    MarcarTodasNotificacoesLidasUseCase,
 };

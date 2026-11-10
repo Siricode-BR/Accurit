@@ -1,5 +1,6 @@
 CREATE TABLE administradores (
     id UUID PRIMARY KEY,
+    nome TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
     cpf VARCHAR(11) NOT NULL UNIQUE,
     senha_hash TEXT NOT NULL,

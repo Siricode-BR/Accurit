@@ -6,6 +6,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub struct Administrador {
     pub id: Uuid,
+    pub nome: String,
     pub email: String,
     pub senha_hash: String,
     pub ativo: bool,
@@ -53,6 +54,7 @@ mod tests {
     fn administrador(bloqueado_ate: Option<DateTime<Utc>>) -> Administrador {
         Administrador {
             id: Uuid::now_v7(),
+            nome: "Gestor".into(),
             email: "gestor@accurit.test".into(),
             senha_hash: "hash".into(),
             ativo: true,

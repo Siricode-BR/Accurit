@@ -26,7 +26,7 @@ use accurit_backend::presentation::state::AppState;
 use common::{BancoTemporario, configuracao_com_extras};
 
 const SENHA: &str = "senha-forte-123";
-const SLUG: &str = "alfa";
+const CNPJ: &str = "52998224725896";
 const EMAIL_GESTOR: &str = "gestor@accurit.test";
 
 struct BancoFixo;
@@ -61,17 +61,17 @@ fn semear_portal(banco: &BancoTemporario, papel: &str, ativo: bool) {
     let hash = argon2.gerar_hash(SENHA).expect("hash deve ser gerado");
 
     let mut conexao = banco.conexao();
-    let escritorio_id = match sql_query("SELECT id FROM escritorios WHERE slug = $1")
-        .bind::<Text, _>(SLUG)
+    let escritorio_id = match sql_query("SELECT id FROM escritorios WHERE cnpj = $1")
+        .bind::<Text, _>(CNPJ)
         .get_result::<IdRow>(&mut conexao)
     {
         Ok(row) => row.id,
         Err(diesel::result::Error::NotFound) => {
             let id = Uuid::now_v7();
-            sql_query("INSERT INTO escritorios (id, slug, nome) VALUES ($1, $2, $3)")
+            sql_query("INSERT INTO escritorios (id, nome, cnpj) VALUES ($1, $2, $3)")
                 .bind::<SqlUuid, _>(id)
-                .bind::<Text, _>(SLUG)
                 .bind::<Text, _>("Escritório de teste")
+                .bind::<Text, _>(CNPJ)
                 .execute(&mut conexao)
                 .expect("escritório deve ser inserido");
             id
@@ -85,7 +85,7 @@ fn semear_portal(banco: &BancoTemporario, papel: &str, ativo: bool) {
     )
     .bind::<SqlUuid, _>(Uuid::now_v7())
     .bind::<SqlUuid, _>(escritorio_id)
-    .bind::<Text, _>(format!("{papel}@alfa.test").to_lowercase())
+    .bind::<Text, _>(format!("{}@52998224725896.test", papel.to_lowercase()))
     .bind::<Text, _>("12345678901")
     .bind::<Text, _>(hash)
     .bind::<Text, _>(papel)
@@ -301,7 +301,11 @@ async fn token_de_uma_audiencia_nao_vale_na_outra() {
     assert_eq!(corpo["error"]["code"], "AUTH_AUDIENCE_MISMATCH");
 
     // Token da plataforma do escritório.
-    let portal = enviar(&ambiente.app, login_portal("operador@alfa.test", SENHA)).await;
+    let portal = enviar(
+        &ambiente.app,
+        login_portal("operador@52998224725896.test", SENHA),
+    )
+    .await;
     assert_eq!(portal.status(), StatusCode::OK);
     let corpo = corpo_json(portal).await;
     let token_client = corpo["accessToken"].as_str().expect("token").to_owned();
@@ -518,14 +522,22 @@ async fn portal_aceita_titular_e_operador_backoffice_rejeita() {
     semear_portal(&ambiente.banco, "CLIENTE", true);
     semear_backoffice(&ambiente.banco, true);
 
-    let portal_titular = enviar(&ambiente.app, login_portal("cliente@alfa.test", SENHA)).await;
+    let portal_titular = enviar(
+        &ambiente.app,
+        login_portal("cliente@52998224725896.test", SENHA),
+    )
+    .await;
     assert_eq!(portal_titular.status(), StatusCode::OK);
     assert!(
         cabecalho_cookie(&portal_titular, "accurit_client_rt").is_some(),
         "portal do cliente deve receber o cookie de cliente"
     );
 
-    let portal_operador = enviar(&ambiente.app, login_portal("operador@alfa.test", SENHA)).await;
+    let portal_operador = enviar(
+        &ambiente.app,
+        login_portal("operador@52998224725896.test", SENHA),
+    )
+    .await;
     assert_eq!(portal_operador.status(), StatusCode::UNAUTHORIZED);
     let corpo = corpo_json(portal_operador).await;
     assert_eq!(corpo["error"]["code"], "AUTH_INVALID_CREDENTIALS");
@@ -540,7 +552,7 @@ async fn login_com_email_inexistente_protege_sem_auditoria() {
         Method::POST,
         "/api/v1/auth/client/login",
         Some(json!({
-            "email": "ninguem@alfa.test",
+            "email": "ninguem@52998224725896.test",
             "senha": SENHA,
         })),
         &[],
@@ -567,7 +579,7 @@ async fn login_do_portal_identifica_o_escritorio_apenas_pelo_email() {
         Method::POST,
         "/api/v1/auth/client/login",
         Some(json!({
-            "escritorio": "slug-qualquer",
+            "escritorio": "52998224725896",
             "email": "  Cliente@Alfa.Test ",
             "senha": SENHA,
         })),
@@ -576,6 +588,6 @@ async fn login_do_portal_identifica_o_escritorio_apenas_pelo_email() {
     let resposta = enviar(&ambiente.app, resposta).await;
     assert_eq!(resposta.status(), StatusCode::OK);
     let corpo = corpo_json(resposta).await;
-    assert_eq!(corpo["usuario"]["email"], "cliente@alfa.test");
+    assert_eq!(corpo["usuario"]["email"], "cliente@52998224725896.test");
     assert!(corpo["usuario"]["escritorioId"].is_string());
 }

@@ -38,10 +38,10 @@ export const routes: Routes = [
       import('./features/tenants/tenant-detalhes.page').then((m) => m.TenantDetalhesPage),
   },
   {
-    path: 'usuarios',
+    path: 'administradores',
     canActivate: [authGuard],
     loadComponent: () =>
-      import('./features/usuarios/usuario-list.component').then((m) => m.UsuarioListComponent),
+      import('./features/administradores/administradores-list.component').then((m) => m.AdministradoresListComponent),
   },
   {
     path: 'catalogo',

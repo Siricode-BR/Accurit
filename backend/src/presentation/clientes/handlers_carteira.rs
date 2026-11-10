@@ -13,7 +13,7 @@ use axum::{
 use uuid::Uuid;
 
 use crate::application::clientes::{
-    NovoClienteFilialCommand, NovaClienteTagCommand, NovoSocioContatoCommand,
+    NovaClienteTagCommand, NovoClienteFilialCommand, NovoSocioContatoCommand,
 };
 use crate::domain::clientes::PapelSocioContato;
 use crate::presentation::auth::RequestContext;
@@ -56,7 +56,11 @@ pub async fn criar_socio_contato(
         ip: contexto.ip,
     };
     let criado = state.socios.criar(&comando)?;
-    Ok((StatusCode::CREATED, Json(SocioContatoResponse::from(criado))).into_response())
+    Ok((
+        StatusCode::CREATED,
+        Json(SocioContatoResponse::from(criado)),
+    )
+        .into_response())
 }
 
 pub async fn listar_socios_contatos(
@@ -294,7 +298,13 @@ pub async fn definir_carteira(
 
 fn decodificar_requisicao(
     payload: ImportacaoRequest,
-) -> Result<(Vec<u8>, crate::application::clientes::importar::FormatoImportacao), ApiError> {
+) -> Result<
+    (
+        Vec<u8>,
+        crate::application::clientes::importar::FormatoImportacao,
+    ),
+    ApiError,
+> {
     use base64::Engine;
 
     use crate::application::clientes::importar::FormatoImportacao;

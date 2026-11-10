@@ -4,12 +4,10 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
+use crate::domain::guias::entidades::{GuiaEmissao, NovoGuiaEmissao};
 use crate::domain::guias::enums::StatusGuia;
 use crate::domain::guias::erros::ErroGuia;
-use crate::domain::guias::entidades::{GuiaEmissao, NovoGuiaEmissao};
-use crate::domain::guias::ports::{
-    RepositorioGuiasEmissao, ProvedorEmissaoGuia,
-};
+use crate::domain::guias::ports::{ProvedorEmissaoGuia, RepositorioGuiasEmissao};
 
 /// Emitir uma guia (DAS ou DARF) com idempotência.
 pub struct EmitirGuiaUseCase {
@@ -22,13 +20,13 @@ impl EmitirGuiaUseCase {
         repositorio: Arc<dyn RepositorioGuiasEmissao>,
         provedor: Arc<dyn ProvedorEmissaoGuia>,
     ) -> Self {
-        Self { repositorio, provedor }
+        Self {
+            repositorio,
+            provedor,
+        }
     }
 
-    pub async fn executar(
-        &self,
-        comando: NovoGuiaEmissao,
-    ) -> Result<GuiaEmissao, ErroGuia> {
+    pub async fn executar(&self, comando: NovoGuiaEmissao) -> Result<GuiaEmissao, ErroGuia> {
         // Verificar idempotência: já existe uma emissão com esta chave?
         if let Some(existente) = self
             .repositorio
@@ -73,7 +71,9 @@ impl ListarGuiasUseCase {
         usuario_id: Uuid,
         limite: i64,
     ) -> Result<Vec<GuiaEmissao>, ErroGuia> {
-        self.repositorio.listar_por_usuario(usuario_id, limite).await
+        self.repositorio
+            .listar_por_usuario(usuario_id, limite)
+            .await
     }
 }
 
@@ -102,10 +102,7 @@ impl BaixarGuiaUseCase {
         Self { repositorio }
     }
 
-    pub async fn executar(
-        &self,
-        id: Uuid,
-    ) -> Result<GuiaEmissao, ErroGuia> {
+    pub async fn executar(&self, id: Uuid) -> Result<GuiaEmissao, ErroGuia> {
         let guia = self
             .repositorio
             .buscar_por_id(id)

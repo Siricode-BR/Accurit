@@ -10,7 +10,7 @@ use crate::domain::guias::entidades::GuiaEmissao;
 #[derive(Debug, Deserialize)]
 pub struct RequisicaoEmitirGuia {
     pub cliente_id: Uuid,
-    pub tipo_guia: String, // "DAS" | "DARF"
+    pub tipo_guia: String,   // "DAS" | "DARF"
     pub competencia: String, // "YYYY-MM"
     pub valor_total: f64,
     pub idempotencia_chave: String,

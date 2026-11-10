@@ -27,10 +27,7 @@ pub fn acesso_do_contexto(
 }
 
 /// Exige permissão de escrita da função e, se há cliente, visibilidade.
-pub fn exigir_escrita(
-    acesso: &AcessoCarteira,
-    cliente_id: Option<Uuid>,
-) -> Result<(), ApiError> {
+pub fn exigir_escrita(acesso: &AcessoCarteira, cliente_id: Option<Uuid>) -> Result<(), ApiError> {
     if !acesso.funcao.pode_escrever_clientes() {
         return Err(ApiError::proibido());
     }
@@ -39,7 +36,9 @@ pub fn exigir_escrita(
 
 /// Exige visibilidade; cliente fora da carteira responde 404.
 pub fn exigir_ver(acesso: &AcessoCarteira, cliente_id: Option<Uuid>) -> Result<(), ApiError> {
-    if let Some(cliente_id) = cliente_id && !acesso.pode_ver(cliente_id) {
+    if let Some(cliente_id) = cliente_id
+        && !acesso.pode_ver(cliente_id)
+    {
         return Err(ApiError::nao_encontrado("cliente"));
     }
     Ok(())

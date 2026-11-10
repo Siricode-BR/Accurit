@@ -152,14 +152,12 @@ impl ListarClientesUseCase {
         &self,
         comando: ListarClientesCommand,
     ) -> Result<ListagemClientes, ClienteError> {
-        Ok(self
-            .repositorio
-            .listar(
-                comando.escritorio_id,
-                comando.filtro,
-                comando.paginacao,
-                comando.apenas_ids.as_deref(),
-            )?)
+        Ok(self.repositorio.listar(
+            comando.escritorio_id,
+            comando.filtro,
+            comando.paginacao,
+            comando.apenas_ids.as_deref(),
+        )?)
     }
 }
 

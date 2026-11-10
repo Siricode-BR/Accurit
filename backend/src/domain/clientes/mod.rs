@@ -5,7 +5,7 @@ mod filtro;
 
 pub use carteira::{
     AcessoCarteira, AtualizarCarteiraCliente, CarteiraCliente, ClienteFilial, ClienteTag,
-    FuncaoUsuario, NovoClienteFilial, NovoSocioContato, NovaClienteTag, PapelSocioContato,
+    FuncaoUsuario, NovaClienteTag, NovoClienteFilial, NovoSocioContato, PapelSocioContato,
     SocioContato,
 };
 pub use cliente::{Cliente, ClienteInvalido, NovoCliente, PorteRegime, TipoCliente};

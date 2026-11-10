@@ -1,4 +1,4 @@
-﻿//! RepositÃ³rio Diesel de templates de notificaÃ§Ã£o.
+//! RepositÃ³rio Diesel de templates de notificaÃ§Ã£o.
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -60,9 +60,14 @@ struct TemplateRow {
 
 impl TemplateRow {
     fn para_entidade(self) -> Result<TemplateNotificacao, ErroNotificacao> {
-        let variaveis: Vec<String> = self.variaveis
+        let variaveis: Vec<String> = self
+            .variaveis
             .as_array()
-            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
         let tipo = match self.tipo.as_str() {
             "pendencia_divida_ativa" => TipoNotificacao::PendenciaDividaAtiva,
@@ -94,48 +99,52 @@ impl RepositorioTemplatesNotificacao for TemplatesNotificacaoDiesel {
         tipo: TipoNotificacao,
     ) -> Result<Option<TemplateNotificacao>, ErroNotificacao> {
         let pool = self.pool.clone();
-        tokio::task::spawn_blocking(move || -> Result<Option<TemplateNotificacao>, ErroNotificacao> {
-            let mut conexao = pool
-                .get()
-                .map_err(|_| ErroNotificacao::Persistencia("pool".into()))?;
-            let linha = diesel::sql_query(
-                "SELECT id, tipo, assunto, corpo_texto, corpo_html, variaveis, \
+        tokio::task::spawn_blocking(
+            move || -> Result<Option<TemplateNotificacao>, ErroNotificacao> {
+                let mut conexao = pool
+                    .get()
+                    .map_err(|_| ErroNotificacao::Persistencia("pool".into()))?;
+                let linha = diesel::sql_query(
+                    "SELECT id, tipo, assunto, corpo_texto, corpo_html, variaveis, \
                          ativo, criado_em, atualizado_em \
                   FROM templates_notificacao \
                   WHERE tipo = $1 AND ativo = TRUE",
-            )
-            .bind::<Text, _>(tipo.as_str())
-            .get_result::<TemplateRow>(&mut conexao)
-            .optional()
-            .map_err(|_| ErroNotificacao::Persistencia("buscar template".into()))?
-            .map(|row| row.para_entidade())
-            .transpose();
-            linha
-        })
+                )
+                .bind::<Text, _>(tipo.as_str())
+                .get_result::<TemplateRow>(&mut conexao)
+                .optional()
+                .map_err(|_| ErroNotificacao::Persistencia("buscar template".into()))?
+                .map(|row| row.para_entidade())
+                .transpose();
+                linha
+            },
+        )
         .await
         .map_err(|_| ErroNotificacao::Persistencia("spawn_blocking".into()))?
     }
 
     async fn listar_ativos(&self) -> Result<Vec<TemplateNotificacao>, ErroNotificacao> {
         let pool = self.pool.clone();
-        tokio::task::spawn_blocking(move || -> Result<Vec<TemplateNotificacao>, ErroNotificacao> {
-            let mut conexao = pool
-                .get()
-                .map_err(|_| ErroNotificacao::Persistencia("pool".into()))?;
-            let linhas = diesel::sql_query(
-                "SELECT id, tipo, assunto, corpo_texto, corpo_html, variaveis, \
+        tokio::task::spawn_blocking(
+            move || -> Result<Vec<TemplateNotificacao>, ErroNotificacao> {
+                let mut conexao = pool
+                    .get()
+                    .map_err(|_| ErroNotificacao::Persistencia("pool".into()))?;
+                let linhas = diesel::sql_query(
+                    "SELECT id, tipo, assunto, corpo_texto, corpo_html, variaveis, \
                          ativo, criado_em, atualizado_em \
                   FROM templates_notificacao \
                   WHERE ativo = TRUE \
                   ORDER BY tipo",
-            )
-            .load::<TemplateRow>(&mut conexao)
-            .map_err(|_| ErroNotificacao::Persistencia("listar templates".into()))?
-            .into_iter()
-            .map(|row| row.para_entidade())
-            .collect::<Result<Vec<_>, _>>()?;
-            Ok(linhas)
-        })
+                )
+                .load::<TemplateRow>(&mut conexao)
+                .map_err(|_| ErroNotificacao::Persistencia("listar templates".into()))?
+                .into_iter()
+                .map(|row| row.para_entidade())
+                .collect::<Result<Vec<_>, _>>()?;
+                Ok(linhas)
+            },
+        )
         .await
         .map_err(|_| ErroNotificacao::Persistencia("spawn_blocking".into()))?
     }

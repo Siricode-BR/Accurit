@@ -1,17 +1,17 @@
 //! Fase F — Handlers de relatórios e link de compartilhamento.
 
-use axum::extract::{Extension, Path, State};
-use axum::http::{header, StatusCode};
-use axum::response::Response;
 use axum::Json;
+use axum::extract::{Extension, Path, State};
+use axum::http::{StatusCode, header};
+use axum::response::Response;
 use uuid::Uuid;
 
 use crate::domain::relatorios::enums::StatusRelatorio;
 use crate::presentation::auth::RequestContext;
 use crate::presentation::error::ApiError;
 use crate::presentation::relatorios::dto::{
-    CriarLinkCompartilhamentoRequest, CriarRelatorioRequest, LinkCompartilhamentoDto,
-    RelatorioDto, RelatorioResumoDto,
+    CriarLinkCompartilhamentoRequest, CriarRelatorioRequest, LinkCompartilhamentoDto, RelatorioDto,
+    RelatorioResumoDto,
 };
 use crate::presentation::relatorios::state::EstadoRelatorios;
 
@@ -21,25 +21,18 @@ pub async fn criar_relatorio(
     Extension(contexto): Extension<RequestContext>,
     Json(requisicao): Json<CriarRelatorioRequest>,
 ) -> Result<Json<RelatorioDto>, ApiError> {
-    let _escritorio_id = contexto
-        .escritorio_id
-        .ok_or_else(ApiError::proibido)?;
-    let comando: crate::application::relatorios::use_cases::ComandoGerarRelatorio =
-        requisicao.try_into().map_err(|e: String| {
-            ApiError::validacao(e)
-        })?;
+    let _escritorio_id = contexto.escritorio_id.ok_or_else(ApiError::proibido)?;
+    let comando: crate::application::relatorios::use_cases::ComandoGerarRelatorio = requisicao
+        .try_into()
+        .map_err(|e: String| ApiError::validacao(e))?;
 
-    let relatorio = estado
-        .gerar
-        .executar(comando)
-        .await
-        .map_err(|e| match e {
-            crate::domain::relatorios::erros::ErroRelatorio::TipoInvalido(_)
-            | crate::domain::relatorios::erros::ErroRelatorio::FormatoInvalido(_) => {
-                ApiError::validacao(e.to_string())
-            }
-            _ => ApiError::erro_interno(),
-        })?;
+    let relatorio = estado.gerar.executar(comando).await.map_err(|e| match e {
+        crate::domain::relatorios::erros::ErroRelatorio::TipoInvalido(_)
+        | crate::domain::relatorios::erros::ErroRelatorio::FormatoInvalido(_) => {
+            ApiError::validacao(e.to_string())
+        }
+        _ => ApiError::erro_interno(),
+    })?;
 
     Ok(Json(RelatorioDto::from(relatorio)))
 }
@@ -49,9 +42,7 @@ pub async fn listar_relatorios(
     State(estado): State<EstadoRelatorios>,
     Extension(contexto): Extension<RequestContext>,
 ) -> Result<Json<Vec<RelatorioResumoDto>>, ApiError> {
-    let _escritorio_id = contexto
-        .escritorio_id
-        .ok_or_else(ApiError::proibido)?;
+    let _escritorio_id = contexto.escritorio_id.ok_or_else(ApiError::proibido)?;
 
     let relatorios = estado
         .listar
@@ -87,9 +78,7 @@ pub async fn buscar_relatorio(
     Extension(contexto): Extension<RequestContext>,
     Path(_id): Path<Uuid>,
 ) -> Result<Json<RelatorioDto>, ApiError> {
-    let _escritorio_id = contexto
-        .escritorio_id
-        .ok_or_else(ApiError::proibido)?;
+    let _escritorio_id = contexto.escritorio_id.ok_or_else(ApiError::proibido)?;
 
     let relatorio = estado
         .buscar
@@ -111,9 +100,7 @@ pub async fn baixar_relatorio(
     Extension(contexto): Extension<RequestContext>,
     Path(_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
-    let _escritorio_id = contexto
-        .escritorio_id
-        .ok_or_else(ApiError::proibido)?;
+    let _escritorio_id = contexto.escritorio_id.ok_or_else(ApiError::proibido)?;
 
     let relatorio = estado
         .buscar
@@ -127,9 +114,7 @@ pub async fn baixar_relatorio(
         })?;
 
     if relatorio.status != StatusRelatorio::Concluido {
-        return Err(ApiError::validacao(
-            "relatório ainda não foi gerado",
-        ));
+        return Err(ApiError::validacao("relatório ainda não foi gerado"));
     }
 
     let conteudo = relatorio
@@ -163,12 +148,11 @@ pub async fn criar_link_compartilhamento(
     Path(_id): Path<Uuid>,
     Json(requisicao): Json<CriarLinkCompartilhamentoRequest>,
 ) -> Result<Json<LinkCompartilhamentoDto>, ApiError> {
-    let _escritorio_id = contexto
-        .escritorio_id
-        .ok_or_else(ApiError::proibido)?;
+    let _escritorio_id = contexto.escritorio_id.ok_or_else(ApiError::proibido)?;
 
-    let comando: crate::application::relatorios::use_cases::ComandoCriarLink =
-        requisicao.try_into().map_err(|e: String| ApiError::validacao(e))?;
+    let comando: crate::application::relatorios::use_cases::ComandoCriarLink = requisicao
+        .try_into()
+        .map_err(|e: String| ApiError::validacao(e))?;
 
     let link = estado
         .criar_link
@@ -204,11 +188,7 @@ pub async fn obter_relatorio_por_link(
             _ => ApiError::erro_interno(),
         })?;
 
-    let extensao = detalhe
-        .nome_arquivo
-        .rsplit('.')
-        .next()
-        .unwrap_or("bin");
+    let extensao = detalhe.nome_arquivo.rsplit('.').next().unwrap_or("bin");
     let content_type = match extensao {
         "pdf" => "application/pdf",
         "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

@@ -20,7 +20,7 @@ interface TenantsState {
 @Injectable({ providedIn: 'root' })
 export class TenantService {
   private readonly http = inject(HttpClient);
-  private readonly baseUrl = '/api/v1/admin/escritorios';
+  private readonly baseUrl = '/api/v1';
 
   #state = signal<TenantsState>({
     itens: [],
@@ -90,7 +90,7 @@ export class TenantService {
   alternarModoSerpro(tenantId: string, modoTrial: boolean, versao: number): Promise<TenantAlteradoDto> {
     return new Promise((resolve, reject) => {
       const url = `${this.baseUrl}/${tenantId}/serpro/trial`;
-      this.http.patch<TenantAlteradoDto>(url, { modoTrial, versaoEsperada: versao }).subscribe({
+      this.http.patch<TenantAlteradoDto>(url, { modoTrialSerpro: modoTrial, versao }).subscribe({
         next: (alt) => {
           this.#state.update((s) => ({
             ...s,
@@ -112,4 +112,3 @@ export class TenantService {
     });
   }
 }
-

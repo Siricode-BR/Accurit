@@ -44,10 +44,7 @@ fn gerar_pdf(titulo: &str) -> Result<Vec<u8>, String> {
 }
 
 /// Gera um relatório em XLSX (planilha com dados dos clientes).
-fn gerar_xlsx(
-    titulo: &str,
-    clientes: &[ClientePublico],
-) -> Result<Vec<u8>, String> {
+fn gerar_xlsx(titulo: &str, clientes: &[ClientePublico]) -> Result<Vec<u8>, String> {
     use rust_xlsxwriter::{Format, Workbook};
 
     let mut workbook = Workbook::new();
@@ -91,10 +88,16 @@ fn gerar_xlsx(
         sheet
             .write_string(linha, 1, &cliente.nome_razao_social, &padrao)
             .map_err(|e| e.to_string())?;
-        sheet.write_string(linha, 2, tipo_str, &padrao).map_err(|e| e.to_string())?;
-        sheet.write_string(linha, 3, porte_str, &padrao).map_err(|e| e.to_string())?;
+        sheet
+            .write_string(linha, 2, tipo_str, &padrao)
+            .map_err(|e| e.to_string())?;
+        sheet
+            .write_string(linha, 3, porte_str, &padrao)
+            .map_err(|e| e.to_string())?;
     }
 
-    let buf = workbook.save_to_buffer().map_err(|e| format!("erro ao salvar XLSX: {e}"))?;
+    let buf = workbook
+        .save_to_buffer()
+        .map_err(|e| format!("erro ao salvar XLSX: {e}"))?;
     Ok(buf)
 }

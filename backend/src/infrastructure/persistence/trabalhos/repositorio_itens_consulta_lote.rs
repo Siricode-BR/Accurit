@@ -7,9 +7,7 @@ use diesel::sql_types::{Nullable, Text, Timestamptz, Uuid as SqlUuid};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::domain::trabalhos::entidades::{
-    ItemConsultaLote, NovoItemConsultaLote,
-};
+use crate::domain::trabalhos::entidades::{ItemConsultaLote, NovoItemConsultaLote};
 use crate::domain::trabalhos::erros::ErroTrabalho;
 use crate::domain::trabalhos::ports::RepositorioItensConsultaLote;
 use crate::infrastructure::persistence::pool::DbPool;

@@ -7,11 +7,7 @@ pub mod enums;
 pub mod erros;
 pub mod ports;
 
-pub use entidades::{
-    GuiaEmissao, NovoGuiaEmissao,
-};
-pub use enums::{TipoGuia, StatusGuia};
+pub use entidades::{GuiaEmissao, NovoGuiaEmissao};
+pub use enums::{StatusGuia, TipoGuia};
 pub use erros::ErroGuia;
-pub use ports::{
-    RepositorioGuiasEmissao, ProvedorEmissaoGuia,
-};
+pub use ports::{ProvedorEmissaoGuia, RepositorioGuiasEmissao};

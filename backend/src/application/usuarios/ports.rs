@@ -68,7 +68,7 @@ pub struct UsuarioDetalhe {
     pub id: Uuid,
     pub escritorio_id: Uuid,
     pub escritorio_nome: String,
-    pub escritorio_slug: String,
+    pub escritorio_cnpj: String,
     pub nome: String,
     pub email: String,
     pub cpf: String,

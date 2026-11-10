@@ -4,10 +4,10 @@
 use async_trait::async_trait;
 use uuid::Uuid;
 
-use crate::domain::relatorios::enums::StatusRelatorio;
 use crate::domain::relatorios::entidades::{
     LinkCompartilhamento, NovoLinkCompartilhamento, NovoRelatorio, Relatorio,
 };
+use crate::domain::relatorios::enums::StatusRelatorio;
 use crate::domain::relatorios::erros::ErroRelatorio;
 
 /// Repositório de relatórios gerados.
@@ -40,10 +40,7 @@ pub trait RepositorioLinksCompartilhamento: Send + Sync {
         &self,
         token: &str,
     ) -> Result<Option<LinkCompartilhamento>, ErroRelatorio>;
-    async fn registrar_acesso(
-        &self,
-        id: Uuid,
-    ) -> Result<(), ErroRelatorio>;
+    async fn registrar_acesso(&self, id: Uuid) -> Result<(), ErroRelatorio>;
     async fn listar_expirados(
         &self,
         agora: chrono::DateTime<chrono::Utc>,

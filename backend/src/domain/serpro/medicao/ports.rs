@@ -117,8 +117,5 @@ pub trait ServicoMedicaoSerpro: Send + Sync {
     ) -> Result<(), ErroMedicao>;
 
     /// Verifica se o escritório pode fazer mais chamadas neste mês.
-    async fn pode_fazer_chamada(
-        &self,
-        escritorio_id: Uuid,
-    ) -> Result<bool, ErroMedicao>;
+    async fn pode_fazer_chamada(&self, escritorio_id: Uuid) -> Result<bool, ErroMedicao>;
 }

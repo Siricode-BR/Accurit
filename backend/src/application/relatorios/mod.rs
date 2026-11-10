@@ -6,6 +6,6 @@ pub mod use_cases;
 pub use use_cases::{
     AcessarRelatorioPorLinkUseCase, BuscarRelatorioUseCase, ComandoCriarLink,
     ComandoGerarRelatorio, ComandoListarRelatorios, CriarLinkCompartilhamentoUseCase,
-    GerarRelatorioUseCase, ListarRelatoriosUseCase, RelatorioParaCompartilhamento,
-    RelatorioResumo, ValidarLinkCompartilhamentoUseCase,
+    GerarRelatorioUseCase, ListarRelatoriosUseCase, RelatorioParaCompartilhamento, RelatorioResumo,
+    ValidarLinkCompartilhamentoUseCase,
 };

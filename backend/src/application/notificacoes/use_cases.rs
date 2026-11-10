@@ -4,14 +4,13 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
-use crate::domain::notificacoes::erros::ErroNotificacao;
 use crate::domain::notificacoes::entidades::{
     Notificacao, NovoNotificacao, NovoPreferenciaNotificacao, PreferenciaNotificacao,
     TemplateNotificacao,
 };
+use crate::domain::notificacoes::erros::ErroNotificacao;
 use crate::domain::notificacoes::ports::{
-    RepositorioNotificacoes, RepositorioPreferenciasNotificacao,
-    RepositorioTemplatesNotificacao,
+    RepositorioNotificacoes, RepositorioPreferenciasNotificacao, RepositorioTemplatesNotificacao,
 };
 
 /// Criar uma notificação.
@@ -24,10 +23,7 @@ impl CriarNotificacaoUseCase {
         Self { repositorio }
     }
 
-    pub async fn executar(
-        &self,
-        comando: NovoNotificacao,
-    ) -> Result<Notificacao, ErroNotificacao> {
+    pub async fn executar(&self, comando: NovoNotificacao) -> Result<Notificacao, ErroNotificacao> {
         self.repositorio.criar(&comando).await
     }
 }
@@ -64,11 +60,7 @@ impl MarcarNotificacaoLidaUseCase {
         Self { repositorio }
     }
 
-    pub async fn executar(
-        &self,
-        id: Uuid,
-        usuario_id: Uuid,
-    ) -> Result<(), ErroNotificacao> {
+    pub async fn executar(&self, id: Uuid, usuario_id: Uuid) -> Result<(), ErroNotificacao> {
         self.repositorio.marcar_como_lida(id, usuario_id).await
     }
 }
@@ -83,10 +75,7 @@ impl MarcarTodasNotificacoesLidasUseCase {
         Self { repositorio }
     }
 
-    pub async fn executar(
-        &self,
-        usuario_id: Uuid,
-    ) -> Result<usize, ErroNotificacao> {
+    pub async fn executar(&self, usuario_id: Uuid) -> Result<usize, ErroNotificacao> {
         self.repositorio.marcar_todas_como_lidas(usuario_id).await
     }
 }

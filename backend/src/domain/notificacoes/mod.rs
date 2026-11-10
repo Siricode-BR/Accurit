@@ -8,12 +8,12 @@ pub mod erros;
 pub mod ports;
 
 pub use entidades::{
-    Notificacao, NovoNotificacao, PreferenciaNotificacao, NovoPreferenciaNotificacao,
-    TemplateNotificacao, NovoTemplateNotificacao,
+    Notificacao, NovoNotificacao, NovoPreferenciaNotificacao, NovoTemplateNotificacao,
+    PreferenciaNotificacao, TemplateNotificacao,
 };
-pub use enums::{CanalNotificacao, TipoNotificacao, StatusNotificacao};
+pub use enums::{CanalNotificacao, StatusNotificacao, TipoNotificacao};
 pub use erros::ErroNotificacao;
 pub use ports::{
-    RepositorioNotificacoes, RepositorioPreferenciasNotificacao,
-    RepositorioTemplatesNotificacao, ProvedorEnvioNotificacao, SchedulerNotificacao,
+    ProvedorEnvioNotificacao, RepositorioNotificacoes, RepositorioPreferenciasNotificacao,
+    RepositorioTemplatesNotificacao, SchedulerNotificacao,
 };

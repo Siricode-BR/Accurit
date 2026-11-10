@@ -21,8 +21,8 @@ fn papel_opcional<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Papel
 pub struct UsuarioDto {
     pub id: Uuid,
     pub escritorio_id: Uuid,
+    pub escritorio_cnpj: String,
     pub escritorio_nome: String,
-    pub escritorio_slug: String,
     pub nome: String,
     pub email: String,
     pub cpf: String,
@@ -38,7 +38,7 @@ impl From<UsuarioDetalhe> for UsuarioDto {
             id: u.id,
             escritorio_id: u.escritorio_id,
             escritorio_nome: u.escritorio_nome,
-            escritorio_slug: u.escritorio_slug,
+            escritorio_cnpj: u.escritorio_cnpj,
             nome: u.nome,
             email: u.email,
             cpf: u.cpf,

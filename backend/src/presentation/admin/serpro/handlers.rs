@@ -63,9 +63,8 @@ fn garante_admin(contexto: &RequestContext) -> Result<(), ApiError> {
 fn map_alterar_para_api(erro: crate::application::serpro::AlterarModoTrialError) -> ApiError {
     use crate::application::serpro::AlterarModoTrialError;
     match erro {
-        AlterarModoTrialError::Ambiente(ErroAmbiente::ConflitoVersao { esperado, .. }) => {
+        AlterarModoTrialError::Ambiente(ErroAmbiente::ConflitoVersao { .. }) => {
             ApiError::conflito("versão do escritório divergiu; recarregue e tente novamente")
-                .com_detalhe(format!("versão esperada: {esperado}"))
         }
         AlterarModoTrialError::Ambiente(ErroAmbiente::ProducaoBloqueada(mensagem)) => {
             ApiError::validacao(mensagem)

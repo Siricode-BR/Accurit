@@ -8,9 +8,7 @@ use crate::domain::notificacoes::entidades::{
     Notificacao, NovoNotificacao, NovoPreferenciaNotificacao, PreferenciaNotificacao,
     TemplateNotificacao,
 };
-use crate::domain::notificacoes::enums::{
-    CanalNotificacao, TipoNotificacao,
-};
+use crate::domain::notificacoes::enums::{CanalNotificacao, TipoNotificacao};
 use crate::domain::notificacoes::erros::ErroNotificacao;
 
 /// Repositório de notificações.
@@ -31,10 +29,7 @@ pub trait RepositorioNotificacoes: Send + Sync {
         limite: i64,
     ) -> Result<Vec<Notificacao>, ErroNotificacao>;
     async fn marcar_como_lida(&self, id: Uuid, usuario_id: Uuid) -> Result<(), ErroNotificacao>;
-    async fn marcar_todas_como_lidas(
-        &self,
-        usuario_id: Uuid,
-    ) -> Result<usize, ErroNotificacao>;
+    async fn marcar_todas_como_lidas(&self, usuario_id: Uuid) -> Result<usize, ErroNotificacao>;
     async fn contar_nao_lidas(&self, usuario_id: Uuid) -> Result<i64, ErroNotificacao>;
 }
 

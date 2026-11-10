@@ -88,7 +88,7 @@
         @for (t of recentes(); track t.id) {
           <li class="recente">
             <span class="recente-nome">{{ t.nome }}</span>
-            <span class="recente-slug">{{ t.slug }}</span>
+            <span class="recente-slug">{{ formatarCnpj(t.cnpj) }}</span>
             <span class="recente-data">{{ formatarData(t.atualizadoEm) }}</span>
             <acc-badge [status]="t.modoTrialSerpro ? 'warning' : 'success'">
               {{ t.modoTrialSerpro ? 'Trial' : 'Produção' }}

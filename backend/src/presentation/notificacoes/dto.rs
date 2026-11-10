@@ -4,9 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::domain::notificacoes::entidades::{
-    Notificacao, PreferenciaNotificacao,
-};
+use crate::domain::notificacoes::entidades::{Notificacao, PreferenciaNotificacao};
 
 /// Requisição para criar uma notificação.
 #[derive(Debug, Deserialize)]

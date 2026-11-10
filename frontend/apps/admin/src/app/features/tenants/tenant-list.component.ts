@@ -1,18 +1,10 @@
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { TenantDto, CriarTenantResponseDto } from '@accurit/core';
+import { formatDocument, formatPtBrDateTime } from '@accurit/shared';
 import {
-  Component,
-  OnInit,
-  inject,
-  signal,
-  computed,
-  ChangeDetectionStrategy,
-} from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { ActivatedRoute, Router } from '@angular/router';
-import { TenantFormComponent } from './tenant-form.component';
-import { TenantService } from '../../data/tenant.service';
-import {
-  AccButtonComponent,
   AccBadgeComponent,
+  AccButtonComponent,
   AccCardComponent,
   AccCtaButtonComponent,
   AccFilterChipsComponent,
@@ -22,26 +14,27 @@ import {
   AccSearchFieldComponent,
   AccSpinnerComponent,
 } from '@accurit/ui';
-import { formatPtBrDateTime } from '@accurit/shared';
-import { CriarTenantResponseDto, TenantDto } from '@accurit/core';
+import { mensagemDeErro } from '../../core/http/mensagem-erro';
+import { TenantService } from '../../data/tenant.service';
+import { TenantFormComponent } from './tenant-form.component';
 
-type FiltroAmbiente = 'todos' | 'producao' | 'trial';
+type FiltroTenentes = 'todos' | 'trial' | 'producao';
 
 @Component({
   selector: 'app-tenant-list',
   standalone: true,
   imports: [
-    CommonModule,
-    AccButtonComponent,
     AccBadgeComponent,
+    AccButtonComponent,
     AccCardComponent,
     AccCtaButtonComponent,
     AccFilterChipsComponent,
     AccIconComponent,
     AccModalComponent,
     AccSearchFieldComponent,
-    TenantFormComponent,
     AccSpinnerComponent,
+    TenantFormComponent,
+    RouterLink,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './tenant-list.component.html',
@@ -49,69 +42,66 @@ type FiltroAmbiente = 'todos' | 'producao' | 'trial';
 })
 export class TenantListComponent implements OnInit {
   protected readonly tenantService = inject(TenantService);
-  protected readonly router = inject(Router);
-  private readonly route = inject(ActivatedRoute);
-  protected readonly modalNovoAberto = signal(false);
 
-  protected readonly opcoesFiltro: readonly AccFilterOption<FiltroAmbiente>[] = [
+  protected readonly opcoesFiltro: readonly AccFilterOption<FiltroTenentes>[] = [
     { value: 'todos', label: 'Todos' },
+    { value: 'trial', label: 'Trial' },
     { value: 'producao', label: 'Produção' },
-    { value: 'trial', label: 'Trial SERPRO' },
   ];
 
   protected readonly termoBusca = signal('');
-  protected readonly filtroAtivo = signal<FiltroAmbiente>('todos');
+  protected readonly filtroAtivo = signal<FiltroTenentes>('todos');
+  protected readonly modalNovoAberto = signal(false);
+  protected readonly editando = signal<string | null>(null);
+  protected readonly erroAcao = signal<string | null>(null);
+  protected readonly aviso = signal<string | null>(null);
 
   protected readonly tenantsExibidos = computed(() => {
     const termo = this.termoBusca().trim().toLowerCase();
-    const filtro = this.filtroAtivo();
     return this.tenantService.tenants().filter((t) => {
-      if (filtro === 'trial' && !t.modoTrialSerpro) return false;
-      if (filtro === 'producao' && t.modoTrialSerpro) return false;
-      return !termo || t.nome.toLowerCase().includes(termo) || t.slug.toLowerCase().includes(termo);
+      if (!termo) return true;
+      return (
+        t.nome.toLowerCase().includes(termo) ||
+        t.cnpj.includes(termo)
+      );
     });
   });
 
-  protected novoTenant(): void {
+  ngOnInit(): void {
+    this.tenantService.listar();
+  }
+
+  protected aplicarFiltro(filtro: FiltroTenentes): void {
+    this.filtroAtivo.set(filtro);
+    this.carregar();
+  }
+
+  private carregar(): void {
+    const filtro = this.filtroAtivo();
+    this.tenantService.listar();
+    // Filtro por ambiente já é feito via computed no template
+  }
+
+  protected recarregar(): void {
+    this.aplicarFiltro(this.filtroAtivo());
+  }
+
+  protected novo(): void {
     this.modalNovoAberto.set(true);
   }
 
-  protected fecharModalNovo(): void {
+  protected aoCriar(resposta: CriarTenantResponseDto): void {
     this.modalNovoAberto.set(false);
+    this.aviso.set(
+      `Escritório ${formatDocument(resposta.cnpj)} criado. Login do titular: ${resposta.emailTitular}.`
+    );
   }
 
-  /** Após cadastrar, fecha o popup e abre a página do escritório criado. */
-  protected aoCadastrar(novo: CriarTenantResponseDto): void {
-    this.modalNovoAberto.set(false);
-    void this.router.navigate(['/tenants', novo.escritorioId], {
-      state: { titularEmail: novo.emailTitular },
-    });
+  protected formatarCnpj(cnpj: string): string {
+    return formatDocument(cnpj);
   }
 
-  protected abrirDetalhes(tenant: TenantDto): void {
-    void this.router.navigate(['/tenants', tenant.id]);
-  }
-
-  ngOnInit(): void {
-    this.tenantService.listar();
-    // Atalhos (dashboard, links antigos) chegam com ?novo=1 para abrir o cadastro direto.
-    if (this.route.snapshot.queryParamMap.has('novo')) {
-      this.modalNovoAberto.set(true);
-      void this.router.navigate([], { queryParams: { novo: null }, replaceUrl: true });
-    }
-  }
-
-  recarregar(): void {
-    this.tenantService.listar();
-  }
-
-  formatarData(iso: string): string {
-    return formatPtBrDateTime(iso);
-  }
-
-  async alternarAmbiente(tenant: TenantDto): Promise<void> {
-    const novoModo = !tenant.modoTrialSerpro;
-    await this.tenantService.alternarModoSerpro(tenant.id, novoModo, tenant.versao);
+  protected formatarData(iso: string | null): string {
+    return iso ? formatPtBrDateTime(iso) : 'Nunca atualizado';
   }
 }
-

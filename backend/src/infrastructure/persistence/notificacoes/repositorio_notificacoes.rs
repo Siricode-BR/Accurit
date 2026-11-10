@@ -1,4 +1,4 @@
-﻿//! RepositÃ³rio Diesel de notificaÃ§Ãµes.
+//! RepositÃ³rio Diesel de notificaÃ§Ãµes.
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -6,12 +6,8 @@ use diesel::prelude::*;
 use diesel::sql_types::{Bool, Nullable, Text, Timestamptz, Uuid as SqlUuid};
 use uuid::Uuid;
 
-use crate::domain::notificacoes::entidades::{
-    Notificacao, NovoNotificacao,
-};
-use crate::domain::notificacoes::enums::{
-    CanalNotificacao, TipoNotificacao,
-};
+use crate::domain::notificacoes::entidades::{Notificacao, NovoNotificacao};
+use crate::domain::notificacoes::enums::{CanalNotificacao, TipoNotificacao};
 use crate::domain::notificacoes::erros::ErroNotificacao;
 use crate::domain::notificacoes::ports::RepositorioNotificacoes;
 use crate::infrastructure::persistence::pool::DbPool;
@@ -104,10 +100,7 @@ impl NotificacaoRow {
 
 #[async_trait]
 impl RepositorioNotificacoes for NotificacoesDiesel {
-    async fn criar(
-        &self,
-        notificacao: &NovoNotificacao,
-    ) -> Result<Notificacao, ErroNotificacao> {
+    async fn criar(&self, notificacao: &NovoNotificacao) -> Result<Notificacao, ErroNotificacao> {
         let pool = self.pool.clone();
         let novo = notificacao.clone();
         tokio::task::spawn_blocking(move || -> Result<Notificacao, ErroNotificacao> {
@@ -140,10 +133,7 @@ impl RepositorioNotificacoes for NotificacoesDiesel {
         .map_err(|_| ErroNotificacao::Persistencia("spawn_blocking".into()))?
     }
 
-    async fn buscar_por_id(
-        &self,
-        id: Uuid,
-    ) -> Result<Option<Notificacao>, ErroNotificacao> {
+    async fn buscar_por_id(&self, id: Uuid) -> Result<Option<Notificacao>, ErroNotificacao> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || -> Result<Option<Notificacao>, ErroNotificacao> {
             let mut conexao = pool
@@ -237,7 +227,9 @@ impl RepositorioNotificacoes for NotificacoesDiesel {
                 .bind::<SqlUuid, _>(escritorio_id)
                 .bind::<diesel::sql_types::BigInt, _>(limite)
                 .load::<NotificacaoRow>(&mut conexao)
-                .map_err(|_| ErroNotificacao::Persistencia("listar notificaÃ§Ãµes por escritÃ³rio".into()))?
+                .map_err(|_| {
+                    ErroNotificacao::Persistencia("listar notificaÃ§Ãµes por escritÃ³rio".into())
+                })?
                 .into_iter()
                 .map(|row| row.para_entidade())
                 .collect::<Result<Vec<_>, _>>()?;
@@ -247,11 +239,7 @@ impl RepositorioNotificacoes for NotificacoesDiesel {
         .map_err(|_| ErroNotificacao::Persistencia("spawn_blocking".into()))?
     }
 
-    async fn marcar_como_lida(
-        &self,
-        id: Uuid,
-        usuario_id: Uuid,
-    ) -> Result<(), ErroNotificacao> {
+    async fn marcar_como_lida(&self, id: Uuid, usuario_id: Uuid) -> Result<(), ErroNotificacao> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || -> Result<(), ErroNotificacao> {
             let mut conexao = pool
@@ -275,10 +263,7 @@ impl RepositorioNotificacoes for NotificacoesDiesel {
         .map_err(|_| ErroNotificacao::Persistencia("spawn_blocking".into()))?
     }
 
-    async fn marcar_todas_como_lidas(
-        &self,
-        usuario_id: Uuid,
-    ) -> Result<usize, ErroNotificacao> {
+    async fn marcar_todas_como_lidas(&self, usuario_id: Uuid) -> Result<usize, ErroNotificacao> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || -> Result<usize, ErroNotificacao> {
             let mut conexao = pool

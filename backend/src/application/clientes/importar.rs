@@ -73,7 +73,14 @@ pub struct RelatorioImportacao {
 
 /// Nomes aceitos de coluna, normalizados (sem acentos, minúsculo).
 const COL_TIPO: &[&str] = &["tipo"];
-const COL_DOCUMENTO: &[&str] = &["cpf_cnpj", "cpf-cnpj", "documento", "cpf", "cnpj", "cpf/cnpj"];
+const COL_DOCUMENTO: &[&str] = &[
+    "cpf_cnpj",
+    "cpf-cnpj",
+    "documento",
+    "cpf",
+    "cnpj",
+    "cpf/cnpj",
+];
 const COL_NOME: &[&str] = &["nome_razao_social", "nome", "razao_social", "razao"];
 const COL_FANTASIA: &[&str] = &["nome_fantasia", "fantasia"];
 const COL_REPRESENTANTE: &[&str] = &["representante_nome", "representante"];
@@ -82,10 +89,7 @@ const COL_TELEFONE: &[&str] = &["telefone", "fone", "tel", "celular"];
 const COL_PORTE: &[&str] = &["porte_regime", "porte", "regime", "regime_tributario"];
 
 fn normalizar(texto: &str) -> String {
-    texto
-        .trim()
-        .to_ascii_lowercase()
-        .replace(['-', ' '], "_")
+    texto.trim().to_ascii_lowercase().replace(['-', ' '], "_")
 }
 
 /// Grupos de colunas; em cada lista, o primeiro nome é o canônico.
@@ -161,7 +165,10 @@ impl std::fmt::Display for ErroAnalise {
         match self {
             Self::SemDados => write!(f, "arquivo sem linhas"),
             Self::CabecalhoInvalido => {
-                write!(f, "cabeçalho obrigatório ausente: tipo, cpf_cnpj, nome_razao_social")
+                write!(
+                    f,
+                    "cabeçalho obrigatório ausente: tipo, cpf_cnpj, nome_razao_social"
+                )
             }
             Self::FormatoNaoReconhecido => write!(f, "formato de arquivo não reconhecido"),
         }
@@ -362,8 +369,7 @@ impl ImportarClientesUseCase {
         conteudo: &[u8],
         formato: FormatoImportacao,
     ) -> Result<AnaliseImportacao, ClienteError> {
-        analisar_conteudo(conteudo, formato)
-            .map_err(|e| ClienteError::Validacao(e.to_string()))
+        analisar_conteudo(conteudo, formato).map_err(|e| ClienteError::Validacao(e.to_string()))
     }
 
     /// Etapa 2: confirmar, criando apenas as linhas ainda válidas e não

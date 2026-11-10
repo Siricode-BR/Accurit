@@ -4,21 +4,20 @@
 
 use std::sync::Arc;
 
-use chrono::{DateTime, Utc, NaiveDate, Datelike};
+use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use uuid::Uuid;
 
+use crate::domain::serpro::ambiente::AmbienteSerpro;
 use crate::domain::serpro::medicao::entidades::{
-    AgregadoConsumoSerpro, AssinaturaEscritorio, BloqueioSerpro,
-    ComandoRegistrarBloqueio, ComandoRegistrarChamada, PlanoEscritorio, ResultadoRegistroChamada,
+    AgregadoConsumoSerpro, AssinaturaEscritorio, BloqueioSerpro, ComandoRegistrarBloqueio,
+    ComandoRegistrarChamada, PlanoEscritorio, ResultadoRegistroChamada,
 };
 use crate::domain::serpro::medicao::enums::{PeriodoAgregado, ResultadoChamada};
 use crate::domain::serpro::medicao::erros::ErroMedicao;
 use crate::domain::serpro::medicao::ports::{
-    RepositorioAgregadosConsumo, RepositorioAssinaturasEscritorio,
-    RepositorioBloqueiosSerpro, RepositorioChamadasSerpro, RepositorioPlanosEscritorio,
-    ServicoMedicaoSerpro,
+    RepositorioAgregadosConsumo, RepositorioAssinaturasEscritorio, RepositorioBloqueiosSerpro,
+    RepositorioChamadasSerpro, RepositorioPlanosEscritorio, ServicoMedicaoSerpro,
 };
-use crate::domain::serpro::ambiente::AmbienteSerpro;
 use crate::domain::serpro::produto::ProdutoSerpro;
 
 /// Serviço de medição: registra chamadas, verifica limites de plano,
@@ -65,18 +64,19 @@ impl ServicoMedicaoSerpro for ServicoMedicaoSerproImpl {
 
         // 2. Conta chamadas já feitas neste mês para este escritório.
         let agora = Utc::now();
-        let mes_inicio = NaiveDate::from_ymd_opt(agora.date_naive().year(), agora.date_naive().month(), 1)
-            .unwrap()
-            .and_time(agora.time())
-            .and_local_timezone(Utc)
-            .unwrap();
+        let mes_inicio =
+            NaiveDate::from_ymd_opt(agora.date_naive().year(), agora.date_naive().month(), 1)
+                .unwrap()
+                .and_time(agora.time())
+                .and_local_timezone(Utc)
+                .unwrap();
 
-        let chamadas_mes = self.contar_chamadas_mes(comando.escritorio_id, mes_inicio).await?;
+        let chamadas_mes = self
+            .contar_chamadas_mes(comando.escritorio_id, mes_inicio)
+            .await?;
 
-        if chamadas_mes >= assinatura.chamadas_mes_limite {
-            if assinatura.bloqueio_ao_exceder {
-                return Err(ErroMedicao::LimiteChamadasExcedido);
-            }
+        if chamadas_mes >= assinatura.chamadas_mes_limite && assinatura.bloqueio_ao_exceder {
+            return Err(ErroMedicao::LimiteChamadasExcedido);
         }
 
         // 3. Registra a chamada.
@@ -114,28 +114,16 @@ impl ServicoMedicaoSerpro for ServicoMedicaoSerproImpl {
     ) -> Result<(), ErroMedicao> {
         // Para cada produto/ambiente, conta chamadas no período e faz upsert.
         let produtos = [
-            (
-                ProdutoSerpro::IntegraContador,
-                AmbienteSerpro::Trial,
-            ),
-            (
-                ProdutoSerpro::IntegraContador,
-                AmbienteSerpro::Producao,
-            ),
-            (
-                ProdutoSerpro::DividaAtiva,
-                AmbienteSerpro::Trial,
-            ),
-            (
-                ProdutoSerpro::DividaAtiva,
-                AmbienteSerpro::Producao,
-            ),
+            (ProdutoSerpro::IntegraContador, AmbienteSerpro::Trial),
+            (ProdutoSerpro::IntegraContador, AmbienteSerpro::Producao),
+            (ProdutoSerpro::DividaAtiva, AmbienteSerpro::Trial),
+            (ProdutoSerpro::DividaAtiva, AmbienteSerpro::Producao),
         ];
 
         for (produto, ambiente) in produtos {
-            let (total, sucesso, c4xx, c5xx, ctimeout, cint, duracao) =
-                self.contar_agregado(escritorio_id, produto, ambiente, referencia)
-                    .await?;
+            let (total, sucesso, c4xx, c5xx, ctimeout, cint, duracao) = self
+                .contar_agregado(escritorio_id, produto, ambiente, referencia)
+                .await?;
 
             let referencia_dia = referencia
                 .date_naive()
@@ -178,11 +166,12 @@ impl ServicoMedicaoSerpro for ServicoMedicaoSerproImpl {
         }
 
         let agora = Utc::now();
-        let mes_inicio = NaiveDate::from_ymd_opt(agora.date_naive().year(), agora.date_naive().month(), 1)
-            .unwrap()
-            .and_time(agora.time())
-            .and_local_timezone(Utc)
-            .unwrap();
+        let mes_inicio =
+            NaiveDate::from_ymd_opt(agora.date_naive().year(), agora.date_naive().month(), 1)
+                .unwrap()
+                .and_time(agora.time())
+                .and_local_timezone(Utc)
+                .unwrap();
 
         let chamadas_mes = self.contar_chamadas_mes(escritorio_id, mes_inicio).await?;
 
@@ -324,7 +313,11 @@ impl CriarAtualizarAssinaturaUseCase {
             .await?
             .ok_or(ErroMedicao::PlanoNaoEncontrado)?;
 
-        if let Some(existente) = self.assinaturas.buscar_por_escritorio(escritorio_id).await? {
+        if let Some(existente) = self
+            .assinaturas
+            .buscar_por_escritorio(escritorio_id)
+            .await?
+        {
             let atualizada = AssinaturaEscritorio {
                 id: existente.id,
                 escritorio_id,
@@ -402,15 +395,13 @@ impl ListarConsumoEscritorioUseCase {
 
         let agregados = self
             .agregados
-            .listar_por_escritorio(
-                escritorio_id,
-                periodo,
-                referencia_inicio,
-                referencia_fim,
-            )
+            .listar_por_escritorio(escritorio_id, periodo, referencia_inicio, referencia_fim)
             .await?;
 
-        let chamadas_recentes = self.chamadas.listar_por_escritorio(escritorio_id, 50).await?;
+        let chamadas_recentes = self
+            .chamadas
+            .listar_por_escritorio(escritorio_id, 50)
+            .await?;
 
         let total_mes: i64 = agregados
             .iter()

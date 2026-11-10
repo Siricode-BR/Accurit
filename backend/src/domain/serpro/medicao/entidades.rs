@@ -4,7 +4,9 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::domain::serpro::ambiente::AmbienteSerpro;
-use crate::domain::serpro::medicao::enums::{MotivoBloqueio, OrigemChamada, PeriodoAgregado, ResultadoChamada};
+use crate::domain::serpro::medicao::enums::{
+    MotivoBloqueio, OrigemChamada, PeriodoAgregado, ResultadoChamada,
+};
 use crate::domain::serpro::produto::ProdutoSerpro;
 
 /// Chamada feita ao SERPRO (registro bruto, append-only).

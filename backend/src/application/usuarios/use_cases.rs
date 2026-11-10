@@ -7,9 +7,8 @@ use crate::application::admin::{
     ProvisionarError, validar_cpf, validar_email, validar_nome, validar_senha,
 };
 use crate::application::usuarios::ports::{
-    AlteracaoUsuario, Ator, EventoAuditoriaUsuario, FiltroUsuarios, ListagemUsuarios,
-    OrigemAtor, RepositorioError, UsuarioDetalhe, UsuarioError, UsuarioGestaoNovo,
-    UsuarioGestaoRepositorio,
+    AlteracaoUsuario, Ator, EventoAuditoriaUsuario, FiltroUsuarios, ListagemUsuarios, OrigemAtor,
+    RepositorioError, UsuarioDetalhe, UsuarioError, UsuarioGestaoNovo, UsuarioGestaoRepositorio,
 };
 use crate::domain::auth::Papel;
 use crate::infrastructure::auth::HashArgon2;

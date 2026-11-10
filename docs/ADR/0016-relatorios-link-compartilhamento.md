@@ -10,11 +10,6 @@ o cliente final por meio de um link seguro e expirável, sem exigir autenticaç�
 do escritório (o cliente PF/PJ atendido é um dado do escritório, nunca um usuário, conforme
 SPEC §1.3).
 
-Duas decisões de arquitetura precisam ser registradas:
-
-1. Como armazenar e disponibilizar o conteúdo gerado dos relatórios.
-2. Como compartilhar relatórios com o cliente final de forma segura, sem exigir login.
-
 ## Decisão
 
 ### 1. Armazenamento de relatórios
@@ -25,7 +20,7 @@ um escritório (`escritorio_id`), ao usuário que o gerou (`usuario_id`) e opcio
 cliente específico (`cliente_id`). O status (`gerando`, `concluido`, `falhou`) permite
 diferenciar relatórios ainda em processamento dos já finalizados.
 
-A geração é síncrona na requisição: o endpoint `POST /relatorios` cria o registro, gera o
+A geração é síncrona na requisição: o endpoint `POST /api/v1/relatorios` cria o registro, gera o
 conteúdo e atualiza o registro com o status e o conteúdo antes de responder. Isso evita a
 complexidade de um job runner assíncrono apenas para relatórios, dado o volume esperado
 baixo nesta fase.
@@ -34,7 +29,7 @@ baixo nesta fase.
 
 É criada a tabela `links_compartilhamento_relatorios` com um token aleatório
 (`UUID::now_v7()` convertido para string), tempo de expiração (`expira_em`) e timestamp de
-último acesso (`acessado_em`). O endpoint `GET /relatorios/compartilhado/{token}` é público
+último acesso (`acessado_em`). O endpoint `GET /api/v1/relatorios/compartilhado/{token}` é público
 (sem autenticação): valida o token, verifica a expiração, registra o acesso e devolve o
 conteúdo do relatório para download direto.
 

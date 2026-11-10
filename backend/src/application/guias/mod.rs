@@ -2,6 +2,4 @@
 
 pub mod use_cases;
 
-pub use use_cases::{
-    EmitirGuiaUseCase, ListarGuiasUseCase, BuscarGuiaUseCase, BaixarGuiaUseCase,
-};
+pub use use_cases::{BaixarGuiaUseCase, BuscarGuiaUseCase, EmitirGuiaUseCase, ListarGuiasUseCase};

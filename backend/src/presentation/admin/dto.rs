@@ -6,7 +6,7 @@ use crate::application::admin::EscritorioResumo;
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProvisionarTenantRequest {
-    pub slug: String,
+    pub cnpj: String,
     pub nome: String,
     pub email_titular: String,
     pub cpf_titular: String,
@@ -17,7 +17,7 @@ pub struct ProvisionarTenantRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ProvisionarTenantResponse {
     pub escritorio_id: Uuid,
-    pub slug: String,
+    pub cnpj: String,
     pub titular_id: Uuid,
     pub email_titular: String,
 }
@@ -35,7 +35,7 @@ pub struct PaginacaoQuery {
 #[serde(rename_all = "camelCase")]
 pub struct EscritorioResumoResponse {
     pub id: Uuid,
-    pub slug: String,
+    pub cnpj: String,
     pub nome: String,
     pub modo_trial_serpro: bool,
     pub versao: i64,
@@ -46,7 +46,7 @@ impl From<EscritorioResumo> for EscritorioResumoResponse {
     fn from(resumo: EscritorioResumo) -> Self {
         Self {
             id: resumo.id,
-            slug: resumo.slug,
+            cnpj: resumo.cnpj,
             nome: resumo.nome,
             modo_trial_serpro: resumo.modo_trial_serpro,
             versao: resumo.versao,
@@ -85,7 +85,7 @@ mod tests {
         let agora = chrono::Utc.with_ymd_and_hms(2026, 10, 24, 9, 0, 0).unwrap();
         let json = serde_json::to_string(&EscritorioResumoResponse {
             id: Uuid::nil(),
-            slug: "contamais".into(),
+            cnpj: "52998224725".into(),
             nome: "ContaMais".into(),
             modo_trial_serpro: true,
             versao: 3,
@@ -96,6 +96,6 @@ mod tests {
         assert!(json.contains("\"modoTrialSerpro\":true"));
         assert!(json.contains("\"versao\":3"));
         assert!(json.contains("\"atualizadoEm\""));
-        assert!(!json.contains("cnpj"));
+        assert!(!json.contains("slug"));
     }
 }

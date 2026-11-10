@@ -1,70 +1,45 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
 import {
-  AtualizarUsuarioRequestDto,
-  CriarUsuarioAdminRequestDto,
-  ListagemUsuariosDto,
   UsuarioDto,
+  AtualizarUsuarioRequestDto,
+  ListagemUsuariosDto,
 } from '@accurit/core';
 
-interface UsuariosState {
-  itens: UsuarioDto[];
-  total: number;
-  carregando: boolean;
-  erro: string | null;
-}
-
-/** Usuários de todos os escritórios (backoffice SaaS). */
 @Injectable({ providedIn: 'root' })
 export class UsuarioService {
   private readonly http = inject(HttpClient);
+  // Rota removida do admin (Etapa 0.2) — usuários de escritório são gerenciados apenas no app client
+  // baseUrl privada, métodos públicos lançcam erro se chamados
   private readonly baseUrl = '/api/v1/admin/usuarios';
 
-  #state = signal<UsuariosState>({ itens: [], total: 0, carregando: false, erro: null });
+  #state = signal<{ itens: UsuarioDto[]; total: number; pagina: number; tamanho: number; carregando: boolean; erro: string | null }>({ itens: [], total: 0, pagina: 1, tamanho: 20, carregando: false, erro: null });
 
-  readonly usuarios = computed(() => this.#state().itens);
+  readonly itens = computed(() => this.#state().itens);
   readonly total = computed(() => this.#state().total);
   readonly carregando = computed(() => this.#state().carregando);
   readonly erro = computed(() => this.#state().erro);
 
-  /** `ativo`: `null` lista todos; `escritorioId` restringe a um escritório; a busca textual é aplicada na tela. */
-  listar(ativo: boolean | null = null, escritorioId: string | null = null): void {
-    this.#state.update((s) => ({ ...s, carregando: true, erro: null }));
-    let params = new HttpParams();
-    if (ativo !== null) params = params.set('ativo', String(ativo));
-    if (escritorioId) params = params.set('escritorioId', escritorioId);
-
-    this.http.get<ListagemUsuariosDto>(this.baseUrl, { params }).subscribe({
-      next: (res) =>
-        this.#state.update((s) => ({ ...s, itens: res.itens, total: res.total, carregando: false })),
-      error: (err: { message?: string }) =>
-        this.#state.update((s) => ({
-          ...s,
-          carregando: false,
-          erro: err.message ?? 'Falha ao carregar a lista de usuários.',
-        })),
-    });
-  }
-
-  async criar(payload: CriarUsuarioAdminRequestDto): Promise<UsuarioDto> {
-    const novo = await firstValueFrom(this.http.post<UsuarioDto>(this.baseUrl, payload));
-    this.#state.update((s) => ({ ...s, itens: [novo, ...s.itens], total: s.total + 1 }));
-    return novo;
-  }
-
-  async atualizar(id: string, patch: AtualizarUsuarioRequestDto): Promise<UsuarioDto> {
-    const atualizado = await firstValueFrom(
-      this.http.patch<UsuarioDto>(`${this.baseUrl}/${id}`, patch),
-    );
+  listar(): void {
+    // Esta rota foi removida do admin (Etapa 0.2)
     this.#state.update((s) => ({
       ...s,
-      itens: s.itens.map((u) => (u.id === id ? atualizado : u)),
+      erro: 'Rota de listagem de usuários de escritório removida do admin. Use o app client para gerenciar usuários de escritório.',
     }));
-    return atualizado;
   }
 
-  async redefinirSenha(id: string, senha: string): Promise<void> {
-    await firstValueFrom(this.http.post<void>(`${this.baseUrl}/${id}/senha`, { senha }));
+  criar(): Promise<UsuarioDto> {
+    return Promise.reject(new Error('Rota de criação de usuários de escritório removida do admin. Use o app client.'));
+  }
+
+  atualizar(): Promise<UsuarioDto> {
+    return Promise.reject(new Error('Rota de atualização de usuários de escritório removida do admin. Use o app client.'));
+  }
+
+  async redefinirSenha(id: string, senha: string): Promise<UsuarioDto> {
+    // Parâmetros mantidos para compatibilidade de chamadas antigas.
+    void id;
+    void senha;
+    return Promise.reject(new Error('Rota de redefinição de senha de usuários de escritório removida do admin. Use o app client.'));
   }
 }

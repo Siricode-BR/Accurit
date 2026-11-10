@@ -17,7 +17,7 @@
       <span class="cabecalho__icone"><acc-icon name="building" /></span>
       <div class="cabecalho__texto">
         <h1 class="titulo">{{ t.nome }}</h1>
-        <p class="slug">{{ t.slug }}</p>
+        <p class="slug">{{ formatarCnpj(t.cnpj) }}</p>
       </div>
       <acc-badge [status]="t.modoTrialSerpro ? 'warning' : 'success'">
         {{ t.modoTrialSerpro ? 'Trial SERPRO' : 'Produção' }}
@@ -50,8 +50,8 @@
           <h2 class="secao__titulo">Informações</h2>
           <dl class="dados">
             <div>
-              <dt>Slug / Subdomínio</dt>
-              <dd class="mono">{{ t.slug }}</dd>
+              <dt>CNPJ</dt>
+              <dd class="mono">{{ formatarCnpj(t.cnpj) }}</dd>
             </div>
             <div>
               <dt>Última atualização</dt>

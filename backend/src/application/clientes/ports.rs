@@ -185,7 +185,10 @@ pub trait AuditoriaClienteRepositorio: Send + Sync {
 /// Repositório de sócios/contatos, filiais, tags e carteira por cliente.
 pub trait RepositorioCarteiraClientes: Send + Sync {
     // Sócios e contatos
-    fn criar_socio_contato(&self, novo: &NovoSocioContato) -> Result<SocioContato, RepositorioError>;
+    fn criar_socio_contato(
+        &self,
+        novo: &NovoSocioContato,
+    ) -> Result<SocioContato, RepositorioError>;
     fn listar_socios_contatos(
         &self,
         escritorio_id: Uuid,
@@ -199,10 +202,7 @@ pub trait RepositorioCarteiraClientes: Send + Sync {
     ) -> Result<bool, RepositorioError>;
 
     // Filiais
-    fn criar_filial(
-        &self,
-        novo: &NovoClienteFilial,
-    ) -> Result<ClienteFilial, RepositorioError>;
+    fn criar_filial(&self, novo: &NovoClienteFilial) -> Result<ClienteFilial, RepositorioError>;
     fn listar_filiais(
         &self,
         escritorio_id: Uuid,

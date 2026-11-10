@@ -122,7 +122,8 @@ impl RenovarSessaoAdmin {
             refresh_ttl_secs: ttl,
             administrador: AdministradorPublico {
                 id: atual.id,
-                email: atual.email,
+                nome: atual.nome.clone(),
+                email: atual.email.clone(),
             },
         })
     }

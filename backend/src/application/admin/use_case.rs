@@ -55,7 +55,7 @@ impl ProvisionarTenantUseCase {
         &self,
         comando: ProvisionarTenantCommand,
     ) -> Result<ProvisionarTenantResultado, ProvisionarError> {
-        validar_slug(&comando.slug)?;
+        validar_cnpj(&comando.cnpj)?;
         validar_nome(&comando.nome)?;
         validar_email(&comando.email_titular)?;
         validar_cpf(&comando.cpf_titular)?;
@@ -74,11 +74,11 @@ impl ProvisionarTenantUseCase {
             ));
         }
 
-        let escritorio_id = if let Some(id) = self.escritorio_repo.buscar_por_slug(&comando.slug)? {
+        let escritorio_id = if let Some(id) = self.escritorio_repo.buscar_por_cnpj(&comando.cnpj)? {
             id
         } else {
             let escritorio = EscritorioNovo {
-                slug: comando.slug.clone(),
+                cnpj: comando.cnpj.clone(),
                 nome: comando.nome.clone(),
             };
             self.escritorio_repo.criar(&escritorio)?
@@ -111,7 +111,7 @@ impl ProvisionarTenantUseCase {
             entidade_id: escritorio_id,
             valor_anterior: None,
             valor_novo: Some(serde_json::json!({
-                "slug": comando.slug,
+                "cnpj": comando.cnpj,
                 "nome": comando.nome,
                 "titular_id": titular_id,
                 "email_titular": comando.email_titular,
@@ -121,30 +121,18 @@ impl ProvisionarTenantUseCase {
 
         Ok(ProvisionarTenantResultado {
             escritorio_id,
-            slug: comando.slug,
+            cnpj: comando.cnpj,
             titular_id,
             email_titular: comando.email_titular,
         })
     }
 }
 
-fn validar_slug(slug: &str) -> Result<(), ProvisionarError> {
-    let slug = slug.trim().to_ascii_lowercase();
-    if slug.len() < 3 || slug.len() > 40 {
-        return Err(ProvisionarError::Validacao(
-            "slug deve ter de 3 a 40 caracteres".into(),
-        ));
+pub(crate) fn validar_cnpj(cnpj: &str) -> Result<(), ProvisionarError> {
+    match crate::domain::auth::Cnpj::novo(cnpj) {
+        Ok(_) => Ok(()),
+        Err(_) => Err(ProvisionarError::Validacao("CNPJ inv\u{00e1}lido".into())),
     }
-    if !slug
-        .bytes()
-        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
-    {
-        return Err(ProvisionarError::Validacao(
-            "slug deve conter apenas letras min\u{00fa}sculas, d\u{00ed}gitos e h\u{00ed}fen"
-                .into(),
-        ));
-    }
-    Ok(())
 }
 
 pub(crate) fn validar_nome(nome: &str) -> Result<(), ProvisionarError> {

@@ -3,10 +3,10 @@
 use std::sync::Arc;
 
 use crate::application::notificacoes::{
-    BuscarPreferenciaUseCase, ContarNotificacoesNaoLidasUseCase,
-    CriarNotificacaoUseCase, CriarOuAtualizarPreferenciaUseCase,
-    ListarNotificacoesUseCase, ListarTemplatesNotificacaoUseCase,
-    MarcarNotificacaoLidaUseCase, MarcarTodasNotificacoesLidasUseCase,
+    BuscarPreferenciaUseCase, ContarNotificacoesNaoLidasUseCase, CriarNotificacaoUseCase,
+    CriarOuAtualizarPreferenciaUseCase, ListarNotificacoesUseCase,
+    ListarTemplatesNotificacaoUseCase, MarcarNotificacaoLidaUseCase,
+    MarcarTodasNotificacoesLidasUseCase,
 };
 
 #[derive(Clone)]

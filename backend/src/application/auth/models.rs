@@ -47,6 +47,7 @@ impl From<&Usuario> for UsuarioPublico {
 #[derive(Debug, Clone)]
 pub struct AdministradorPublico {
     pub id: Uuid,
+    pub nome: String,
     pub email: String,
 }
 

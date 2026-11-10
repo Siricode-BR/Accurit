@@ -88,29 +88,30 @@ fn cpf_com_dv(seed: u64) -> String {
     format!("{parte}{primeiro}{segundo}")
 }
 
-fn semear_escritorio(banco: &BancoTemporario, slug: &str) -> Uuid {
+const CNPJ_ESCRITORIO: &str = "52998224725896";
+
+fn semear_escritorio(banco: &BancoTemporario) -> Uuid {
     let mut conexao = banco.conexao();
     let id = Uuid::now_v7();
-    sql_query("INSERT INTO escritorios (id, slug, nome) VALUES ($1, $2, $3)")
+    sql_query("INSERT INTO escritorios (id, nome, cnpj) VALUES ($1, $2, $3)")
         .bind::<SqlUuid, _>(id)
-        .bind::<Text, _>(slug)
-        .bind::<Text, _>(format!("Escritório {slug}"))
+        .bind::<Text, _>("Escritório de teste")
+        .bind::<Text, _>(CNPJ_ESCRITORIO)
         .execute(&mut conexao)
         .expect("escritório deve ser inserido");
     id
 }
 
-fn id_do_escritorio(banco: &BancoTemporario, slug: &str) -> Option<Uuid> {
-    sql_query("SELECT id FROM escritorios WHERE slug = $1")
-        .bind::<Text, _>(slug)
+fn id_do_escritorio(banco: &BancoTemporario, cnpj: &str) -> Option<Uuid> {
+    sql_query("SELECT id FROM escritorios WHERE cnpj = $1")
+        .bind::<Text, _>(cnpj)
         .get_result::<IdRow>(&mut banco.conexao())
         .ok()
         .map(|linha| linha.id)
 }
 
-fn semear_usuario(banco: &BancoTemporario, slug: &str, papel: &str, ativo: bool, cpf: &str) {
-    let escritorio_id =
-        id_do_escritorio(banco, slug).unwrap_or_else(|| semear_escritorio(banco, slug));
+fn semear_usuario(banco: &BancoTemporario, cnpj: &str, papel: &str, ativo: bool, cpf: &str) {
+    let escritorio_id = id_do_escritorio(banco, cnpj).unwrap_or_else(|| semear_escritorio(banco));
 
     let mut conexao = banco.conexao();
     let config = configuracao_com_extras("", &[]);
@@ -123,7 +124,7 @@ fn semear_usuario(banco: &BancoTemporario, slug: &str, papel: &str, ativo: bool,
     )
     .bind::<SqlUuid, _>(Uuid::now_v7())
     .bind::<SqlUuid, _>(escritorio_id)
-    .bind::<Text, _>(format!("{papel}@{slug}.test").to_lowercase())
+    .bind::<Text, _>(format!("{}@{cnpj}.test", papel.to_lowercase()))
     .bind::<Text, _>(cpf.to_owned())
     .bind::<Text, _>(hash)
     .bind::<Text, _>(papel)
@@ -207,14 +208,14 @@ fn codigo_de_erro(corpo: &Value) -> &str {
     corpo["error"]["code"].as_str().expect("envelope de erro")
 }
 
-async fn entrar_portal(app: &Router, slug: &str, papel: &str) -> Value {
+async fn entrar_portal(app: &Router, cnpj: &str, papel: &str) -> Value {
     let resposta = enviar(
         app,
         pedido(
             Method::POST,
             "/api/v1/auth/client/login",
             Some(json!({
-                "email": format!("{papel}@{slug}.test"),
+                "email": format!("{}@{cnpj}.test", papel.to_lowercase()),
                 "senha": SENHA,
             })),
             None,
@@ -224,7 +225,7 @@ async fn entrar_portal(app: &Router, slug: &str, papel: &str) -> Value {
     assert_eq!(
         resposta.status(),
         StatusCode::OK,
-        "login de {papel} deve funcionar no escritório {slug}"
+        "login de {papel} no escritório CNPJ={cnpj}"
     );
     corpo_json(resposta).await
 }
@@ -262,11 +263,23 @@ fn corpo_cliente(tipo: &str, cpf_cnpj: &str, nome: &str, porte_regime: Option<&s
 #[tokio::test]
 async fn crud_de_clientes_isolado_por_escritorio() {
     let ambiente = ambiente(&[]);
-    semear_usuario(&ambiente.banco, "alfa", "OPERADOR", true, &cpf_com_dv(1));
-    semear_usuario(&ambiente.banco, "beta", "OPERADOR", true, &cpf_com_dv(2));
+    semear_usuario(
+        &ambiente.banco,
+        CNPJ_ESCRITORIO,
+        "OPERADOR",
+        true,
+        &cpf_com_dv(1),
+    );
+    semear_usuario(
+        &ambiente.banco,
+        CNPJ_ESCRITORIO,
+        "OPERADOR",
+        true,
+        &cpf_com_dv(2),
+    );
 
-    let token_alfa = token_de(&entrar_portal(&ambiente.app, "alfa", "OPERADOR").await);
-    let token_beta = token_de(&entrar_portal(&ambiente.app, "beta", "OPERADOR").await);
+    let token_alfa = token_de(&entrar_portal(&ambiente.app, CNPJ_ESCRITORIO, "OPERADOR").await);
+    let token_beta = token_de(&entrar_portal(&ambiente.app, CNPJ_ESCRITORIO, "OPERADOR").await);
 
     let resposta = enviar(
         &ambiente.app,

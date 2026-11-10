@@ -1,5 +1,4 @@
 use axum::http::Request;
-use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -7,6 +6,7 @@ use uuid::Uuid;
 use crate::application::serpro::{ObterConfiguracaoSerproCommand, ObterConfiguracaoSerproUseCase};
 use crate::domain::serpro::ambiente::AmbienteSerpro;
 use crate::presentation::auth::RequestContext;
+use crate::presentation::middleware::request_id::RequestId;
 
 /// Snapshot imutável do ambiente efetivo do escritório, resolvido **uma
 /// única vez** no início da requisição (SPEC §8: "o backend é a autoridade:
@@ -51,10 +51,22 @@ pub async fn resolver_ambiente(
 ) -> Response {
     let contexto = requisicao.extensions().get::<RequestContext>().cloned();
     let Some(contexto) = contexto else {
-        return erro_interno("contexto do portal ausente na requisição");
+        let request_id = requisicao
+            .extensions()
+            .get::<RequestId>()
+            .map(|id| id.como_str())
+            .unwrap_or("-")
+            .to_owned();
+        return erro_interno(&request_id);
     };
     let Some(escritorio_id): Option<Uuid> = contexto.escritorio_id else {
-        return erro_interno("escritorio_id ausente no token do portal");
+        let request_id = requisicao
+            .extensions()
+            .get::<RequestId>()
+            .map(|id| id.como_str())
+            .unwrap_or("-")
+            .to_owned();
+        return erro_interno(&request_id);
     };
 
     match estado
@@ -72,6 +84,7 @@ pub async fn resolver_ambiente(
     }
 }
 
-fn erro_interno(detalhe: &'static str) -> Response {
-    (StatusCode::INTERNAL_SERVER_ERROR, detalhe).into_response()
+fn erro_interno(request_id: &str) -> Response {
+    let api_error = crate::presentation::error::ApiError::erro_interno();
+    api_error.resposta(request_id)
 }

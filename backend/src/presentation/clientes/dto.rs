@@ -131,7 +131,7 @@ impl ListarClientesQuery {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProvisionarTenantRequest {
-    pub slug: String,
+    pub cnpj: String,
     pub nome: String,
     pub email_titular: String,
     pub cpf_titular: String,
@@ -142,7 +142,7 @@ pub struct ProvisionarTenantRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ProvisionarTenantResponse {
     pub escritorio_id: Uuid,
-    pub slug: String,
+    pub cnpj: String,
     pub titular_id: Uuid,
     pub email_titular: String,
 }

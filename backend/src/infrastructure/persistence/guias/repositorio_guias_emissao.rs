@@ -1,4 +1,4 @@
-﻿//! RepositÃ³rio Diesel de emissÃµes de guia.
+//! RepositÃ³rio Diesel de emissÃµes de guia.
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -98,10 +98,7 @@ impl GuiaRow {
 
 #[async_trait]
 impl RepositorioGuiasEmissao for GuiasEmissaoDiesel {
-    async fn criar(
-        &self,
-        guia: &NovoGuiaEmissao,
-    ) -> Result<GuiaEmissao, ErroGuia> {
+    async fn criar(&self, guia: &NovoGuiaEmissao) -> Result<GuiaEmissao, ErroGuia> {
         let pool = self.pool.clone();
         let novo = guia.clone();
         tokio::task::spawn_blocking(move || -> Result<GuiaEmissao, ErroGuia> {
@@ -134,10 +131,7 @@ impl RepositorioGuiasEmissao for GuiasEmissaoDiesel {
         .map_err(|_| ErroGuia::Persistencia("spawn_blocking".into()))?
     }
 
-    async fn buscar_por_id(
-        &self,
-        id: Uuid,
-    ) -> Result<Option<GuiaEmissao>, ErroGuia> {
+    async fn buscar_por_id(&self, id: Uuid) -> Result<Option<GuiaEmissao>, ErroGuia> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || -> Result<Option<GuiaEmissao>, ErroGuia> {
             let mut conexao = pool
@@ -162,10 +156,7 @@ impl RepositorioGuiasEmissao for GuiasEmissaoDiesel {
         .map_err(|_| ErroGuia::Persistencia("spawn_blocking".into()))?
     }
 
-    async fn buscar_por_idempotencia(
-        &self,
-        chave: &str,
-    ) -> Result<Option<GuiaEmissao>, ErroGuia> {
+    async fn buscar_por_idempotencia(&self, chave: &str) -> Result<Option<GuiaEmissao>, ErroGuia> {
         let pool = self.pool.clone();
         let chave_owned = chave.to_owned();
         tokio::task::spawn_blocking(move || -> Result<Option<GuiaEmissao>, ErroGuia> {

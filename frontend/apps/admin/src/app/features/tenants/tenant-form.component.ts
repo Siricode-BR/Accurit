@@ -1,223 +1,144 @@
+import { ChangeDetectionStrategy, Component, OnInit, inject, input, output, signal } from '@angular/core';
 import {
-  Component,
-  inject,
-  output,
-  signal,
-  ChangeDetectionStrategy,
-} from '@angular/core';
-import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
-import { CriarTenantRequestDto, CriarTenantResponseDto } from '@accurit/core';
+  AbstractControl,
+  FormBuilder,
+  ReactiveFormsModule,
+  ValidationErrors,
+  Validators,
+} from '@angular/forms';
+import { CriarTenantResponseDto } from '@accurit/core';
+import { isValidCPF, sanitizeDocument } from '@accurit/shared';
+import { AccButtonComponent, AccDocumentMaskDirective } from '@accurit/ui';
 import { mensagemDeErro } from '../../core/http/mensagem-erro';
 import { TenantService } from '../../data/tenant.service';
-import { AccButtonComponent } from '@accurit/ui';
+import { USUARIO_FORM_STYLES } from '../usuarios/usuario-form.styles';
 
 @Component({
-  selector: 'app-admin-tenant-form',
+  selector: 'app-tenant-form',
   standalone: true,
-  imports: [ReactiveFormsModule, AccButtonComponent],
+  imports: [ReactiveFormsModule, AccButtonComponent, AccDocumentMaskDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <form [formGroup]="form" (ngSubmit)="onSubmit()" class="tenant-form" novalidate>
-      @if (erroCadastro(); as mensagem) {
+    <form [formGroup]="form" (ngSubmit)="enviar()" class="form" novalidate>
+      @if (erro(); as mensagem) {
         <div class="alert-error" role="alert">{{ mensagem }}</div>
       }
 
-      <div class="field">
-        <label for="slug" class="label">Slug / Subdomínio</label>
-        <input
-          id="slug"
-          type="text"
-          formControlName="slug"
-          autocomplete="off"
-          class="input"
-          [class.input--error]="isInvalid('slug')"
-          placeholder="ex: escritorio-silva"
-        />
-        <small class="hint">Usado na URL do escritório (a-z, 0-9 e hífen).</small>
-      </div>
-
-      <div class="field">
-        <label for="nome" class="label">Nome do Escritório</label>
-        <input
-          id="nome"
-          type="text"
-          formControlName="nome"
-          autocomplete="off"
-          class="input"
-          [class.input--error]="isInvalid('nome')"
-          placeholder="ex: Escritório Silva & Associados"
-        />
-      </div>
-
-      <div class="field">
-        <label for="emailTitular" class="label">E-mail do Titular</label>
-        <input
-          id="emailTitular"
-          type="email"
-          formControlName="emailTitular"
-          autocomplete="username"
-          class="input"
-          [class.input--error]="isInvalid('emailTitular')"
-        />
-      </div>
-
-      <div class="field">
-        <label for="cpfTitular" class="label">CPF do Titular</label>
-        <input
-          id="cpfTitular"
-          type="text"
-          formControlName="cpfTitular"
-          autocomplete="off"
-          class="input"
-          [class.input--error]="isInvalid('cpfTitular')"
-          placeholder="000.000.000-00"
-        />
+      <div class="field field--full">
+        <label for="t-cnpj" class="label">CNPJ</label>
+        <input id="t-cnpj" type="text" formControlName="cnpj" accDocMask autocomplete="off" class="input"
+          [class.input--error]="invalido('cnpj')" placeholder="00.000.000/0000-00" />
+        @if (invalido('cnpj')) { <span class="field-error">CNPJ inválido.</span> }
       </div>
 
       <div class="field field--full">
-        <label for="senhaTitular" class="label">Senha do Titular</label>
-        <input
-          id="senhaTitular"
-          type="password"
-          formControlName="senhaTitular"
-          autocomplete="new-password"
-          class="input"
-          [class.input--error]="isInvalid('senhaTitular')"
-          placeholder="mínimo 8 caracteres"
-        />
+        <label for="t-nome" class="label">Nome do escritório</label>
+        <input id="t-nome" type="text" formControlName="nome" autocomplete="off" class="input"
+          [class.input--error]="invalido('nome')" placeholder="Nome do escritório" />
+        @if (invalido('nome')) { <span class="field-error">Informe o nome.</span> }
+      </div>
+
+      <div class="field">
+        <label for="t-email" class="label">E-mail do titular</label>
+        <input id="t-email" type="email" formControlName="emailTitular" autocomplete="off" class="input"
+          [class.input--error]="invalido('emailTitular')" placeholder="titular@escritorio.com.br" />
+        @if (invalido('emailTitular')) { <span class="field-error">Informe e-mail válido.</span> }
+      </div>
+
+      <div class="field">
+        <label for="t-cpf" class="label">CPF do titular</label>
+        <input id="t-cpf" type="text" formControlName="cpfTitular" accDocMask autocomplete="off" class="input"
+          [class.input--error]="invalido('cpfTitular')" placeholder="000.000.000-00" />
+        @if (invalido('cpfTitular')) { <span class="field-error">CPF inválido.</span> }
+      </div>
+
+      <div class="field">
+        <label for="t-senha" class="label">Senha do titular</label>
+        <input id="t-senha" type="password" formControlName="senhaTitular" autocomplete="new-password" class="input"
+          [class.input--error]="invalido('senhaTitular')" placeholder="Senha inicial do titular" />
+        @if (invalido('senhaTitular')) { <span class="field-error">Senha deve ter ao menos 8 caracteres.</span> }
+      </div>
+
+      <div class="field">
+        <label for="t-senha-2" class="label">Confirmar senha</label>
+        <input id="t-senha-2" type="password" formControlName="senhaConfirmada" autocomplete="new-password"
+          class="input" [class.input--error]="form.hasError('senhasIguais')" placeholder="Repita a senha" />
+        @if (form.hasError('senhasIguais')) { <span class="field-error">As senhas não coincidem.</span> }
       </div>
 
       <div class="actions">
         <button acc-button type="button" variant="outline" size="md" (click)="cancelado.emit()">
           Cancelar
         </button>
-        <button
-          acc-button
-          type="submit"
-          variant="primary"
-          size="md"
-          [loading]="enviando()"
-          [disabled]="form.invalid || enviando()"
-        >
-          Criar Escritório
+        <button acc-button type="submit" variant="primary" size="md" [loading]="enviando()"
+          [disabled]="enviando()">
+          Criar escritório
         </button>
       </div>
     </form>
   `,
-  styles: `
-    .tenant-form {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 1rem;
-      width: 100%;
-    }
-
-    @media (min-width: 560px) {
-      .tenant-form {
-        grid-template-columns: 1fr 1fr;
-      }
-    }
-
-    .field--full,
-    .alert-error,
-    .actions {
-      grid-column: 1 / -1;
-    }
-
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 0.375rem;
-    }
-
-    .label {
-      font-size: 0.875rem;
-      font-weight: 500;
-      color: var(--acc-color-text-main);
-    }
-
-    .hint {
-      font-size: 0.75rem;
-      color: var(--acc-color-text-muted);
-    }
-
-    .input {
-      padding: 0.625rem 0.875rem;
-      border: 1px solid var(--acc-color-border);
-      border-radius: var(--acc-radius-md);
-      font-size: 0.875rem;
-      outline: none;
-      font-family: inherit;
-      background-color: var(--acc-color-surface);
-    }
-
-    .input:focus {
-      border-color: var(--acc-color-primary);
-      box-shadow: 0 0 0 3px rgb(30 64 175 / 0.14);
-    }
-
-    .input--error {
-      border-color: var(--acc-color-danger);
-    }
-
-    .alert-error {
-      padding: 0.75rem 1rem;
-      border-radius: var(--acc-radius-md);
-      background-color: var(--acc-color-danger-bg);
-      color: var(--acc-color-danger);
-      font-size: 0.875rem;
-    }
-
-    .actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 0.75rem;
-      margin-top: 0.5rem;
-    }
-  `,
+  styles: USUARIO_FORM_STYLES,
 })
-export class TenantFormComponent {
+export class TenantFormComponent implements OnInit {
   private readonly tenantService = inject(TenantService);
 
-  /** Emitido com o escritório criado; quem hospeda decide para onde navegar. */
-  readonly cadastrado = output<CriarTenantResponseDto>();
+  readonly criado = output<CriarTenantResponseDto>();
   readonly cancelado = output<void>();
 
   protected readonly enviando = signal(false);
-  protected readonly erroCadastro = signal<string | null>(null);
+  protected readonly erro = signal<string | null>(null);
+  protected readonly aviso = signal<string | null>(null);
 
-  protected readonly form = inject(FormBuilder).group({
-    slug: ['', [Validators.required, Validators.pattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)]],
-    nome: ['', [Validators.required, Validators.minLength(3)]],
-    emailTitular: ['', [Validators.required, Validators.email]],
-    cpfTitular: ['', [Validators.required]],
-    senhaTitular: ['', [Validators.required, Validators.minLength(8)]],
-  });
+  protected readonly form = inject(FormBuilder).nonNullable.group(
+    {
+      cnpj: ['', [Validators.required, Validators.pattern(/^[0-9]{14}$/)]],
+      nome: ['', [Validators.required, Validators.maxLength(200)]],
+      emailTitular: ['', [Validators.required, Validators.email]],
+      cpfTitular: ['', [Validators.required, (c: AbstractControl) => (isValidCPF(sanitizeDocument(c.value ?? '')) ? null : { cpf: true })]],
+      senhaTitular: ['', [Validators.required, Validators.minLength(8)]],
+      senhaConfirmada: ['', Validators.required],
+    },
+    { validators: senhasIguais },
+  );
 
-  protected isInvalid(field: string): boolean {
-    const c = this.form.get(field);
-    return !!(c?.invalid && c.touched);
+  ngOnInit(): void {
+    // CNPJ já vem formatado ou vazio para preenchimento
   }
 
-  protected onSubmit(): void {
+  protected invalido(campo: 'cnpj' | 'nome' | 'emailTitular' | 'cpfTitular' | 'senhaTitular' | 'senhaConfirmada'): boolean {
+    const c = this.form.controls[campo];
+    return c.invalid && c.touched;
+  }
+
+  protected async enviar(): Promise<void> {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
     }
-
-    const payload = this.form.getRawValue() as unknown as CriarTenantRequestDto;
+    const v = this.form.getRawValue();
     this.enviando.set(true);
-    this.erroCadastro.set(null);
-    this.tenantService.criar(payload).then(
-      (novo) => {
-        this.enviando.set(false);
-        this.cadastrado.emit(novo);
-      },
-      (erro: { error?: { message?: string }; message?: string }) => {
-        this.enviando.set(false);
-        this.erroCadastro.set(mensagemDeErro(erro, 'Falha ao criar o escritório.'));
-        this.form.markAllAsTouched();
-      },
-    );
+    this.erro.set(null);
+    try {
+      const resposta = await this.tenantService.criar({
+        cnpj: v.cnpj,
+        nome: v.nome.trim(),
+        emailTitular: v.emailTitular.trim().toLowerCase(),
+        cpfTitular: sanitizeDocument(v.cpfTitular),
+        senhaTitular: v.senhaTitular,
+      });
+      this.aviso.set(`Escritório criado com CNPJ ${v.cnpj}.`);
+      this.criado.emit(resposta);
+    } catch (e) {
+      this.erro.set(mensagemDeErro(e, 'Não foi possível criar o escritório.'));
+    } finally {
+      this.enviando.set(false);
+    }
   }
+}
+
+/** Validação de grupo: senha e confirmação precisam coincidir. */
+function senhasIguais(grupo: AbstractControl): ValidationErrors | null {
+  const senha = grupo.get('senhaTitular')?.value;
+  const confirmacao = grupo.get('senhaConfirmada')?.value;
+  return senha && confirmacao && senha !== confirmacao ? { senhasIguais: true } : null;
 }

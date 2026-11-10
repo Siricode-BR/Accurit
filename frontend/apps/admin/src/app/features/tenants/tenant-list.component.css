@@ -116,6 +116,13 @@
   justify-content: space-between;
 }
 
+.alert-aviso {
+  padding: 1rem;
+  border-radius: var(--acc-radius-md);
+  background-color: var(--acc-color-success-bg, #ecfdf5);
+  color: var(--acc-color-success, #047857);
+}
+
 .empty-message {
   text-align: center;
   padding: 3rem 1rem !important;

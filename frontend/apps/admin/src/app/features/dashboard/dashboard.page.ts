@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { formatPtBrDateTime } from '@accurit/shared';
+import { formatDocument, formatPtBrDateTime } from '@accurit/shared';
 import {
   AccBadgeComponent,
   AccButtonComponent,
@@ -80,8 +80,8 @@ export class DashboardPage implements OnInit {
   });
 
   protected readonly subtitulo = computed(() => {
-    const email = this.sessao.user()?.email;
-    return email ? `Backoffice SaaS · ${email}` : 'Backoffice SaaS';
+    const nome = this.sessao.user()?.nome;
+    return nome ? `Backoffice SaaS · ${nome}` : 'Backoffice SaaS';
   });
 
   ngOnInit(): void {
@@ -94,5 +94,9 @@ export class DashboardPage implements OnInit {
 
   protected formatarData(iso: string): string {
     return formatPtBrDateTime(iso);
+  }
+
+  protected formatarCnpj(cnpj: string): string {
+    return formatDocument(cnpj);
   }
 }

@@ -5,9 +5,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::application::relatorios::use_cases::{
-    ComandoCriarLink, ComandoGerarRelatorio,
-};
+use crate::application::relatorios::use_cases::{ComandoCriarLink, ComandoGerarRelatorio};
 use crate::domain::relatorios::enums::{FormatoRelatorio, TipoRelatorio};
 
 /// Requisição para gerar um relatório.

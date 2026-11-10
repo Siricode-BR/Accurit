@@ -3,11 +3,11 @@
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use diesel::prelude::*;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel::RunQueryDsl;
 use diesel::SelectableHelper;
+use diesel::prelude::*;
 use uuid::Uuid;
 
 use crate::domain::relatorios::entidades::{
@@ -15,13 +15,9 @@ use crate::domain::relatorios::entidades::{
 };
 use crate::domain::relatorios::enums::{FormatoRelatorio, StatusRelatorio, TipoRelatorio};
 use crate::domain::relatorios::erros::ErroRelatorio;
-use crate::domain::relatorios::ports::{
-    RepositorioLinksCompartilhamento, RepositorioRelatorios,
-};
+use crate::domain::relatorios::ports::{RepositorioLinksCompartilhamento, RepositorioRelatorios};
 use crate::infrastructure::persistence::pool::DbPool;
-use crate::infrastructure::persistence::schema::{
-    links_compartilhamento_relatorios, relatorios,
-};
+use crate::infrastructure::persistence::schema::{links_compartilhamento_relatorios, relatorios};
 
 #[derive(Clone)]
 pub struct RelatoriosDiesel {
@@ -71,7 +67,11 @@ impl RelatorioRow {
             "situacao_fiscal" => TipoRelatorio::SituacaoFiscal,
             "historico_consultas" => TipoRelatorio::HistoricoConsultas,
             "pendencias_carteira" => TipoRelatorio::PendenciasCarteira,
-            _ => return Err(ErroRelatorio::Persistencia("tipo de relatório inválido".into())),
+            _ => {
+                return Err(ErroRelatorio::Persistencia(
+                    "tipo de relatório inválido".into(),
+                ));
+            }
         };
         let formato = match self.formato.as_str() {
             "PDF" => FormatoRelatorio::Pdf,
@@ -129,10 +129,7 @@ impl LinkCompartilhamentoRow {
 
 #[async_trait]
 impl RepositorioRelatorios for RelatoriosDiesel {
-    async fn criar(
-        &self,
-        relatorio: &NovoRelatorio,
-    ) -> Result<Relatorio, ErroRelatorio> {
+    async fn criar(&self, relatorio: &NovoRelatorio) -> Result<Relatorio, ErroRelatorio> {
         let pool = self.pool.clone();
         let novo = relatorio.clone();
         tokio::task::spawn_blocking(move || -> Result<Relatorio, ErroRelatorio> {
@@ -172,9 +169,7 @@ impl RepositorioRelatorios for RelatoriosDiesel {
                 .first(&mut conexao)
                 .optional()
                 .map_err(|_| ErroRelatorio::Persistencia("buscar relatório".into()))?;
-            let linha = linha
-                .map(|row| row.para_entidade())
-                .transpose()?;
+            let linha = linha.map(|row| row.para_entidade()).transpose()?;
             Ok(linha)
         })
         .await
@@ -272,28 +267,26 @@ impl RepositorioLinksCompartilhamento for RelatoriosDiesel {
     ) -> Result<Option<LinkCompartilhamento>, ErroRelatorio> {
         let pool = self.pool.clone();
         let token_owned = token.to_owned();
-        tokio::task::spawn_blocking(move || -> Result<Option<LinkCompartilhamento>, ErroRelatorio> {
-            let mut conexao = pool
-                .get()
-                .map_err(|_| ErroRelatorio::Persistencia("pool".into()))?;
-            let linha = links_compartilhamento_relatorios::table
-                .filter(links_compartilhamento_relatorios::token.eq(token_owned))
-                .select(LinkCompartilhamentoRow::as_select())
-                .first(&mut conexao)
-                .optional()
-                .map_err(|_| ErroRelatorio::Persistencia("buscar link".into()))?;
-            let linha = linha
-                .map(|row: LinkCompartilhamentoRow| row.para_entidade());
-            Ok(linha)
-        })
+        tokio::task::spawn_blocking(
+            move || -> Result<Option<LinkCompartilhamento>, ErroRelatorio> {
+                let mut conexao = pool
+                    .get()
+                    .map_err(|_| ErroRelatorio::Persistencia("pool".into()))?;
+                let linha = links_compartilhamento_relatorios::table
+                    .filter(links_compartilhamento_relatorios::token.eq(token_owned))
+                    .select(LinkCompartilhamentoRow::as_select())
+                    .first(&mut conexao)
+                    .optional()
+                    .map_err(|_| ErroRelatorio::Persistencia("buscar link".into()))?;
+                let linha = linha.map(|row: LinkCompartilhamentoRow| row.para_entidade());
+                Ok(linha)
+            },
+        )
         .await
         .map_err(|_| ErroRelatorio::Persistencia("spawn_blocking".into()))?
     }
 
-    async fn registrar_acesso(
-        &self,
-        id: Uuid,
-    ) -> Result<(), ErroRelatorio> {
+    async fn registrar_acesso(&self, id: Uuid) -> Result<(), ErroRelatorio> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || -> Result<(), ErroRelatorio> {
             let mut conexao = pool
@@ -320,19 +313,21 @@ impl RepositorioLinksCompartilhamento for RelatoriosDiesel {
         agora: DateTime<Utc>,
     ) -> Result<Vec<LinkCompartilhamento>, ErroRelatorio> {
         let pool = self.pool.clone();
-        tokio::task::spawn_blocking(move || -> Result<Vec<LinkCompartilhamento>, ErroRelatorio> {
-            let mut conexao = pool
-                .get()
-                .map_err(|_| ErroRelatorio::Persistencia("pool".into()))?;
-            let linhas = links_compartilhamento_relatorios::table
-                .filter(links_compartilhamento_relatorios::expira_em.lt(agora))
-                .load(&mut conexao)
-                .map_err(|_| ErroRelatorio::Persistencia("listar links expirados".into()))?
-                .into_iter()
-                .map(|row: LinkCompartilhamentoRow| row.para_entidade())
-                .collect();
-            Ok(linhas)
-        })
+        tokio::task::spawn_blocking(
+            move || -> Result<Vec<LinkCompartilhamento>, ErroRelatorio> {
+                let mut conexao = pool
+                    .get()
+                    .map_err(|_| ErroRelatorio::Persistencia("pool".into()))?;
+                let linhas = links_compartilhamento_relatorios::table
+                    .filter(links_compartilhamento_relatorios::expira_em.lt(agora))
+                    .load(&mut conexao)
+                    .map_err(|_| ErroRelatorio::Persistencia("listar links expirados".into()))?
+                    .into_iter()
+                    .map(|row: LinkCompartilhamentoRow| row.para_entidade())
+                    .collect();
+                Ok(linhas)
+            },
+        )
         .await
         .map_err(|_| ErroRelatorio::Persistencia("spawn_blocking".into()))?
     }

@@ -13,9 +13,7 @@ use axum::{
 };
 use uuid::Uuid;
 
-use crate::application::clientes::{
-    GestaoAcessoUsuariosUseCase, VerificarAcessoUseCase,
-};
+use crate::application::clientes::{GestaoAcessoUsuariosUseCase, VerificarAcessoUseCase};
 use crate::application::usuarios::{
     Ator, AtualizarUsuarioCommand, CriarUsuarioCommand, FiltroUsuarios, GestaoUsuariosUseCase,
     OrigemAtor,
@@ -25,7 +23,7 @@ use crate::domain::clientes::FuncaoUsuario;
 use crate::presentation::auth::{AuthState, ExigirAudiencia, RequestContext, exigir};
 use crate::presentation::error::ApiError;
 use crate::presentation::usuarios::dto::{
-    AtualizarUsuarioRequest, AcessoUsuarioDto, CriarUsuarioRequest, DefinirAcessoRequest,
+    AcessoUsuarioDto, AtualizarUsuarioRequest, CriarUsuarioRequest, DefinirAcessoRequest,
     DefinirCarteiraRequest, ListaUsuariosResponse, ListarUsuariosQuery, RedefinirSenhaRequest,
     UsuarioDto,
 };
@@ -90,18 +88,16 @@ async fn listar(
     } else {
         ator_portal(&ctx)?
     };
-    let listagem = estado
-        .gestao
-        .listar_paginado(
-            &ator,
-            FiltroUsuarios {
-                escritorio_id: q.escritorio_id,
-                busca: q.busca,
-                ativo: q.ativo,
-                pagina: q.pagina,
-                tamanho: q.tamanho,
-            },
-        )?;
+    let listagem = estado.gestao.listar_paginado(
+        &ator,
+        FiltroUsuarios {
+            escritorio_id: q.escritorio_id,
+            busca: q.busca,
+            ativo: q.ativo,
+            pagina: q.pagina,
+            tamanho: q.tamanho,
+        },
+    )?;
     Ok(Json(ListaUsuariosResponse {
         itens: listagem.itens.into_iter().map(Into::into).collect(),
         total: listagem.total,
@@ -220,8 +216,9 @@ async fn definir_acesso(
     if alvo.papel == Papel::Admin {
         return Err(ApiError::proibido());
     }
-    let funcao = FuncaoUsuario::de_str(&req.funcao)
-        .ok_or_else(|| ApiError::validacao("função deve ser GESTOR, ANALISTA_FISCAL ou OPERADOR_LEITURA"))?;
+    let funcao = FuncaoUsuario::de_str(&req.funcao).ok_or_else(|| {
+        ApiError::validacao("função deve ser GESTOR, ANALISTA_FISCAL ou OPERADOR_LEITURA")
+    })?;
     estado
         .acesso
         .definir_funcao(alvo.escritorio_id, alvo.id, funcao)
@@ -290,7 +287,9 @@ macro_rules! rotas {
                     |s: State<Estado>,
                      c: Extension<RequestContext>,
                      id: Path<Uuid>,
-                     r: Json<AtualizarUsuarioRequest>| atualizar(s, c, id, r, $admin),
+                     r: Json<AtualizarUsuarioRequest>| {
+                        atualizar(s, c, id, r, $admin)
+                    },
                 ),
             )
             .route(
@@ -305,7 +304,12 @@ macro_rules! rotas {
     };
 }
 
-fn proteger(router: Router<Estado>, auth: &AuthState, audiencia: Audiencia, estado: Estado) -> Router {
+fn proteger(
+    router: Router<Estado>,
+    auth: &AuthState,
+    audiencia: Audiencia,
+    estado: Estado,
+) -> Router {
     router
         .route_layer(axum_middleware::from_fn_with_state(
             ExigirAudiencia::novo(auth.tokens.clone(), audiencia),
@@ -328,10 +332,7 @@ pub fn construir_usuarios(
         verificar: Arc::new(verificar),
     };
     let rotas = rotas!(false)
-        .route(
-            "/{id}/acesso",
-            get(obter_acesso).put(definir_acesso),
-        )
+        .route("/{id}/acesso", get(obter_acesso).put(definir_acesso))
         .route("/{id}/carteira", axum::routing::put(definir_carteira));
     proteger(rotas, auth, Audiencia::Client, estado)
 }

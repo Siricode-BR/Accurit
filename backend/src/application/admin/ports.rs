@@ -16,6 +16,8 @@ pub enum RepositorioError {
     EscritorioExistente,
     #[error("usuario j\u{00e1} existe neste escrit\u{00f3}rio")]
     UsuarioExistente,
+    #[error("valida\u{00e7}\u{00e3}o: {0}")]
+    Validacao(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -43,7 +45,7 @@ impl From<&str> for ProvisionarError {
 pub trait EscritorioRepositorio: Send + Sync {
     fn criar(&self, escritorio: &EscritorioNovo) -> Result<Uuid, RepositorioError>;
 
-    fn buscar_por_slug(&self, slug: &str) -> Result<Option<Uuid>, RepositorioError>;
+    fn buscar_por_cnpj(&self, cnpj: &str) -> Result<Option<Uuid>, RepositorioError>;
 
     /// Listagem paginada (SPEC §10.3: `page`/`pageSize`, ordenação
     /// determinística). Devolve os itens da página e o total.
@@ -93,7 +95,7 @@ pub trait AuditoriaAdminRepositorio: Send + Sync {
 
 #[derive(Debug, Clone)]
 pub struct EscritorioNovo {
-    pub slug: String,
+    pub cnpj: String,
     pub nome: String,
 }
 
@@ -102,7 +104,7 @@ pub struct EscritorioNovo {
 #[derive(Debug, Clone)]
 pub struct EscritorioResumo {
     pub id: Uuid,
-    pub slug: String,
+    pub cnpj: String,
     pub nome: String,
     pub modo_trial_serpro: bool,
     pub versao: i64,
@@ -120,7 +122,7 @@ pub struct UsuarioNovo {
 
 #[derive(Debug, Clone)]
 pub struct ProvisionarTenantCommand {
-    pub slug: String,
+    pub cnpj: String,
     pub nome: String,
     pub email_titular: String,
     pub cpf_titular: String,
@@ -132,7 +134,7 @@ pub struct ProvisionarTenantCommand {
 #[derive(Debug, Clone)]
 pub struct ProvisionarTenantResultado {
     pub escritorio_id: Uuid,
-    pub slug: String,
+    pub cnpj: String,
     pub titular_id: Uuid,
     pub email_titular: String,
 }
@@ -147,4 +149,66 @@ pub struct EventoAuditoriaAdmin {
     pub valor_anterior: Option<Value>,
     pub valor_novo: Option<Value>,
     pub ip: Option<IpAddr>,
+}
+
+// ===== Etapa 0.2 — gestão de administradores (backoffice /administradores) =====
+
+/// Administrador do backoffice, sem senha ou hash.
+/// `atualizado_em` espelha `criado_em` enquanto a tabela não tem
+/// a coluna correspondente.
+#[derive(Debug, Clone)]
+pub struct AdministradorDto {
+    pub id: Uuid,
+    pub nome: String,
+    pub email: String,
+    pub cpf: String,
+    pub ativo: bool,
+    pub criado_em: chrono::DateTime<chrono::Utc>,
+    pub atualizado_em: chrono::DateTime<chrono::Utc>,
+    pub ultimo_login_em: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// Dados para criar um administrador; a senha chega em texto plano e o use
+/// case a converte em hash antes de tocar no repositório.
+#[derive(Debug, Clone)]
+pub struct AdministradorNovo {
+    pub nome: String,
+    pub email: String,
+    pub cpf: String,
+    pub senha: String,
+}
+
+/// Alterações parciais aceitas em `PATCH /administradores/{id}`.
+/// A senha tem fluxo próprio (`alterar_senha`).
+#[derive(Debug, Clone, Default)]
+pub struct AdministradorAtualizar {
+    pub nome: Option<String>,
+    pub email: Option<String>,
+}
+
+pub trait AdministradorRepositorio: Send + Sync {
+    fn criar(&self, admin: &AdministradorNovo, senha_hash: &str) -> Result<Uuid, RepositorioError>;
+
+    /// Listagem paginada; devolve os itens da página e o total.
+    fn listar(
+        &self,
+        paginacao: &Paginacao,
+    ) -> Result<(Vec<AdministradorDto>, usize), RepositorioError>;
+
+    fn buscar_por_id(&self, id: Uuid) -> Result<Option<AdministradorDto>, RepositorioError>;
+
+    /// E-mail é único na plataforma (sem diferenciar maiúsculas).
+    fn buscar_por_email(&self, email: &str) -> Result<Option<AdministradorDto>, RepositorioError>;
+
+    fn atualizar(
+        &self,
+        id: Uuid,
+        mudancas: &AdministradorAtualizar,
+    ) -> Result<Option<AdministradorDto>, RepositorioError>;
+
+    fn alterar_senha(
+        &self,
+        id: Uuid,
+        senha_hash: &str,
+    ) -> Result<Option<AdministradorDto>, RepositorioError>;
 }

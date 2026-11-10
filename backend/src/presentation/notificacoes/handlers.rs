@@ -1,8 +1,8 @@
 //! Fase C — Handlers de notificações.
 
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::Json;
 use uuid::Uuid;
 
 use crate::domain::notificacoes::enums::{CanalNotificacao, TipoNotificacao};
@@ -10,8 +10,8 @@ use crate::domain::notificacoes::erros::ErroNotificacao;
 use crate::presentation::auth::RequestContext;
 use crate::presentation::error::ApiError;
 use crate::presentation::notificacoes::dto::{
-    RespostaContagemNaoLidas, RespostaNotificacao, RespostaPreferenciaNotificacao,
     RequisicaoCriarNotificacao, RequisicaoMarcarLida, RequisicaoPreferenciaNotificacao,
+    RespostaContagemNaoLidas, RespostaNotificacao, RespostaPreferenciaNotificacao,
 };
 use crate::presentation::notificacoes::state::EstadoNotificacoes;
 
@@ -42,7 +42,11 @@ pub async fn criar_notificacao(
         .executar(crate::domain::notificacoes::entidades::NovoNotificacao {
             usuario_id: requisicao.usuario_id,
             escritorio_id: contexto.escritorio_id.ok_or_else(|| {
-                ApiError::nova(StatusCode::INTERNAL_SERVER_ERROR, "CONTEXTO_TOKEN_INVALIDO", "Token sem escritório")
+                ApiError::nova(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "CONTEXTO_TOKEN_INVALIDO",
+                    "Token sem escritório",
+                )
             })?,
             canal,
             tipo,
@@ -73,7 +77,10 @@ pub async fn listar_notificacoes(
         .map_err(mapear_erro_notificacao)?;
 
     Ok(Json(
-        notificacoes.into_iter().map(RespostaNotificacao::from).collect(),
+        notificacoes
+            .into_iter()
+            .map(RespostaNotificacao::from)
+            .collect(),
     ))
 }
 
@@ -151,13 +158,15 @@ pub async fn criar_ou_atualizar_preferencia(
     let usuario_id = contexto.usuario_id;
     let preferencia = estado
         .criar_ou_atualizar_preferencia
-        .executar(crate::domain::notificacoes::entidades::NovoPreferenciaNotificacao {
-            usuario_id,
-            canal_email: requisicao.canal_email,
-            canal_whatsapp: requisicao.canal_whatsapp,
-            canal_in_app: requisicao.canal_in_app,
-            tipos_ativados: requisicao.tipos_ativados,
-        })
+        .executar(
+            crate::domain::notificacoes::entidades::NovoPreferenciaNotificacao {
+                usuario_id,
+                canal_email: requisicao.canal_email,
+                canal_whatsapp: requisicao.canal_whatsapp,
+                canal_in_app: requisicao.canal_in_app,
+                tipos_ativados: requisicao.tipos_ativados,
+            },
+        )
         .await
         .map_err(mapear_erro_notificacao)?;
 
@@ -167,7 +176,8 @@ pub async fn criar_ou_atualizar_preferencia(
 /// GET /templates-notificacao — listar templates ativos.
 pub async fn listar_templates(
     State(estado): State<EstadoNotificacoes>,
-) -> Result<Json<Vec<crate::presentation::notificacoes::dto::RespostaTemplateNotificacao>>, ApiError> {
+) -> Result<Json<Vec<crate::presentation::notificacoes::dto::RespostaTemplateNotificacao>>, ApiError>
+{
     let templates = estado
         .listar_templates
         .executar()
@@ -175,19 +185,22 @@ pub async fn listar_templates(
         .map_err(mapear_erro_notificacao)?;
 
     Ok(Json(
-        templates.into_iter().map(|t| {
-            crate::presentation::notificacoes::dto::RespostaTemplateNotificacao {
-                id: t.id,
-                tipo: t.tipo.as_str().to_owned(),
-                assunto: t.assunto,
-                corpo_texto: t.corpo_texto,
-                corpo_html: t.corpo_html,
-                variaveis: t.variaveis,
-                ativo: t.ativo,
-                criado_em: t.criado_em,
-                atualizado_em: t.atualizado_em,
-            }
-        }).collect(),
+        templates
+            .into_iter()
+            .map(
+                |t| crate::presentation::notificacoes::dto::RespostaTemplateNotificacao {
+                    id: t.id,
+                    tipo: t.tipo.as_str().to_owned(),
+                    assunto: t.assunto,
+                    corpo_texto: t.corpo_texto,
+                    corpo_html: t.corpo_html,
+                    variaveis: t.variaveis,
+                    ativo: t.ativo,
+                    criado_em: t.criado_em,
+                    atualizado_em: t.atualizado_em,
+                },
+            )
+            .collect(),
     ))
 }
 
@@ -223,16 +236,12 @@ fn mapear_erro_notificacao(erro: ErroNotificacao) -> ApiError {
             "PROVEDOR_INDISPONIVEL",
             &msg,
         ),
-        ErroNotificacao::Persistencia(msg) => ApiError::nova(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "PERSISTENCIA",
-            &msg,
-        ),
-        ErroNotificacao::Interno(msg) => ApiError::nova(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "ERRO_INTERNO",
-            &msg,
-        ),
+        ErroNotificacao::Persistencia(msg) => {
+            ApiError::nova(StatusCode::INTERNAL_SERVER_ERROR, "PERSISTENCIA", &msg)
+        }
+        ErroNotificacao::Interno(msg) => {
+            ApiError::nova(StatusCode::INTERNAL_SERVER_ERROR, "ERRO_INTERNO", &msg)
+        }
     }
 }
 
