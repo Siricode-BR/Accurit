@@ -20,10 +20,7 @@ import { RelatoriosService } from '../../data/relatorios.service';
 import {
   AccButtonComponent,
   AccBadgeComponent,
-  AccCardComponent,
-  AccSpinnerComponent,
   AccCtaButtonComponent,
-  AccIconComponent,
   AccModalComponent,
 } from '@accurit/ui';
 
@@ -48,10 +45,7 @@ const FORMATOS_RELATORIO: readonly FormatoRelatorioOpcao[] = [
     CommonModule,
     AccButtonComponent,
     AccBadgeComponent,
-    AccCardComponent,
-    AccSpinnerComponent,
     AccCtaButtonComponent,
-    AccIconComponent,
     AccModalComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,

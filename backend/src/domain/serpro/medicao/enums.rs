@@ -123,6 +123,9 @@ pub enum MotivoBloqueio {
     RateLimitInterno,
     ProducaoNaoConfigurada,
     ParametroInvalido,
+    /// Limite de chamadas do plano do escritório atingido (Fase B.1 —
+    /// bloqueio explícito e auditado pelo job runner).
+    LimitePlano,
 }
 
 impl MotivoBloqueio {
@@ -131,6 +134,7 @@ impl MotivoBloqueio {
             Self::RateLimitInterno => "rate_limit_interno",
             Self::ProducaoNaoConfigurada => "producao_nao_configurada",
             Self::ParametroInvalido => "parametro_invalido",
+            Self::LimitePlano => "limite_plano",
         }
     }
 }
@@ -143,6 +147,7 @@ impl FromStr for MotivoBloqueio {
             "rate_limit_interno" => Ok(Self::RateLimitInterno),
             "producao_nao_configurada" => Ok(Self::ProducaoNaoConfigurada),
             "parametro_invalido" => Ok(Self::ParametroInvalido),
+            "limite_plano" => Ok(Self::LimitePlano),
             _ => Err(format!("motivo desconhecido: {s}")),
         }
     }

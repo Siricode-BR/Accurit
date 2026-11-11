@@ -8,7 +8,12 @@ import {
 } from '@angular/forms';
 import { CriarTenantResponseDto } from '@accurit/core';
 import { isValidCNPJ, isValidCPF, sanitizeDocument } from '@accurit/shared';
-import { AccButtonComponent, AccDocumentMaskDirective } from '@accurit/ui';
+import {
+  AccAlertComponent,
+  AccButtonComponent,
+  AccDocumentFieldComponent,
+  AccInputComponent,
+} from '@accurit/ui';
 import { mensagemDeErro } from '../../core/http/mensagem-erro';
 import { TenantService } from '../../data/tenant.service';
 import { USUARIO_FORM_STYLES } from '../usuarios/usuario-form.styles';
@@ -16,55 +21,70 @@ import { USUARIO_FORM_STYLES } from '../usuarios/usuario-form.styles';
 @Component({
   selector: 'app-tenant-form',
   standalone: true,
-  imports: [ReactiveFormsModule, AccButtonComponent, AccDocumentMaskDirective],
+  imports: [
+    ReactiveFormsModule,
+    AccAlertComponent,
+    AccButtonComponent,
+    AccDocumentFieldComponent,
+    AccInputComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <form [formGroup]="form" (ngSubmit)="enviar()" class="form" novalidate>
       @if (erro(); as mensagem) {
-        <div class="alert-error" role="alert">{{ mensagem }}</div>
+        <acc-alert variante="erro" [descartavel]="true" (fechado)="erro.set(null)">
+          {{ mensagem }}
+        </acc-alert>
       }
 
-      <div class="field field--full">
-        <label for="t-cnpj" class="label">CNPJ</label>
-        <input id="t-cnpj" type="text" formControlName="cnpj" accDocMask autocomplete="off" class="input"
-          [class.input--error]="invalido('cnpj')" placeholder="00.000.000/0000-00" />
-        @if (invalido('cnpj')) { <span class="field-error">CNPJ inválido.</span> }
-      </div>
+      <acc-document-field
+        label="CNPJ"
+        formControlName="cnpj"
+        placeholder="00.000.000/0000-00"
+        hint="Somente dígitos verificadores válidos."
+        [validarDigitos]="true"
+      />
 
-      <div class="field field--full">
-        <label for="t-nome" class="label">Nome do escritório</label>
-        <input id="t-nome" type="text" formControlName="nome" autocomplete="off" class="input"
-          [class.input--error]="invalido('nome')" placeholder="Nome do escritório" />
-        @if (invalido('nome')) { <span class="field-error">Informe o nome.</span> }
-      </div>
+      <acc-input
+        label="Nome do escritório"
+        formControlName="nome"
+        placeholder="Nome do escritório"
+        [erro]="invalido('nome') ? 'Informe o nome.' : null"
+      />
 
-      <div class="field">
-        <label for="t-email" class="label">E-mail do titular</label>
-        <input id="t-email" type="email" formControlName="emailTitular" autocomplete="off" class="input"
-          [class.input--error]="invalido('emailTitular')" placeholder="titular@escritorio.com.br" />
-        @if (invalido('emailTitular')) { <span class="field-error">Informe e-mail válido.</span> }
-      </div>
+      <acc-input
+        label="E-mail do titular"
+        type="email"
+        formControlName="emailTitular"
+        autocomplete="off"
+        placeholder="titular@escritorio.com.br"
+        [erro]="invalido('emailTitular') ? 'Informe e-mail válido.' : null"
+      />
 
-      <div class="field">
-        <label for="t-cpf" class="label">CPF do titular</label>
-        <input id="t-cpf" type="text" formControlName="cpfTitular" accDocMask autocomplete="off" class="input"
-          [class.input--error]="invalido('cpfTitular')" placeholder="000.000.000-00" />
-        @if (invalido('cpfTitular')) { <span class="field-error">CPF inválido.</span> }
-      </div>
+      <acc-document-field
+        label="CPF do titular"
+        formControlName="cpfTitular"
+        placeholder="000.000.000-00"
+        [validarDigitos]="true"
+      />
 
-      <div class="field">
-        <label for="t-senha" class="label">Senha do titular</label>
-        <input id="t-senha" type="password" formControlName="senhaTitular" autocomplete="new-password" class="input"
-          [class.input--error]="invalido('senhaTitular')" placeholder="Senha inicial do titular" />
-        @if (invalido('senhaTitular')) { <span class="field-error">Senha deve ter ao menos 8 caracteres.</span> }
-      </div>
+      <acc-input
+        label="Senha do titular"
+        type="password"
+        formControlName="senhaTitular"
+        autocomplete="new-password"
+        placeholder="Senha inicial do titular"
+        [erro]="invalido('senhaTitular') ? 'Senha deve ter ao menos 8 caracteres.' : null"
+      />
 
-      <div class="field">
-        <label for="t-senha-2" class="label">Confirmar senha</label>
-        <input id="t-senha-2" type="password" formControlName="senhaConfirmada" autocomplete="new-password"
-          class="input" [class.input--error]="form.hasError('senhasIguais')" placeholder="Repita a senha" />
-        @if (form.hasError('senhasIguais')) { <span class="field-error">As senhas não coincidem.</span> }
-      </div>
+      <acc-input
+        label="Confirmar senha"
+        type="password"
+        formControlName="senhaConfirmada"
+        autocomplete="new-password"
+        placeholder="Repita a senha"
+        [erro]="form.hasError('senhasIguais') ? 'As senhas não coincidem.' : null"
+      />
 
       <div class="actions">
         <button acc-button type="button" variant="outline" size="md" (click)="cancelado.emit()">

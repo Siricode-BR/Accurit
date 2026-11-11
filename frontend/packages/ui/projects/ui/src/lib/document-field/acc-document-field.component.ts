@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, input, model, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  forwardRef,
+  input,
+  model,
+  signal,
+} from '@angular/core';
+import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 import { formatDocument, isValidDocument, sanitizeDocument } from '@accurit/shared';
 import { AccIconComponent } from '../icon/acc-icon.component';
 
@@ -15,10 +24,17 @@ let proximoId = 0;
   standalone: true,
   imports: [AccIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  providers: [
+    {
+      provide: NG_VALUE_ACCESSOR,
+      useExisting: forwardRef(() => AccDocumentFieldComponent),
+      multi: true,
+    },
+  ],
   templateUrl: './acc-document-field.component.html',
   styleUrl: './acc-document-field.component.css',
 })
-export class AccDocumentFieldComponent {
+export class AccDocumentFieldComponent implements ControlValueAccessor {
   readonly label = input<string>('Documento do contribuinte');
   readonly value = model<string>('');
   readonly bloqueado = input<boolean>(false);
@@ -29,6 +45,7 @@ export class AccDocumentFieldComponent {
 
   protected readonly inputId = `acc-doc-${++proximoId}`;
   protected readonly tocado = signal(false);
+  private readonly desabilitadoForm = signal(false);
 
   protected readonly exibicao = computed(() => formatDocument(this.value()));
 
@@ -59,5 +76,29 @@ export class AccDocumentFieldComponent {
     const formatado = formatDocument(sanitizeDocument(alvo.value).slice(0, 14));
     alvo.value = formatado;
     this.value.set(formatado);
+    this.onChange(formatado);
+  }
+
+  private onChange: (valor: string) => void = () => {};
+  private onTouched: () => void = () => {};
+
+  writeValue(valor: unknown): void {
+    this.value.set(valor === null || valor === undefined ? '' : String(valor));
+  }
+
+  registerOnChange(fn: (valor: string) => void): void {
+    this.onChange = fn;
+  }
+
+  registerOnTouched(fn: () => void): void {
+    this.onTouched = fn;
+  }
+
+  setDisabledState(desabilitado: boolean): void {
+    this.desabilitadoForm.set(desabilitado);
+  }
+
+  protected somenteLeitura(): boolean {
+    return this.bloqueado() || this.desabilitadoForm();
   }
 }

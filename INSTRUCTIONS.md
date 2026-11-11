@@ -110,6 +110,13 @@ Copie `.env.example` para `.env` e preencha os valores. Nunca versione `.env`, c
 | `SERPRO_HTTP_CONNECT_TIMEOUT_SECS` | Não | Timeout de conexão (padrão 5) |
 | `SERPRO_HTTP_REQUEST_TIMEOUT_SECS` | Não | Timeout de requisição (padrão 30) |
 | `SERPRO_PROCURACAO_CACHE_TTL_SECS` | Não | TTL do cache de procuração (padrão 300) |
+| `JOBS_RUNNER_ENABLED` | Não | Liga/desliga o worker interno de trabalhos e lotes (padrão `true`) |
+| `JOBS_POLL_INTERVAL_SECS` | Não | Intervalo do poll da fila persistida (padrão 60) |
+| `JOBS_MAX_CONCORRENCIA` | Não | Execuções simultâneas por processo (padrão 4) |
+| `JOBS_LEASE_SECS` | Não | TTL do lease/heartbeat de uma execução (padrão 120) |
+| `JOBS_BACKOFF_BASE_SECS` | Não | Base do backoff exponencial de retry (padrão 30) |
+| `JOBS_BACKOFF_TETO_SECS` | Não | Teto do backoff exponencial (padrão 3600) |
+| `JOBS_MAX_TENTATIVAS` | Não | Tentativas antes de marcar falha definitiva (padrão 5) |
 | `RUST_LOG` | Não | Nível de log (`info`, `debug`, `warn`) |
 | `METRICS_TOKEN` | Produção | Token Bearer para `GET /api/v1/metrics`; sem ele a rota responde 403 |
 
@@ -166,6 +173,13 @@ DIVIDA_ATIVA_FALLBACK_CODIGO_CONTRIBUINTE=false
 SERPRO_HTTP_CONNECT_TIMEOUT_SECS=5
 SERPRO_HTTP_REQUEST_TIMEOUT_SECS=30
 SERPRO_PROCURACAO_CACHE_TTL_SECS=300
+JOBS_RUNNER_ENABLED=true
+JOBS_POLL_INTERVAL_SECS=60
+JOBS_MAX_CONCORRENCIA=4
+JOBS_LEASE_SECS=120
+JOBS_BACKOFF_BASE_SECS=30
+JOBS_BACKOFF_TETO_SECS=3600
+JOBS_MAX_TENTATIVAS=5
 
 RUST_LOG=info
 ```

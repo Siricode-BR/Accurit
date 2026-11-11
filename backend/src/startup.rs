@@ -87,8 +87,20 @@ pub async fn run(config: Config) -> Result<(), StartupError> {
 
     let estado = AppState::novo(
         ConsultarSaude::novo(PostgresSaudeBanco::novo(pool.clone())),
-        pool,
+        pool.clone(),
     );
+
+    // Job runner (Fase B.1): worker interno de trabalhos agendados e lotes,
+    // desligável por `JOBS_RUNNER_ENABLED`, com shutdown gracioso.
+    let (runner_shutdown_tx, runner_shutdown_rx) = tokio::sync::watch::channel(false);
+    let runner = if config.jobs.enabled {
+        let runner = crate::infrastructure::jobs::montar_runner(&pool, &config, runner_shutdown_rx);
+        Some(tokio::spawn(runner.executar()))
+    } else {
+        tracing::info!("job runner desabilitado por JOBS_RUNNER_ENABLED=false");
+        None
+    };
+
     let aplicacao = routes::construir(estado, Some(auth), &config);
 
     let listener = TcpListener::bind(("0.0.0.0", config.port))
@@ -102,10 +114,23 @@ pub async fn run(config: Config) -> Result<(), StartupError> {
 
     tracing::info!(endereco, "servidor HTTP iniciado");
 
-    axum::serve(listener, aplicacao)
+    let resultado = axum::serve(listener, aplicacao)
         .with_graceful_shutdown(desligamento())
         .await
-        .map_err(|_| StartupError::Servidor)
+        .map_err(|_| StartupError::Servidor);
+
+    // Desligamento gracioso do worker: sinaliza e aguarda até 30 s pelas
+    // execuções em andamento antes de encerrar o processo.
+    let _ = runner_shutdown_tx.send(true);
+    if let Some(handle) = runner {
+        match tokio::time::timeout(std::time::Duration::from_secs(30), handle).await {
+            Ok(Ok(())) => tracing::info!("job runner finalizado"),
+            Ok(Err(_)) => tracing::warn!("tarefa do job runner falhou"),
+            Err(_) => tracing::warn!("job runner não encerrou em 30 s"),
+        }
+    }
+
+    resultado
 }
 
 async fn desligamento() {

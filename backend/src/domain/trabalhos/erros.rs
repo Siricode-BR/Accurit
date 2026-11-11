@@ -22,6 +22,15 @@ pub enum ErroTrabalho {
     Persistencia(String),
     #[error("erro interno: {0}")]
     Interno(String),
+    /// Falha transitória do job runner (Fase B.1): vale nova tentativa com
+    /// backoff exponencial — `0` é a mensagem, `1` o atraso sugerido em
+    /// segundos.
+    #[error("falha transitória: {0}")]
+    Transitorio(String, u64),
+    /// Execução bloqueada por política (limite do plano, serviço não
+    /// habilitado). Não vale nova tentativa; vira status "bloqueado".
+    #[error("execução bloqueada: {0}")]
+    Bloqueado(String),
 }
 
 impl ErroTrabalho {
@@ -37,6 +46,22 @@ impl ErroTrabalho {
             Self::SemPermissao => "SEM_PERMISSAO",
             Self::Persistencia(_) => "PERSISTENCIA",
             Self::Interno(_) => "ERRO_INTERNO",
+            Self::Transitorio(_, _) => "FALHA_TRANSITORIA",
+            Self::Bloqueado(_) => "EXECUCAO_BLOQUEADA",
+        }
+    }
+
+    /// Indica se o erro do job runner admite nova tentativa com backoff.
+    pub const fn transitorio(&self) -> bool {
+        matches!(self, Self::Transitorio(_, _))
+    }
+
+    /// Atraso sugerido para nova tentativa (segundos) quando o erro é
+    /// transitório e traz o atraso explícito (ex.: rate limit da SERPRO).
+    pub const fn atraso_sugerido(&self) -> Option<u64> {
+        match self {
+            Self::Transitorio(_, atraso) => Some(*atraso),
+            _ => None,
         }
     }
 }

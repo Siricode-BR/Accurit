@@ -143,6 +143,11 @@ fn mapear_erro_guia(erro: ErroGuia) -> ApiError {
             "PROVEDOR_INDISPONIVEL",
             &msg,
         ),
+        ErroGuia::ServicoNaoHabilitado(msg) => ApiError::nova(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "SERVICO_NAO_HABILITADO",
+            &msg,
+        ),
         ErroGuia::Persistencia(msg) => {
             ApiError::nova(StatusCode::INTERNAL_SERVER_ERROR, "PERSISTENCIA", &msg)
         }

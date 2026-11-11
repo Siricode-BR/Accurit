@@ -6,7 +6,7 @@ use crate::application::trabalhos::{
     BuscarConsultaLoteUseCase, BuscarTrabalhoAgendadoUseCase, CriarConsultaLoteUseCase,
     CriarTrabalhoAgendadoUseCase, HabilitarDesabilitarTrabalhoUseCase, ListarConsultasLoteUseCase,
     ListarExecucoesTrabalhoUseCase, ListarItensConsultaLoteUseCase,
-    ListarTrabalhosAgendadosUseCase,
+    ListarTrabalhosAgendadosUseCase, ReexecutarConsultaLoteUseCase,
 };
 
 #[derive(Clone)]
@@ -20,6 +20,7 @@ pub struct EstadoTrabalhos {
     pub listar_lotes: Arc<ListarConsultasLoteUseCase>,
     pub buscar_lote: Arc<BuscarConsultaLoteUseCase>,
     pub listar_itens_lote: Arc<ListarItensConsultaLoteUseCase>,
+    pub reexecutar_lote: Arc<ReexecutarConsultaLoteUseCase>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -34,6 +35,7 @@ impl EstadoTrabalhos {
         listar_lotes: Arc<ListarConsultasLoteUseCase>,
         buscar_lote: Arc<BuscarConsultaLoteUseCase>,
         listar_itens_lote: Arc<ListarItensConsultaLoteUseCase>,
+        reexecutar_lote: Arc<ReexecutarConsultaLoteUseCase>,
     ) -> Self {
         Self {
             criar_trabalho,
@@ -45,6 +47,7 @@ impl EstadoTrabalhos {
             listar_lotes,
             buscar_lote,
             listar_itens_lote,
+            reexecutar_lote,
         }
     }
 }

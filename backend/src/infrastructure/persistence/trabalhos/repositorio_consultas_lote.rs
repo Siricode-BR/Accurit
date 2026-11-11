@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use diesel::sql_types::{Integer, Nullable, Text, Timestamptz, Uuid as SqlUuid};
+use diesel::sql_types::{BigInt, Integer, Nullable, Text, Timestamptz, Uuid as SqlUuid};
 use uuid::Uuid;
 
 use crate::domain::trabalhos::entidades::{ConsultaLote, NovoConsultaLote};
@@ -73,6 +73,7 @@ impl LoteRow {
             "concluido" => StatusLote::Concluido,
             "falhou" => StatusLote::Falhou,
             "parcial" => StatusLote::Parcial,
+            "bloqueado" => StatusLote::Bloqueado,
             _ => return Err(ErroTrabalho::Persistencia("status inválido".into())),
         };
         Ok(ConsultaLote {
@@ -214,6 +215,106 @@ impl RepositorioConsultasLote for ConsultasLoteDiesel {
                 return Err(ErroTrabalho::ConsultaLoteNaoEncontrada);
             }
             Ok(())
+        })
+        .await
+        .map_err(|_| ErroTrabalho::Persistencia("spawn_blocking".into()))?
+    }
+
+    async fn reivindicar_pendentes(
+        &self,
+        agora: DateTime<Utc>,
+        lease_expira_em: DateTime<Utc>,
+        max: usize,
+    ) -> Result<Vec<ConsultaLote>, ErroTrabalho> {
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut conexao = pool
+                .get()
+                .map_err(|_| ErroTrabalho::Persistencia("pool".into()))?;
+            // Reivindicação atômica de lotes pendentes — ou "presos" com lease
+            // expirado — respeitando o lock por escritório (um lote em
+            // execução por escritório). `FOR UPDATE SKIP LOCKED` evita que
+            // dois workers peguem o mesmo lote.
+            let linhas = diesel::sql_query(
+                "UPDATE consultas_em_lote \
+                 SET status = 'executando', lease_expira_em = $1, \
+                     iniciado_em = COALESCE(iniciado_em, $2) \
+                 WHERE id IN (\
+                   SELECT c.id FROM consultas_em_lote c \
+                   WHERE (c.status = 'pendente' \
+                          OR (c.status = 'executando' AND c.lease_expira_em <= $2)) \
+                     AND NOT EXISTS (\
+                       SELECT 1 FROM consultas_em_lote o \
+                       WHERE o.escritorio_id = c.escritorio_id \
+                         AND o.id <> c.id \
+                         AND o.status = 'executando' \
+                         AND o.lease_expira_em > $2\
+                     ) \
+                   ORDER BY c.criado_em ASC \
+                   LIMIT $3 \
+                   FOR UPDATE SKIP LOCKED\
+                 ) \
+                 RETURNING id, escritorio_id, nome, produto, servico, verbo, status, \
+                           total_itens, itens_concluidos, itens_com_erro, \
+                           criado_em, iniciado_em, finalizado_em",
+            )
+            .bind::<Timestamptz, _>(lease_expira_em)
+            .bind::<Timestamptz, _>(agora)
+            .bind::<BigInt, _>(i64::try_from(max).unwrap_or(i64::MAX))
+            .load::<LoteRow>(&mut conexao)
+            .map_err(|_| ErroTrabalho::Persistencia("reivindicar lotes".into()))?
+            .into_iter()
+            .map(|row| row.para_entidade())
+            .collect::<Result<Vec<_>, _>>()?;
+            Ok(linhas)
+        })
+        .await
+        .map_err(|_| ErroTrabalho::Persistencia("spawn_blocking".into()))?
+    }
+
+    async fn renovar_lease(
+        &self,
+        id: Uuid,
+        lease_expira_em: DateTime<Utc>,
+    ) -> Result<(), ErroTrabalho> {
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut conexao = pool
+                .get()
+                .map_err(|_| ErroTrabalho::Persistencia("pool".into()))?;
+            let atualizados = diesel::sql_query(
+                "UPDATE consultas_em_lote \
+                 SET lease_expira_em = $2 \
+                 WHERE id = $1 AND status = 'executando'",
+            )
+            .bind::<SqlUuid, _>(id)
+            .bind::<Timestamptz, _>(lease_expira_em)
+            .execute(&mut conexao)
+            .map_err(|_| ErroTrabalho::Persistencia("renovar lease lote".into()))?;
+            if atualizados != 1 {
+                return Err(ErroTrabalho::ConsultaLoteNaoEncontrada);
+            }
+            Ok(())
+        })
+        .await
+        .map_err(|_| ErroTrabalho::Persistencia("spawn_blocking".into()))?
+    }
+
+    async fn recuperar_presos(&self, agora: DateTime<Utc>) -> Result<i64, ErroTrabalho> {
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut conexao = pool
+                .get()
+                .map_err(|_| ErroTrabalho::Persistencia("pool".into()))?;
+            let recuperados = diesel::sql_query(
+                "UPDATE consultas_em_lote \
+                 SET status = 'pendente', lease_expira_em = NULL \
+                 WHERE status = 'executando' AND lease_expira_em <= $1",
+            )
+            .bind::<Timestamptz, _>(agora)
+            .execute(&mut conexao)
+            .map_err(|_| ErroTrabalho::Persistencia("recuperar lotes presos".into()))?;
+            Ok(i64::try_from(recuperados).unwrap_or(i64::MAX))
         })
         .await
         .map_err(|_| ErroTrabalho::Persistencia("spawn_blocking".into()))?

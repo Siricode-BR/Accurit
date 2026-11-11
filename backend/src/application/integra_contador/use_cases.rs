@@ -65,6 +65,7 @@ pub struct ResultadoIntegraContador {
     pub dados_resposta: Option<String>,
 }
 
+#[derive(Clone)]
 pub struct ExecutarIntegraContadorUseCase {
     contexto: Arc<dyn CatalogoEscritoriosIntegra>,
     cliente: Arc<dyn ClienteIntegraContador>,
@@ -75,6 +76,9 @@ pub struct ExecutarIntegraContadorUseCase {
     /// Servico de medicao de uso SERPRO — registra toda chamada de saida
     /// para fins de cobranca, distinguindo TRIAL de PRODUCAO.
     servico_medicao: Arc<dyn ServicoMedicaoSerpro>,
+    /// Origem da chamada registrada na medição (Fase B.1): consultas
+    /// manuais, rotinas agendadas e lotes são distinguidos na cobrança.
+    origem: OrigemChamada,
     /// CatÃƒÂ¡logo configurÃƒÂ¡vel (`catalogo_servicos_integra`, ADR-0013).
     /// `None` = catÃƒÂ¡logo estÃƒÂ¡tico do domÃƒÂ­nio (comportamento anterior).
     /// ResoluÃƒÂ§ÃƒÂ£o ÃƒÂ© banco-primeiro; queda no estÃƒÂ¡tico quando nÃƒÂ£o configurado
@@ -100,8 +104,16 @@ impl ExecutarIntegraContadorUseCase {
             procuracoes,
             operator_header_enabled,
             servico_medicao,
+            origem: OrigemChamada::Manual,
             provedor_catalogo: None,
         }
+    }
+
+    /// Define a origem da chamada na medição de uso (Fase B.1).
+    #[must_use]
+    pub const fn com_origem(mut self, origem: OrigemChamada) -> Self {
+        self.origem = origem;
+        self
     }
 
     /// Liga o catÃƒÂ¡logo configurÃƒÂ¡vel ao caso de uso (ADR-0013). `None`
@@ -324,7 +336,7 @@ impl ExecutarIntegraContadorUseCase {
                         ambiente: comando.ambiente,
                         cliente_id: None,
                         usuario_id: Some(comando.usuario_id),
-                        origem: OrigemChamada::Manual,
+                        origem: self.origem,
                         resultado: resultado_medicao(&entrega),
                         status_http: Some(entrega.http_status),
                         duracao_ms,
@@ -379,7 +391,7 @@ impl ExecutarIntegraContadorUseCase {
                         ambiente: comando.ambiente,
                         cliente_id: None,
                         usuario_id: Some(comando.usuario_id),
-                        origem: OrigemChamada::Manual,
+                        origem: self.origem,
                         resultado: ResultadoChamada::Indeterminado,
                         status_http: None,
                         duracao_ms,

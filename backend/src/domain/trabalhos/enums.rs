@@ -25,6 +25,9 @@ pub enum StatusExecucao {
     Executando,
     Concluido,
     Falhou,
+    /// Execução interrompida por bloqueio (limite do plano, rate limit
+    /// persistente). Explicitamente distinguida de "falhou" (Fase B.1).
+    Bloqueado,
 }
 
 impl StatusExecucao {
@@ -34,6 +37,7 @@ impl StatusExecucao {
             Self::Executando => "executando",
             Self::Concluido => "concluido",
             Self::Falhou => "falhou",
+            Self::Bloqueado => "bloqueado",
         }
     }
 }
@@ -46,6 +50,9 @@ pub enum StatusLote {
     Concluido,
     Falhou,
     Parcial,
+    /// Lote encerrado sem execução: todos os itens bloqueados (limite do
+    /// plano). Explicitamente distinguido de "falhou" (Fase B.1).
+    Bloqueado,
 }
 
 impl StatusLote {
@@ -56,6 +63,7 @@ impl StatusLote {
             Self::Concluido => "concluido",
             Self::Falhou => "falhou",
             Self::Parcial => "parcial",
+            Self::Bloqueado => "bloqueado",
         }
     }
 }
@@ -83,6 +91,7 @@ mod tests {
             StatusExecucao::Executando,
             StatusExecucao::Concluido,
             StatusExecucao::Falhou,
+            StatusExecucao::Bloqueado,
         ] {
             let s = status.as_str();
             assert!(s.len() <= 16, "status {s:?} excede VARCHAR(16)");
@@ -97,6 +106,7 @@ mod tests {
             StatusLote::Concluido,
             StatusLote::Falhou,
             StatusLote::Parcial,
+            StatusLote::Bloqueado,
         ] {
             let s = status.as_str();
             assert!(s.len() <= 16, "status {s:?} excede VARCHAR(16)");

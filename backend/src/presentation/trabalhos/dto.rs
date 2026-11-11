@@ -52,6 +52,7 @@ pub struct RespostaExecucaoTrabalho {
     pub erro_mensagem: Option<String>,
     pub registros_processados: i32,
     pub registros_com_erro: i32,
+    pub tentativas: i32,
     pub criado_em: DateTime<Utc>,
 }
 
@@ -102,6 +103,7 @@ pub struct RespostaItemConsultaLote {
     pub erro: Option<String>,
     pub criado_em: DateTime<Utc>,
     pub processado_em: Option<DateTime<Utc>>,
+    pub tentativas: i32,
 }
 
 impl From<crate::domain::trabalhos::entidades::TrabalhoAgendado> for RespostaTrabalhoAgendado {
@@ -135,6 +137,7 @@ impl From<crate::domain::trabalhos::entidades::ExecucaoTrabalho> for RespostaExe
             erro_mensagem: e.erro_mensagem,
             registros_processados: e.registros_processados,
             registros_com_erro: e.registros_com_erro,
+            tentativas: e.tentativas,
             criado_em: e.criado_em,
         }
     }
@@ -172,6 +175,7 @@ impl From<crate::domain::trabalhos::entidades::ItemConsultaLote> for RespostaIte
             erro: i.erro,
             criado_em: i.criado_em,
             processado_em: i.processado_em,
+            tentativas: i.tentativas,
         }
     }
 }

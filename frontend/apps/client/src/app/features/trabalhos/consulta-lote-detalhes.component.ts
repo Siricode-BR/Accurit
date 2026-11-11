@@ -1,6 +1,7 @@
 import {
   Component,
   ChangeDetectionStrategy,
+  computed,
   inject,
   signal,
   OnInit,
@@ -18,7 +19,17 @@ import {
   AccBadgeComponent,
   AccCardComponent,
   AccSpinnerComponent,
+  AccTableComponent,
 } from '@accurit/ui';
+import { AccColunaTabela } from '@accurit/ui';
+
+const COLUNAS_ITENS: AccColunaTabela<Record<string, unknown>>[] = [
+  { campo: 'documento', titulo: 'Documento' },
+  { campo: 'tipo', titulo: 'Tipo' },
+  { campo: 'status', titulo: 'Status' },
+  { campo: 'tentativas', titulo: 'Tentativas', alinhamento: 'right' },
+  { campo: 'erro', titulo: 'Erro' },
+];
 
 @Component({
   selector: 'app-consulta-lote-detalhes',
@@ -29,6 +40,7 @@ import {
     AccBadgeComponent,
     AccCardComponent,
     AccSpinnerComponent,
+    AccTableComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './consulta-lote-detalhes.component.html',
@@ -41,8 +53,19 @@ export class ConsultaLoteDetalhesComponent implements OnInit {
 
   protected readonly lote = signal<ConsultaLoteDto | null>(null);
   protected readonly itens = signal<ItemConsultaLoteDto[]>([]);
+  protected readonly colunasItens = COLUNAS_ITENS;
+  protected readonly itensTabela = computed<Record<string, unknown>[]>(() =>
+    this.itens().map((item) => ({
+      documento: item.documento,
+      tipo: item.tipo || this.tipoDocumento(item.documento),
+      status: this.rotuloItemStatus(item.status),
+      tentativas: item.tentativas,
+      erro: item.erro ?? '—',
+    })),
+  );
   protected readonly carregandoLote = signal(false);
   protected readonly carregandoItens = signal(false);
+  protected readonly reexecutando = signal(false);
   protected readonly erro = signal<string | null>(null);
 
   async ngOnInit(): Promise<void> {
@@ -92,6 +115,8 @@ export class ConsultaLoteDetalhesComponent implements OnInit {
         return 'Falhou';
       case 'parcial':
         return 'Parcial';
+      case 'bloqueado':
+        return 'Bloqueado';
       default:
         return status;
     }
@@ -105,6 +130,8 @@ export class ConsultaLoteDetalhesComponent implements OnInit {
         return 'danger';
       case 'executando':
         return 'info';
+      case 'bloqueado':
+        return 'warning';
       case 'parcial':
         return 'warning';
       case 'pendente':
@@ -119,6 +146,9 @@ export class ConsultaLoteDetalhesComponent implements OnInit {
         return 'success';
       case 'falhou':
         return 'danger';
+      case 'executando':
+        return 'info';
+      case 'bloqueado':
       case 'pendente':
       default:
         return 'warning';
@@ -131,9 +161,39 @@ export class ConsultaLoteDetalhesComponent implements OnInit {
         return 'Concluído';
       case 'falhou':
         return 'Falhou';
+      case 'executando':
+        return 'Executando';
+      case 'bloqueado':
+        return 'Bloqueado';
       case 'pendente':
       default:
         return 'Pendente';
+    }
+  }
+
+  /** Lote finalizado com itens falhos/bloqueados pode ser reexecutado. */
+  protected podeReexecutar(): boolean {
+    const status = this.lote()?.status;
+    return status === 'falhou' || status === 'parcial' || status === 'bloqueado';
+  }
+
+  protected async reexecutar(): Promise<void> {
+    const lote = this.lote();
+    if (!lote || this.reexecutando()) {
+      return;
+    }
+    this.reexecutando.set(true);
+    this.erro.set(null);
+    try {
+      await this.trabalhosService.reexecutarLote(lote.id);
+      await this.carregarLote(lote.id);
+      await this.carregarItens(lote.id);
+    } catch (err: any) {
+      this.erro.set(
+        mensagemDeErro(err, 'Falha ao reexecutar a consulta em lote.'),
+      );
+    } finally {
+      this.reexecutando.set(false);
     }
   }
 

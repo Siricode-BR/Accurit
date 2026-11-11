@@ -762,6 +762,12 @@ where
                 itens_lote_repo.clone(),
             ),
         );
+        let reexecutar_lote_uc = std::sync::Arc::new(
+            crate::application::trabalhos::ReexecutarConsultaLoteUseCase::novo(
+                lotes_repo.clone(),
+                itens_lote_repo.clone(),
+            ),
+        );
 
         let estado_trabalhos = crate::presentation::trabalhos::state::EstadoTrabalhos::novo(
             criar_trabalho_uc,
@@ -773,6 +779,7 @@ where
             listar_lotes_uc,
             buscar_lote_uc,
             listar_itens_lote_uc,
+            reexecutar_lote_uc,
         );
 
         api = api.merge(crate::presentation::trabalhos::construir(

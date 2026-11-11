@@ -55,6 +55,8 @@ export class ConsultasLoteListComponent {
         return 'Falhou';
       case 'parcial':
         return 'Parcial';
+      case 'bloqueado':
+        return 'Bloqueado';
       default:
         return status;
     }
@@ -68,8 +70,8 @@ export class ConsultasLoteListComponent {
         return 'danger';
       case 'executando':
         return 'info';
+      case 'bloqueado':
       case 'parcial':
-        return 'warning';
       case 'pendente':
       default:
         return 'warning';

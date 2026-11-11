@@ -46,6 +46,8 @@ pub struct ExecucaoTrabalho {
     pub erro_mensagem: Option<String>,
     pub registros_processados: i32,
     pub registros_com_erro: i32,
+    /// Tentativas do job runner (Fase B.1): incrementa a cada reivindicação.
+    pub tentativas: i32,
     pub criado_em: DateTime<Utc>,
 }
 
@@ -89,6 +91,8 @@ pub struct ItemConsultaLote {
     pub erro: Option<String>,
     pub criado_em: DateTime<Utc>,
     pub processado_em: Option<DateTime<Utc>>,
+    /// Tentativas do job runner (Fase B.1): incrementa a cada reivindicação.
+    pub tentativas: i32,
 }
 
 /// Dados para criação de um novo item de lote.

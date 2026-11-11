@@ -19,7 +19,6 @@ import {
 import { TrabalhosService } from '../../data/trabalhos.service';
 import {
   AccButtonComponent,
-  AccSpinnerComponent,
   AccCardComponent,
 } from '@accurit/ui';
 
@@ -42,7 +41,6 @@ const AMBIENTES: { valor: string; label: string }[] = [
     FormsModule,
     ReactiveFormsModule,
     AccButtonComponent,
-    AccSpinnerComponent,
     AccCardComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,

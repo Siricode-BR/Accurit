@@ -28,6 +28,8 @@ pub enum TipoNotificacao {
     DasVencendo,
     FalhaRotina,
     LimiteConsumoSerpro,
+    /// Conclusão de consulta em lote (Fase B.1 — job runner).
+    LoteConcluido,
 }
 
 impl TipoNotificacao {
@@ -40,6 +42,7 @@ impl TipoNotificacao {
             Self::DasVencendo => "das_vencendo",
             Self::FalhaRotina => "falha_rotina",
             Self::LimiteConsumoSerpro => "limite_consumo_serpro",
+            Self::LoteConcluido => "lote_concluido",
         }
     }
 
@@ -52,6 +55,7 @@ impl TipoNotificacao {
             Self::DasVencendo,
             Self::FalhaRotina,
             Self::LimiteConsumoSerpro,
+            Self::LoteConcluido,
         ]
     }
 }

@@ -10,7 +10,8 @@ CREATE TABLE notificacoes (
         'certificado_a1_vencendo',
         'das_vencendo',
         'falha_rotina',
-        'limite_consumo_serpro'
+        'limite_consumo_serpro',
+        'lote_concluido'
     )),
     titulo VARCHAR(255) NOT NULL,
     corpo TEXT NOT NULL,

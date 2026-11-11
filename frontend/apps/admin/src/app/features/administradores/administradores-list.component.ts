@@ -2,9 +2,13 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { DatePipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import {
+  AccAlertComponent,
   AccBadgeComponent,
   AccButtonComponent,
+  AccConfirmDialogComponent,
+  AccInputComponent,
   AccModalComponent,
+  AccSearchFieldComponent,
 } from '@accurit/ui';
 import { AdministradorDto } from '@accurit/core';
 import { AdministradorService } from '../../data/administrador.service';
@@ -15,7 +19,17 @@ type ModoModal = 'criar' | 'editar' | 'senha';
 @Component({
   selector: 'app-administradores-list',
   standalone: true,
-  imports: [ReactiveFormsModule, DatePipe, AccButtonComponent, AccBadgeComponent, AccModalComponent],
+  imports: [
+    ReactiveFormsModule,
+    DatePipe,
+    AccAlertComponent,
+    AccButtonComponent,
+    AccBadgeComponent,
+    AccConfirmDialogComponent,
+    AccInputComponent,
+    AccModalComponent,
+    AccSearchFieldComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="page-header">
@@ -24,17 +38,14 @@ type ModoModal = 'criar' | 'editar' | 'senha';
     </div>
 
     @if (erro()) {
-      <div class="alert alert-danger" role="alert">{{ erro() }}</div>
+      <acc-alert variante="erro" [descartavel]="true" (fechado)="erro.set(null)">{{ erro() }}</acc-alert>
     }
 
     <div class="filtros">
-      <input
-        class="input"
-        type="search"
+      <acc-search-field
         placeholder="Buscar por nome ou e-mail"
         [value]="busca()"
-        (input)="busca.set($any($event.target).value)"
-        (keyup.enter)="carregar(1)"
+        (valueChange)="busca.set($event)"
       />
       <button acc-button variant="outline" type="button" (click)="carregar(1)">Buscar</button>
       <button acc-button variant="primary" type="button" (click)="abrirCriar()">Novo administrador</button>
@@ -99,17 +110,14 @@ type ModoModal = 'criar' | 'editar' | 'senha';
       <acc-modal [title]="tituloModal()" (fechar)="fechar()">
         <form [formGroup]="form" (ngSubmit)="salvar()" class="form" novalidate>
           @if (modo() !== 'senha') {
-            <label>Nome <input class="input" formControlName="nome" /></label>
-            <label>E-mail <input class="input" type="email" formControlName="email" /></label>
+            <acc-input label="Nome" formControlName="nome" />
+            <acc-input label="E-mail" type="email" formControlName="email" />
           }
           @if (modo() === 'criar') {
-            <label>CPF <input class="input" formControlName="cpf" placeholder="000.000.000-00" /></label>
+            <acc-input label="CPF" formControlName="cpf" placeholder="000.000.000-00" />
           }
           @if (modo() !== 'editar') {
-            <label>
-              Senha
-              <input class="input" type="password" formControlName="senha" autocomplete="new-password" />
-            </label>
+            <acc-input label="Senha" type="password" formControlName="senha" autocomplete="new-password" />
           }
           @if (erroForm()) { <p class="field-error">{{ erroForm() }}</p> }
           <div class="acoes">
@@ -118,6 +126,17 @@ type ModoModal = 'criar' | 'editar' | 'senha';
           </div>
         </form>
       </acc-modal>
+    }
+
+    @if (confirmacao(); as alvo) {
+      <acc-confirm-dialog
+        titulo="{{ alvo.ativo ? 'Desativar administrador' : 'Ativar administrador' }}"
+        mensagem="Confirma {{ alvo.ativo ? 'desativar' : 'ativar' }} {{ alvo.nome }}? {{ alvo.ativo ? 'As sessões do administrador serão revogadas.' : '' }}"
+        [confirmarTexto]="alvo.ativo ? 'Desativar' : 'Ativar'"
+        [variante]="alvo.ativo ? 'danger' : 'primary'"
+        (confirmar)="confirmarAlternancia()"
+        (cancelado)="confirmacao.set(null)"
+      />
     }
   `,
   styles: `
@@ -147,6 +166,7 @@ export class AdministradoresListComponent implements OnInit {
   readonly busca = signal('');
   readonly modo = signal<ModoModal | null>(null);
   readonly selecionado = signal<AdministradorDto | null>(null);
+  readonly confirmacao = signal<AdministradorDto | null>(null);
 
   readonly form = this.fb.group({
     nome: [''],
@@ -241,8 +261,16 @@ export class AdministradoresListComponent implements OnInit {
   }
 
   async alternarAtivo(administrador: AdministradorDto): Promise<void> {
+    this.confirmacao.set(administrador);
+  }
+
+  async confirmarAlternancia(): Promise<void> {
+    const administrador = this.confirmacao();
+    if (!administrador) {
+      return;
+    }
     const acao = administrador.ativo ? 'desativar' : 'ativar';
-    if (!confirm(`Confirma ${acao} ${administrador.nome}?`)) return;
+    this.confirmacao.set(null);
     try {
       await this.servico.atualizar(administrador.id, { ativo: !administrador.ativo });
       await this.carregar(this.pagina());

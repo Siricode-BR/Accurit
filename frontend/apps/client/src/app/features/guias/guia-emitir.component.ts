@@ -19,7 +19,6 @@ import {
 import { GuiasService } from '../../data/guias.service';
 import {
   AccButtonComponent,
-  AccSpinnerComponent,
   AccCardComponent,
 } from '@accurit/ui';
 
@@ -31,7 +30,6 @@ import {
     FormsModule,
     ReactiveFormsModule,
     AccButtonComponent,
-    AccSpinnerComponent,
     AccCardComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,

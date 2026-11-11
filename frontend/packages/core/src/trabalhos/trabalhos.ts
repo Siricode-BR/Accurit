@@ -6,14 +6,20 @@ export type TipoTrabalho =
   | 'validar_procuracao'
   | 'consulta_integra_contador';
 
-export type StatusExecucao = 'pendente' | 'executando' | 'concluido' | 'falhou';
+export type StatusExecucao =
+  | 'pendente'
+  | 'executando'
+  | 'concluido'
+  | 'falhou'
+  | 'bloqueado';
 
 export type StatusLote =
   | 'pendente'
   | 'executando'
   | 'concluido'
   | 'falhou'
-  | 'parcial';
+  | 'parcial'
+  | 'bloqueado';
 
 /** Resposta de um trabalho agendado (GET/POST /trabalhos). */
 export interface TrabalhoAgendadoDto {
@@ -56,6 +62,7 @@ export interface ExecucaoTrabalhoDto {
   erroMensagem: string | null;
   registrosProcessados: number;
   registrosComErro: number;
+  tentativas: number;
   criadoEm: string;
 }
 
@@ -91,11 +98,12 @@ export interface ItemConsultaLoteDto {
   consultaLoteId: string;
   documento: string;
   tipo: string; // 'PF' | 'PJ'
-  status: string; // 'pendente' | 'concluido' | 'falhou'
+  status: string; // 'pendente' | 'executando' | 'concluido' | 'falhou' | 'bloqueado'
   resultadoRedigido: unknown | null;
   erro: string | null;
   criadoEm: string;
   processadoEm: string | null;
+  tentativas: number;
 }
 
 /** Opções de filtro para listagem de trabalhos. */

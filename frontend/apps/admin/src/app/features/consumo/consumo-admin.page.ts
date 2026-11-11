@@ -1,12 +1,11 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ConsumoAdminDto, PlanoEscritorioDto } from '@accurit/core';
 import {
   AccBadgeComponent,
   AccButtonComponent,
   AccCardComponent,
-  AccEmptyStateComponent,
   AccPageHeaderComponent,
   AccSpinnerComponent,
 } from '@accurit/ui';
@@ -20,13 +19,11 @@ type Aba = 'consumo' | 'planos';
   selector: 'app-consumo-admin-page',
   standalone: true,
   imports: [
-    DatePipe,
     DecimalPipe,
     FormsModule,
     AccBadgeComponent,
     AccButtonComponent,
     AccCardComponent,
-    AccEmptyStateComponent,
     AccPageHeaderComponent,
     AccSpinnerComponent,
   ],

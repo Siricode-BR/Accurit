@@ -52,6 +52,7 @@ const execucaoMock: ExecucaoTrabalhoDto = {
   erroMensagem: null,
   registrosProcessados: 5,
   registrosComErro: 0,
+  tentativas: 1,
   criadoEm: '2026-11-09T02:00:00Z',
 };
 

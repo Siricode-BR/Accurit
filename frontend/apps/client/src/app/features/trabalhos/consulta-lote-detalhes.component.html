@@ -1,14 +1,28 @@
 <div class="page-container">
   <div class="page-header">
     <h1 class="page-title">Detalhes do Lote</h1>
-    <button
-      acc-button
-      variant="outline"
-      size="sm"
-      (click)="voltar()"
-    >
-      Voltar à lista
-    </button>
+    <div class="page-acoes">
+      @if (lote() && podeReexecutar()) {
+        <button
+          acc-button
+          variant="primary"
+          size="sm"
+          type="button"
+          [disabled]="reexecutando()"
+          (click)="reexecutar()"
+        >
+          {{ reexecutando() ? 'Reexecutando...' : 'Reexecutar pendentes' }}
+        </button>
+      }
+      <button
+        acc-button
+        variant="outline"
+        size="sm"
+        (click)="voltar()"
+      >
+        Voltar à lista
+      </button>
+    </div>
   </div>
 
   @if (erro(); as mensagemErro) {
@@ -86,32 +100,11 @@
         } @else if (itens().length === 0) {
           <p class="vazio">Nenhum item registrado.</p>
         } @else {
-          <table class="acc-table">
-            <thead>
-              <tr>
-                <th>Documento</th>
-                <th>Tipo</th>
-                <th>Status</th>
-                <th>Erro</th>
-                <th>Criado em</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (item of itens(); track item.id) {
-                <tr>
-                  <td>{{ item.documento }}</td>
-                  <td>{{ tipoDocumento(item.documento) }}</td>
-                  <td>
-                    <acc-badge [status]="badgeItemStatus(item.status)">
-                      {{ rotuloItemStatus(item.status) }}
-                    </acc-badge>
-                  </td>
-                  <td>{{ item.erro ?? '—' }}</td>
-                  <td>{{ item.criadoEm }}</td>
-                </tr>
-              }
-            </tbody>
-          </table>
+          <acc-table
+            [colunas]="colunasItens"
+            [linhas]="itensTabela()"
+            vazio="Nenhum item registrado."
+          />
         }
       </acc-card>
     </div>

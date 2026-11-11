@@ -25,6 +25,13 @@ pub const ARGON2_MEMORIA_KIB: u32 = 19_456;
 pub const ARGON2_ITERACOES: u32 = 2;
 pub const ARGON2_PARALELISMO: u32 = 1;
 
+pub const JOBS_POLL_INTERVAL_SECS: u64 = 60;
+pub const JOBS_MAX_CONCORRENCIA: u32 = 4;
+pub const JOBS_LEASE_SECS: u64 = 120;
+pub const JOBS_BACKOFF_BASE_SECS: u64 = 30;
+pub const JOBS_BACKOFF_TETO_SECS: u64 = 3_600;
+pub const JOBS_MAX_TENTATIVAS: u32 = 5;
+
 #[derive(Debug, Clone)]
 pub struct DatabaseConfig {
     pub url: SecretString,
@@ -41,6 +48,29 @@ pub struct AuthConfig {
     pub argon2_memory_kib: u32,
     pub argon2_iterations: u32,
     pub argon2_parallelism: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct JobsConfig {
+    /// Liga/desliga o worker interno de trabalhos agendados e lotes
+    /// (`JOBS_RUNNER_ENABLED`, padrão `true`).
+    pub enabled: bool,
+    /// Intervalo do poll da fila persistida (`JOBS_POLL_INTERVAL_SECS`).
+    pub poll_interval_secs: u64,
+    /// Execuções de trabalho/lote simultâneas por processo
+    /// (`JOBS_MAX_CONCORRENCIA`).
+    pub max_concorrencia: u32,
+    /// TTL do lease/heartbeat de uma execução (`JOBS_LEASE_SECS`): uma
+    /// execução sem renovação por esse período é considerada "presa" e
+    /// volta à fila.
+    pub lease_secs: u64,
+    /// Base do backoff exponencial em segundos (`JOBS_BACKOFF_BASE_SECS`).
+    pub backoff_base_secs: u64,
+    /// Teto do backoff exponencial em segundos (`JOBS_BACKOFF_TETO_SECS`).
+    pub backoff_teto_secs: u64,
+    /// Tentativas máximas antes de a execução ser marcada como `falhou`
+    /// (`JOBS_MAX_TENTATIVAS`).
+    pub max_tentativas: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -87,6 +117,8 @@ pub struct Config {
     pub cors_allowed_origins: Vec<String>,
     pub auth: AuthConfig,
     pub serpro: SerproConfig,
+    /// Job runner (Fase B.1): worker interno de trabalhos agendados e lotes.
+    pub jobs: JobsConfig,
     /// Retenção do histórico `consultas_fiscais`, em dias (SPEC
     /// §9.11): `CONSULTAS_RETENCAO_DIAS`.
     pub consultas_retencao_dias: u64,
@@ -250,6 +282,36 @@ impl Config {
 
         let log_filter = opcional(&mapa, "RUST_LOG").unwrap_or_else(|| "info".to_owned());
 
+        let jobs = JobsConfig {
+            enabled: booleano(&mapa, "JOBS_RUNNER_ENABLED", true)?,
+            poll_interval_secs: inteiro_positivo(
+                &mapa,
+                "JOBS_POLL_INTERVAL_SECS",
+                JOBS_POLL_INTERVAL_SECS,
+            )?,
+            max_concorrencia: inteiro_positivo_u32(
+                &mapa,
+                "JOBS_MAX_CONCORRENCIA",
+                JOBS_MAX_CONCORRENCIA,
+            )?,
+            lease_secs: inteiro_positivo(&mapa, "JOBS_LEASE_SECS", JOBS_LEASE_SECS)?,
+            backoff_base_secs: inteiro_positivo(
+                &mapa,
+                "JOBS_BACKOFF_BASE_SECS",
+                JOBS_BACKOFF_BASE_SECS,
+            )?,
+            backoff_teto_secs: inteiro_positivo(
+                &mapa,
+                "JOBS_BACKOFF_TETO_SECS",
+                JOBS_BACKOFF_TETO_SECS,
+            )?,
+            max_tentativas: inteiro_positivo_u32(
+                &mapa,
+                "JOBS_MAX_TENTATIVAS",
+                JOBS_MAX_TENTATIVAS,
+            )?,
+        };
+
         let consultas_retencao_dias = inteiro_positivo(&mapa, "CONSULTAS_RETENCAO_DIAS", 90)?;
 
         Ok(Self {
@@ -261,6 +323,7 @@ impl Config {
             cors_allowed_origins,
             auth,
             serpro,
+            jobs,
             consultas_retencao_dias,
             log_filter,
             metrics_token: segredo_opcional(&mapa, "METRICS_TOKEN"),
@@ -664,6 +727,42 @@ mod tests {
         assert_eq!(cfg.serpro.rate_limit_consultas_por_segundo, 4);
         assert_eq!(cfg.consultas_retencao_dias, 90);
         assert!(!cfg.serpro.divida_ativa_fallback_codigo_contribuinte);
+    }
+
+    #[test]
+    fn padrao_jobs_runner() {
+        let cfg = config(base()).expect("config válida");
+        assert!(cfg.jobs.enabled);
+        assert_eq!(cfg.jobs.poll_interval_secs, JOBS_POLL_INTERVAL_SECS);
+        assert_eq!(cfg.jobs.max_concorrencia, JOBS_MAX_CONCORRENCIA);
+        assert_eq!(cfg.jobs.lease_secs, JOBS_LEASE_SECS);
+        assert_eq!(cfg.jobs.backoff_base_secs, JOBS_BACKOFF_BASE_SECS);
+        assert_eq!(cfg.jobs.backoff_teto_secs, JOBS_BACKOFF_TETO_SECS);
+        assert_eq!(cfg.jobs.max_tentativas, JOBS_MAX_TENTATIVAS);
+    }
+
+    #[test]
+    fn jobs_runner_aceita_configuracao_explicita() {
+        let mut mapa = base();
+        mapa.insert("JOBS_RUNNER_ENABLED".into(), "false".into());
+        mapa.insert("JOBS_POLL_INTERVAL_SECS".into(), "5".into());
+        mapa.insert("JOBS_MAX_CONCORRENCIA".into(), "8".into());
+        mapa.insert("JOBS_MAX_TENTATIVAS".into(), "3".into());
+        let cfg = config(mapa).expect("config válida");
+        assert!(!cfg.jobs.enabled);
+        assert_eq!(cfg.jobs.poll_interval_secs, 5);
+        assert_eq!(cfg.jobs.max_concorrencia, 8);
+        assert_eq!(cfg.jobs.max_tentativas, 3);
+    }
+
+    #[test]
+    fn rejeita_poll_interval_zero() {
+        let mut mapa = base();
+        mapa.insert("JOBS_POLL_INTERVAL_SECS".into(), "0".into());
+        assert!(matches!(
+            config(mapa),
+            Err(ConfigError::Invalida("JOBS_POLL_INTERVAL_SECS", _))
+        ));
     }
 
     #[test]

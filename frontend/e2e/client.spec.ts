@@ -89,3 +89,35 @@ test.describe('Portal do escritório', () => {
     await expect(page.getByText(new RegExp(LIMITE_CHAMADAS)).first()).toBeVisible();
   });
 });
+test.describe('Smoke visual e responsividade', () => {
+  test('telas principais em 1280px e 375px sem overflow horizontal', async ({ page }) => {
+    await login(page);
+    const telas: Array<[string, string]> = [
+      ['/dashboard', 'dashboard'],
+      ['/clientes', 'clientes'],
+      ['/trabalhos', 'trabalhos'],
+      ['/consultas-lote', 'consultas-lote'],
+      ['/consumo', 'consumo'],
+      ['/notificacoes', 'notificacoes'],
+    ];
+    for (const [caminho, nome] of telas) {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await page.goto(caminho);
+      await page.waitForLoadState('networkidle');
+      const overflowDesktop = await page.evaluate(
+        () => document.documentElement.scrollWidth > window.innerWidth + 1,
+      );
+      expect(overflowDesktop, `${caminho} em 1280px`).toBe(false);
+      await page.screenshot({ path: `test-results/visual/${nome}-1280.png`, fullPage: true });
+
+      await page.setViewportSize({ width: 375, height: 812 });
+      await page.goto(caminho);
+      await page.waitForLoadState('networkidle');
+      const overflowMobile = await page.evaluate(
+        () => document.documentElement.scrollWidth > window.innerWidth + 1,
+      );
+      expect(overflowMobile, `${caminho} em 375px`).toBe(false);
+      await page.screenshot({ path: `test-results/visual/${nome}-375.png`, fullPage: true });
+    }
+  });
+});

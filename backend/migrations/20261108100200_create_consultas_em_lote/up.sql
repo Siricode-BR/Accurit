@@ -5,13 +5,17 @@ CREATE TABLE consultas_em_lote (
     produto VARCHAR(32) NOT NULL CHECK (produto IN ('INTEGRA_CONTADOR', 'DIVIDA_ATIVA')),
     servico VARCHAR(64) NOT NULL,
     verbo VARCHAR(16),
-    status VARCHAR(16) NOT NULL CHECK (status IN ('pendente', 'executando', 'concluido', 'falhou', 'parcial')),
+    status VARCHAR(16) NOT NULL CHECK (status IN ('pendente', 'executando', 'concluido', 'falhou', 'parcial', 'bloqueado')),
     total_itens INTEGER NOT NULL DEFAULT 0,
     itens_concluidos INTEGER NOT NULL DEFAULT 0,
     itens_com_erro INTEGER NOT NULL DEFAULT 0,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     iniciado_em TIMESTAMPTZ,
-    finalizado_em TIMESTAMPTZ
+    finalizado_em TIMESTAMPTZ,
+    -- Job runner (Fase B.1): lease/heartbeat do processamento do lote — um
+    -- lote em execução por escritório; expiração recupera lotes "presos".
+    lease_expira_em TIMESTAMPTZ
 );
 CREATE INDEX idx_consultas_em_lote_escritorio ON consultas_em_lote(escritorio_id);
 CREATE INDEX idx_consultas_em_lote_status ON consultas_em_lote(status, criado_em DESC);
+CREATE INDEX idx_consultas_em_lote_lease ON consultas_em_lote(status, lease_expira_em);

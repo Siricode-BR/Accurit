@@ -4,6 +4,7 @@ pub mod crypto;
 pub mod divida_ativa;
 pub mod guias;
 pub mod integra_contador;
+pub mod jobs;
 pub mod observability;
 pub mod persistence;
 pub mod serpro;

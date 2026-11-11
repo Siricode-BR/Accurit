@@ -10,6 +10,10 @@ pub enum ErroGuia {
     NaoPodeBaixar(String),
     #[error("provedor de emissão indisponível: {0}")]
     ProvedorIndisponivel(String),
+    /// Emissão não habilitada por falta de contrato SERPRO confirmado
+    /// (Fase D): código estável `SERVICO_NAO_HABILITADO`.
+    #[error("serviço de emissão não habilitado: {0}")]
+    ServicoNaoHabilitado(String),
     #[error("falha de persistência: {0}")]
     Persistencia(String),
     #[error("erro interno: {0}")]
@@ -23,6 +27,7 @@ impl ErroGuia {
             Self::JaExisteIdempotencia => "GUIA_JA_EXISTE_IDEMPOTENCIA",
             Self::NaoPodeBaixar(_) => "NAO_PODE_BAIXAR",
             Self::ProvedorIndisponivel(_) => "PROVEDOR_INDISPONIVEL",
+            Self::ServicoNaoHabilitado(_) => "SERVICO_NAO_HABILITADO",
             Self::Persistencia(_) => "PERSISTENCIA",
             Self::Interno(_) => "ERRO_INTERNO",
         }

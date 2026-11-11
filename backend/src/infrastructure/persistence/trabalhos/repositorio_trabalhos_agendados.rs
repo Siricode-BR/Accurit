@@ -300,6 +300,91 @@ impl RepositorioTrabalhosAgendados for TrabalhosAgendadosDiesel {
         .await
         .map_err(|_| ErroTrabalho::Persistencia("spawn_blocking".into()))?
     }
+
+    async fn reivindicar_devidos(
+        &self,
+        agora: DateTime<Utc>,
+        lease_expira_em: DateTime<Utc>,
+        max: usize,
+    ) -> Result<Vec<(TrabalhoAgendado, Uuid)>, ErroTrabalho> {
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut conexao = pool
+                .get()
+                .map_err(|_| ErroTrabalho::Persistencia("pool".into()))?;
+            diesel::sql_query("BEGIN")
+                .execute(&mut conexao)
+                .map_err(|_| ErroTrabalho::Persistencia("iniciar transação de claim".into()))?;
+
+            let resultado = (|| -> Result<Vec<(TrabalhoAgendado, Uuid)>, ErroTrabalho> {
+                // Reivindica trabalhos devidos: habilitados, vencidos, sem
+                // execução pendente/executando em aberto e sem outro trabalho
+                // do mesmo escritório executando sob lease válido.
+                let linhas = diesel::sql_query(
+                    "SELECT t.id, t.escritorio_id, t.nome, t.tipo, t.produto, t.ambiente, \
+                            t.cron_expression, t.habilitado, t.proxima_execucao, \
+                            t.ultima_execucao, t.criado_em, t.atualizado_em \
+                     FROM trabalhos_agendados t \
+                     WHERE t.habilitado = TRUE \
+                       AND t.proxima_execucao IS NOT NULL \
+                       AND t.proxima_execucao <= $1 \
+                       AND NOT EXISTS (\
+                         SELECT 1 FROM execucoes_trabalho e \
+                         WHERE e.trabalho_agendado_id = t.id \
+                           AND e.status IN ('pendente', 'executando')\
+                       ) \
+                       AND NOT EXISTS (\
+                         SELECT 1 FROM execucoes_trabalho e2 \
+                         JOIN trabalhos_agendados t2 ON t2.id = e2.trabalho_agendado_id \
+                         WHERE t2.escritorio_id = t.escritorio_id \
+                           AND t2.id <> t.id \
+                           AND e2.status = 'executando' \
+                           AND e2.lease_expira_em > $1\
+                       ) \
+                     ORDER BY t.proxima_execucao ASC \
+                     LIMIT $2 \
+                     FOR UPDATE SKIP LOCKED",
+                )
+                .bind::<Timestamptz, _>(agora)
+                .bind::<BigInt, _>(i64::try_from(max).unwrap_or(i64::MAX))
+                .load::<TrabalhoRow>(&mut conexao)
+                .map_err(|_| ErroTrabalho::Persistencia("reivindicar trabalhos".into()))?;
+
+                let mut trabalhos = Vec::with_capacity(linhas.len());
+                for linha in linhas {
+                    let execucao_id = Uuid::now_v7();
+                    diesel::sql_query(
+                        "INSERT INTO execucoes_trabalho \
+                         (id, trabalho_agendado_id, escritorio_id, status, lease_expira_em, tentativas) \
+                         VALUES ($1, $2, $3, 'executando', $4, 1)",
+                    )
+                    .bind::<SqlUuid, _>(execucao_id)
+                    .bind::<SqlUuid, _>(linha.id)
+                    .bind::<SqlUuid, _>(linha.escritorio_id)
+                    .bind::<Timestamptz, _>(lease_expira_em)
+                    .execute(&mut conexao)
+                    .map_err(|_| ErroTrabalho::Persistencia("criar execução do claim".into()))?;
+                    trabalhos.push((linha.para_entidade()?, execucao_id));
+                }
+                Ok(trabalhos)
+            })();
+
+            match resultado {
+                Ok(trabalhos) => {
+                    diesel::sql_query("COMMIT")
+                        .execute(&mut conexao)
+                        .map_err(|_| ErroTrabalho::Persistencia("commit do claim".into()))?;
+                    Ok(trabalhos)
+                }
+                Err(erro) => {
+                    let _ = diesel::sql_query("ROLLBACK").execute(&mut conexao);
+                    Err(erro)
+                }
+            }
+        })
+        .await
+        .map_err(|_| ErroTrabalho::Persistencia("spawn_blocking".into()))?
+    }
 }
 
 #[derive(QueryableByName)]

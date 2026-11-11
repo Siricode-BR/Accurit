@@ -15,72 +15,92 @@
   </div>
 
   @if (erroServico(); as mensagemErro) {
-    <div class="alert-error" role="alert">{{ mensagemErro }}</div>
+    <acc-alert variante="erro">{{ mensagemErro }}</acc-alert>
   }
   @if (erroValidacao(); as mensagemErro) {
-    <div class="alert-error" role="alert">{{ mensagemErro }}</div>
+    <acc-alert variante="aviso" [descartavel]="true" (fechado)="erroValidacao.set(null)">
+      {{ mensagemErro }}
+    </acc-alert>
   }
 
   <acc-card>
     <form [formGroup]="form" (ngSubmit)="criar()">
       <div class="form-grid">
-        <div class="form-campo">
-          <label class="form-label">Nome</label>
-          <input
-            id="nome"
-            type="text"
-            formControlName="nome"
-            class="input"
-            placeholder="Ex: Consulta mensal DEVEDOR"
-          />
-          @if (form.get('nome')?.invalid && form.get('nome')?.touched) {
-            <small class="campo-erro">O nome é obrigatório.</small>
+        <acc-input
+          label="Nome"
+          formControlName="nome"
+          placeholder="Ex: Consulta mensal DEVEDOR"
+          [erro]="form.get('nome')?.invalid && form.get('nome')?.touched ? 'O nome é obrigatório.' : null"
+        />
+
+        <acc-select label="Produto" formControlName="produto" [options]="produtos" [placeholder]="null" />
+
+        <acc-select label="Serviço" formControlName="servico" [options]="servicos" [placeholder]="null" />
+
+        <acc-select label="Verbo" formControlName="verbo" [options]="verbos" [placeholder]="null" />
+
+        <div class="form-campo form-campo--full">
+          <span class="form-label">Clientes do escritório</span>
+          <small class="campo-ajuda">
+            Selecione os clientes cujos documentos entram no lote (a execução
+            manual é feita pelo worker interno logo após a criação).
+          </small>
+          @if (carregandoClientes()) {
+            <div class="clientes-carregando">
+              <acc-spinner size="sm"></acc-spinner>
+              <span>Carregando clientes...</span>
+            </div>
+          } @else if (clientes().length === 0) {
+            <p class="campo-ajuda">Nenhum cliente cadastrado neste escritório.</p>
+          } @else {
+            <div class="clientes-grid">
+              @for (cliente of clientes(); track cliente.id) {
+                <acc-checkbox
+                  [label]="cliente.nomeRazaoSocial + ' · ' + cliente.cpfCnpj"
+                  [ngModel]="clienteSelecionado(cliente)"
+                  [ngModelOptions]="{ standalone: true }"
+                  (ngModelChange)="alternarCliente(cliente)"
+                />
+              }
+            </div>
           }
-        </div>
-
-        <div class="form-campo">
-          <label class="form-label">Produto</label>
-          <select id="produto" formControlName="produto" class="input input--select">
-            @for (produto of produtos; track produto.valor) {
-              <option [value]="produto.valor">{{ rotuloProduto(produto.valor) }}</option>
-            }
-          </select>
-        </div>
-
-        <div class="form-campo">
-          <label class="form-label">Serviço</label>
-          <select id="servico" formControlName="servico" class="input input--select">
-            @for (servico of servicos; track servico.valor) {
-              <option [value]="servico.valor">{{ rotuloServico(servico.valor) }}</option>
-            }
-          </select>
-        </div>
-
-        <div class="form-campo">
-          <label class="form-label">Verbo</label>
-          <select id="verbo" formControlName="verbo" class="input input--select">
-            @for (verbo of verbos; track verbo.valor) {
-              <option [value]="verbo.valor">{{ verbo.label }}</option>
-            }
-          </select>
         </div>
 
         <div class="form-campo form-campo--full">
-          <label class="form-label">Documentos (CPF/CNPJ, um por linha)</label>
-          <textarea
-            id="documentos"
-            formControlName="documentos"
-            class="input input--textarea"
-            rows="4"
-            placeholder="52998224725
-12345678000195"
-          ></textarea>
-          <small class="campo-ajuda">
-            Informe um documento por linha. O tipo (PF/PJ) é detectado automaticamente pelo tamanho.
-          </small>
-          @if (form.get('documentos')?.invalid && form.get('documentos')?.touched) {
-            <small class="campo-erro">Informe ao menos um documento válido.</small>
+          <span class="form-label">Documentos do lote</span>
+          @for (documento of documentos(); track $index) {
+            <div class="documento-linha">
+              <acc-input
+                placeholder="CPF ou CNPJ"
+                [ngModel]="documento"
+                [ngModelOptions]="{ standalone: true }"
+                (ngModelChange)="atualizarValorDocumento($index, $event)"
+              />
+              <button
+                acc-button
+                variant="outline"
+                size="sm"
+                type="button"
+                (click)="removerDocumento($index)"
+              >
+                Remover
+              </button>
+            </div>
           }
+          <div>
+            <button
+              acc-button
+              variant="outline"
+              size="sm"
+              type="button"
+              (click)="adicionarDocumento()"
+            >
+              Adicionar documento
+            </button>
+          </div>
+          <small class="campo-ajuda">
+            O tipo (PF/PJ) é detectado automaticamente pelo tamanho do documento.
+          </small>
         </div>
       </div>
 

@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, output, signal } f
 import { AccIconComponent } from '../icon/acc-icon.component';
 import { AccSidebarComponent } from '../sidebar/acc-sidebar.component';
 import { AccNavGroup } from '../sidebar/acc-sidebar.types';
+import { AccToastHostComponent } from '../toast/acc-toast-host.component';
 import { AccShellUsuario } from './acc-app-shell.types';
 
 /**
@@ -13,7 +14,7 @@ import { AccShellUsuario } from './acc-app-shell.types';
 @Component({
   selector: 'acc-app-shell',
   standalone: true,
-  imports: [AccSidebarComponent, AccIconComponent],
+  imports: [AccSidebarComponent, AccIconComponent, AccToastHostComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './acc-app-shell.component.html',
   styleUrl: './acc-app-shell.component.css',

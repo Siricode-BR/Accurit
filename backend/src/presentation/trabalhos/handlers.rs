@@ -405,6 +405,51 @@ pub async fn listar_itens_consulta_lote(
     ))
 }
 
+/// POST /consultas-lote/{id}/executar — reexecuta manualmente um lote,
+/// devolvendo à fila os itens que falharam/bloquearam.
+pub async fn reexecutar_consulta_lote(
+    State(estado): State<EstadoTrabalhos>,
+    Extension(contexto): Extension<RequestContext>,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    let escritorio_id = contexto.escritorio_id.ok_or_else(|| {
+        ApiError::nova(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "CONTEXTO_TOKEN_INVALIDO",
+            "Token sem escritório",
+        )
+    })?;
+
+    let lote = estado
+        .buscar_lote
+        .executar(id)
+        .await
+        .map_err(mapear_erro_trabalho)?
+        .ok_or_else(|| {
+            ApiError::nova(
+                StatusCode::NOT_FOUND,
+                "CONSULTA_LOTE_NAO_ENCONTRADA",
+                "Lote não encontrado",
+            )
+        })?;
+
+    if lote.escritorio_id != escritorio_id {
+        return Err(ApiError::nova(
+            StatusCode::NOT_FOUND,
+            "CONSULTA_LOTE_NAO_ENCONTRADA",
+            "Lote não encontrado",
+        ));
+    }
+
+    estado
+        .reexecutar_lote
+        .executar(id)
+        .await
+        .map_err(mapear_erro_trabalho)?;
+
+    Ok(StatusCode::ACCEPTED)
+}
+
 /// GET /trabalhos/tipos — lista tipos de trabalho disponíveis.
 pub async fn listar_tipos_trabalho() -> Json<Value> {
     Json(serde_json::json!([
@@ -421,6 +466,7 @@ pub async fn listar_status_execucao() -> Json<Value> {
         { "valor": StatusExecucao::Executando.as_str(), "label": "Executando" },
         { "valor": StatusExecucao::Concluido.as_str(), "label": "Concluído" },
         { "valor": StatusExecucao::Falhou.as_str(), "label": "Falhou" },
+        { "valor": StatusExecucao::Bloqueado.as_str(), "label": "Bloqueado" },
     ]))
 }
 
@@ -432,6 +478,7 @@ pub async fn listar_status_lote() -> Json<Value> {
         { "valor": StatusLote::Concluido.as_str(), "label": "Concluído" },
         { "valor": StatusLote::Falhou.as_str(), "label": "Falhou" },
         { "valor": StatusLote::Parcial.as_str(), "label": "Parcial" },
+        { "valor": StatusLote::Bloqueado.as_str(), "label": "Bloqueado" },
     ]))
 }
 
@@ -482,6 +529,12 @@ fn mapear_erro_trabalho(erro: ErroTrabalho) -> ApiError {
         }
         ErroTrabalho::Interno(msg) => {
             ApiError::nova(StatusCode::INTERNAL_SERVER_ERROR, "ERRO_INTERNO", &msg)
+        }
+        ErroTrabalho::Transitorio(msg, _) => {
+            ApiError::nova(StatusCode::SERVICE_UNAVAILABLE, "FALHA_TRANSITORIA", &msg)
+        }
+        ErroTrabalho::Bloqueado(msg) => {
+            ApiError::nova(StatusCode::CONFLICT, "EXECUCAO_BLOQUEADA", &msg)
         }
     }
 }

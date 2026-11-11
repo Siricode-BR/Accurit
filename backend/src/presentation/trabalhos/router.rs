@@ -9,7 +9,7 @@ use crate::presentation::trabalhos::handlers::{
     alternar_trabalho, buscar_consulta_lote, buscar_trabalho, criar_consulta_lote, criar_trabalho,
     listar_consultas_lote, listar_execucoes_escritorio, listar_execucoes_por_trabalho,
     listar_itens_consulta_lote, listar_status_execucao, listar_status_lote, listar_tipos_trabalho,
-    listar_trabalhos,
+    listar_trabalhos, reexecutar_consulta_lote,
 };
 use crate::presentation::trabalhos::state::EstadoTrabalhos;
 
@@ -34,6 +34,10 @@ pub fn construir(estado: EstadoTrabalhos, exigir_audiencia: ExigirAudiencia) -> 
         .route(
             "/consultas-lote/{id}/itens",
             get(listar_itens_consulta_lote),
+        )
+        .route(
+            "/consultas-lote/{id}/executar",
+            post(reexecutar_consulta_lote),
         )
         .route("/trabalhos/tipos", get(listar_tipos_trabalho))
         .route("/trabalhos/status-execucao", get(listar_status_execucao))

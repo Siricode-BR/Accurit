@@ -245,6 +245,34 @@ export class TrabalhosService {
     }
   }
 
+  /**
+   * Execução manual (Fase B.1): devolve à fila os itens que falharam ou
+   * foram bloqueados. O worker interno processa o lote no próximo poll.
+   */
+  async reexecutarLote(loteId: string): Promise<void> {
+    this.#erroLotes.set(null);
+    try {
+      await firstValueFrom(
+        this.http.post(
+          `${this.baseUrlLotes}/${encodeURIComponent(loteId)}/executar`,
+          {},
+        ),
+      );
+      this.#lotes.update((atual) =>
+        atual.map((lote) =>
+          lote.id === loteId
+            ? { ...lote, status: 'pendente', itensComErro: 0 }
+            : lote,
+        ),
+      );
+    } catch (err: any) {
+      this.#erroLotes.set(
+        mensagemDeErro(err, 'Falha ao reexecutar a consulta em lote.'),
+      );
+      throw err;
+    }
+  }
+
   limpar(): void {
     this.#trabalhos.set([]);
     this.#execucoes.set([]);

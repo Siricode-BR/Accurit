@@ -74,7 +74,7 @@ CREATE TABLE bloqueios_serpro (
     id UUID PRIMARY KEY,
     escritorio_id UUID NOT NULL REFERENCES escritorios(id) ON DELETE CASCADE,
     produto VARCHAR(32) NOT NULL CHECK (produto IN ('INTEGRA_CONTADOR', 'DIVIDA_ATIVA')),
-    motivo VARCHAR(64) NOT NULL CHECK (motivo IN ('rate_limit_interno', 'producao_nao_configurada', 'parametro_invalido')),
+    motivo VARCHAR(64) NOT NULL CHECK (motivo IN ('rate_limit_interno', 'producao_nao_configurada', 'parametro_invalido', 'limite_plano')),
     contexto TEXT NULL,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

@@ -69,6 +69,8 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @accurit/ui build
+      - run: pnpm check:ui
       - run: pnpm --filter admin test
       - run: pnpm --filter client test
       - run: pnpm --filter client test:vitest

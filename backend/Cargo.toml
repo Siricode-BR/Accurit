@@ -17,6 +17,7 @@ axum = { version = "0.8", features = ["macros"] }
 ipnet = "2.9"
 base64 = "0.23.1"
 chrono = { version = "0.4.45", features = ["serde"] }
+chrono-tz = "0.10"
 cookie = "0.18.1"
 diesel = { version = "2.3.14", features = ["postgres", "r2d2", "uuid", "chrono", "serde_json", "ipnet-address"] }
 diesel_migrations = { version = "2.3.2", features = ["postgres"] }

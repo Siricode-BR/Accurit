@@ -92,6 +92,8 @@ export class TrabalhoDetalhesComponent implements OnInit {
         return 'Concluído';
       case 'falhou':
         return 'Falhou';
+      case 'bloqueado':
+        return 'Bloqueado';
       default:
         return status;
     }
@@ -105,6 +107,7 @@ export class TrabalhoDetalhesComponent implements OnInit {
         return 'danger';
       case 'executando':
         return 'info';
+      case 'bloqueado':
       case 'pendente':
       default:
         return 'warning';

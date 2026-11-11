@@ -131,6 +131,9 @@ pub struct ConsultarDevedorUseCase {
     /// Servico de medicao de uso SERPRO — registra toda chamada de saida
     /// para fins de cobranca, distinguindo TRIAL de PRODUCAO.
     servico_medicao: Arc<dyn ServicoMedicaoSerpro>,
+    /// Origem da chamada registrada na medição (Fase B.1): consultas
+    /// manuais, rotinas agendadas e lotes são distinguidos na cobrança.
+    origem: OrigemChamada,
 }
 
 impl ConsultarDevedorUseCase {
@@ -153,7 +156,15 @@ impl ConsultarDevedorUseCase {
             fallback: None,
             operador_header_habilitado: false,
             servico_medicao,
+            origem: OrigemChamada::Manual,
         }
+    }
+
+    /// Define a origem da chamada na medição de uso (Fase B.1).
+    #[must_use]
+    pub const fn com_origem(mut self, origem: OrigemChamada) -> Self {
+        self.origem = origem;
+        self
     }
 
     pub fn com_catalogo_clientes(
@@ -254,7 +265,7 @@ impl ConsultarDevedorUseCase {
                         ambiente: resultado.ambiente,
                         cliente_id: registro.cliente_id,
                         usuario_id: Some(comando.usuario_id),
-                        origem: OrigemChamada::Manual,
+                        origem: self.origem,
                         resultado: resultado_medicao,
                         status_http: Some(200),
                         duracao_ms,
@@ -275,7 +286,7 @@ impl ConsultarDevedorUseCase {
                         ambiente,
                         cliente_id: None,
                         usuario_id: Some(comando.usuario_id),
-                        origem: OrigemChamada::Manual,
+                        origem: self.origem,
                         resultado: ResultadoChamada::Indeterminado,
                         status_http: None,
                         duracao_ms,
@@ -321,6 +332,8 @@ pub struct ConsultarInscricaoUseCase {
     /// Servico de medicao de uso SERPRO — registra toda chamada de saida
     /// para fins de cobranca, distinguindo TRIAL de PRODUCAO.
     servico_medicao: Arc<dyn ServicoMedicaoSerpro>,
+    /// Origem da chamada registrada na medição (Fase B.1).
+    origem: OrigemChamada,
 }
 
 impl ConsultarInscricaoUseCase {
@@ -341,7 +354,15 @@ impl ConsultarInscricaoUseCase {
             catalogo_operadores: None,
             operador_header_habilitado: false,
             servico_medicao,
+            origem: OrigemChamada::Manual,
         }
+    }
+
+    /// Define a origem da chamada na medição de uso (Fase B.1).
+    #[must_use]
+    pub const fn com_origem(mut self, origem: OrigemChamada) -> Self {
+        self.origem = origem;
+        self
     }
 
     pub fn com_operadores(
@@ -433,7 +454,7 @@ impl ConsultarInscricaoUseCase {
                         ambiente: detalhe.ambiente,
                         cliente_id: None,
                         usuario_id: Some(comando.usuario_id),
-                        origem: OrigemChamada::Manual,
+                        origem: self.origem,
                         resultado: resultado_medicao,
                         status_http: Some(200),
                         duracao_ms,
@@ -454,7 +475,7 @@ impl ConsultarInscricaoUseCase {
                         ambiente,
                         cliente_id: None,
                         usuario_id: Some(comando.usuario_id),
-                        origem: OrigemChamada::Manual,
+                        origem: self.origem,
                         resultado: ResultadoChamada::Indeterminado,
                         status_http: None,
                         duracao_ms,

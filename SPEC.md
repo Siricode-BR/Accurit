@@ -883,29 +883,39 @@ escritório, com expressão `cron`, produto (`INTEGRA_CONTADOR` ou `DIVIDA_ATIVA
 `consulta_integra_contador`). Cada trabalho tem um campo `habilitado` para ligar/desligar a
 execução automática, e `proxima_execucao` / `ultima_execucao` para rastreamento de horários.
 
-O job runner consulta trabalhos devidos (`proxima_execucao <= agora` e `habilitado = TRUE`)
-periodicamente, cria uma execução (`execucoes_trabalho`) com status `executando`, roda o executor
-correspondente ao tipo de trabalho e atualiza a execução com o resultado final.
+O job runner interno (Fase B.1) consulta a fila persistida (`proxima_execucao <= agora` e
+`habilitado = TRUE`) periodicamente, reivindica cada trabalho de forma atômica
+(`FOR UPDATE SKIP LOCKED`, com lock por escritório — um trabalho em execução por escritório),
+cria a execução (`execucoes_trabalho`) com status `executando` e lease, executa pelos casos de uso
+existentes (medição com origem `rotina`) e finaliza com o resultado. Falhas transitórias voltam a
+`pendente` com backoff exponencial; execuções presas por crash (lease expirado) são recuperadas.
+A próxima execução é calculada por cron de 5 campos no fuso `America/Sao_Paulo`.
 
 ### 8.5.2 Execuções de trabalho
 
 Cada execução (`execucoes_trabalho`) está vinculada a um trabalho agendado e a um escritório, com
-status (`pendente`, `executando`, `concluido`, `falhou`), timestamps de início e fim, mensagem de
-erro e contadores de registros processados / com erro. Execuções são listáveis por trabalho ou por
-escritório.
+status (`pendente`, `executando`, `concluido`, `falhou`, `bloqueado`), timestamps de início e fim,
+mensagem de erro e contadores de registros processados / com erro. Execuções são listáveis por
+trabalho ou por escritório. O runner mantém `tentativas`, `proxima_tentativa_em` (backoff) e
+`lease_expira_em` (heartbeat); limite do plano bloqueia a execução com status `bloqueado` (nunca
+`falhou`).
 
 ### 8.5.3 Consultas em lote
 
 Uma **consulta em lote** (`consultas_em_lote`) é um grupo de consultas fiscais executadas de uma
 só vez, com nome, produto, serviço, verbo opcional e status (`pendente`, `executando`,
-`concluido`, `falhou`, `parcial`). Acompanha `total_itens`, `itens_concluidos` e
-`itens_com_erro` para exibição de progresso.
+`concluido`, `falhou`, `parcial`, `bloqueado`). Acompanha `total_itens`, `itens_concluidos` e
+`itens_com_erro` para exibição de progresso. O worker reivindica um lote por escritório por vez
+(lease com expiração) e processa os itens um a um; ao final publica notificação `lote_concluido`.
+`POST /api/v1/consultas-lote/{id}/executar` devolve à fila os itens `falhou`/`bloqueado` para
+reexecução manual.
 
 ### 8.5.4 Itens de consulta em lote
 
 Cada **item de lote** (`itens_consulta_lote`) representa um documento individual (CPF/CNPJ com
-tipo `PF`/`PJ`) dentro de um lote, com status (`pendente`, `concluido`, `falhou`), resultado
-redigido (JSONB) e mensagem de erro. Itens são listáveis por lote.
+tipo `PF`/`PJ`) dentro de um lote, com status (`pendente`, `executando`, `concluido`, `falhou`,
+`bloqueado`), resultado redigido (JSONB), mensagem de erro, `tentativas` e backoff
+(`proxima_tentativa_em`). Itens são listáveis por lote.
 
 ### 8.5.5 Contrato da API (Fase B)
 
@@ -921,6 +931,7 @@ redigido (JSONB) e mensagem de erro. Itens são listáveis por lote.
 | `GET` | `/api/v1/consultas-lote` | Lista consultas em lote do escritório autenticado |
 | `GET` | `/api/v1/consultas-lote/{id}` | Busca uma consulta em lote por ID |
 | `GET` | `/api/v1/consultas-lote/{id}/itens` | Lista itens de uma consulta em lote |
+| `POST` | `/api/v1/consultas-lote/{id}/executar` | Reexecuta manualmente os itens `falhou`/`bloqueado` (202) |
 | `GET` | `/api/v1/trabalhos/tipos` | Lista tipos de trabalho disponíveis |
 | `GET` | `/api/v1/trabalhos/status-execucao` | Lista status de execução disponíveis |
 | `GET` | `/api/v1/trabalhos/status-lote` | Lista status de lote disponíveis |
@@ -951,7 +962,9 @@ Os seguintes gatilhos geram notificações automaticamente:
 - Procuração a vencer em 30/15/7 dias (`procuracao_vencendo`);
 - Certificado A1 a vencer em 30/15/7 dias (`certificado_a1_vencendo`);
 - DAS próxima do vencimento (`das_vencendo`);
-- Falha de rotina (`falha_rotina`).
+- Falha de rotina (`falha_rotina`);
+- Consumo SERPRO em 80%/100% do plano (`limite_consumo_serpro`);
+- Conclusão de consulta em lote (`lote_concluido`).
 
 #### 8.6.3 Contrato da API (Fase C)
 
@@ -1397,21 +1410,26 @@ CREATE TABLE execucoes_trabalho (
     id UUID PRIMARY KEY,
     trabalho_agendado_id UUID NOT NULL REFERENCES trabalhos_agendados(id) ON DELETE CASCADE,
     escritorio_id UUID NOT NULL REFERENCES escritorios(id) ON DELETE CASCADE,
-    status VARCHAR(16) NOT NULL CHECK (status IN ('pendente', 'executando', 'concluido', 'falhou')),
+    status VARCHAR(16) NOT NULL CHECK (status IN ('pendente', 'executando', 'concluido', 'falhou', 'bloqueado')),
     iniciado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     finalizado_em TIMESTAMPTZ,
     erro_mensagem TEXT,
     registros_processados INTEGER NOT NULL DEFAULT 0,
     registros_com_erro INTEGER NOT NULL DEFAULT 0,
+    tentativas INTEGER NOT NULL DEFAULT 0,
+    proxima_tentativa_em TIMESTAMPTZ,
+    lease_expira_em TIMESTAMPTZ,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_execucoes_trabalho_escritorio ON execucoes_trabalho(escritorio_id);
 CREATE INDEX idx_execucoes_trabalho_trabalho ON execucoes_trabalho(trabalho_agendado_id, criado_em DESC);
 CREATE INDEX idx_execucoes_trabalho_status ON execucoes_trabalho(status, criado_em DESC);
+CREATE INDEX idx_execucoes_trabalho_lease ON execucoes_trabalho(status, lease_expira_em);
 ```
 
 Uma instância de execução de um trabalho agendado no tempo. Mantém status, timestamps, mensagem de
-erro e contadores de registros processados/com erro.
+erro, contadores de registros processados/com erro, `tentativas` do runner, backoff
+(`proxima_tentativa_em`) e lease/heartbeat com expiração para recuperação após crash.
 
 ### 9.8.3 `consultas_em_lote` (Fase B)
 
@@ -1423,16 +1441,18 @@ CREATE TABLE consultas_em_lote (
     produto VARCHAR(32) NOT NULL CHECK (produto IN ('INTEGRA_CONTADOR', 'DIVIDA_ATIVA')),
     servico VARCHAR(64) NOT NULL,
     verbo VARCHAR(16),
-    status VARCHAR(16) NOT NULL CHECK (status IN ('pendente', 'executando', 'concluido', 'falhou', 'parcial')),
+    status VARCHAR(16) NOT NULL CHECK (status IN ('pendente', 'executando', 'concluido', 'falhou', 'parcial', 'bloqueado')),
     total_itens INTEGER NOT NULL DEFAULT 0,
     itens_concluidos INTEGER NOT NULL DEFAULT 0,
     itens_com_erro INTEGER NOT NULL DEFAULT 0,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     iniciado_em TIMESTAMPTZ,
-    finalizado_em TIMESTAMPTZ
+    finalizado_em TIMESTAMPTZ,
+    lease_expira_em TIMESTAMPTZ
 );
 CREATE INDEX idx_consultas_em_lote_escritorio ON consultas_em_lote(escritorio_id);
 CREATE INDEX idx_consultas_em_lote_status ON consultas_em_lote(status, criado_em DESC);
+CREATE INDEX idx_consultas_em_lote_lease ON consultas_em_lote(status, lease_expira_em);
 ```
 
 Grupo de consultas fiscais executadas de uma só vez, com acompanhamento de progresso (total,
@@ -1446,18 +1466,22 @@ CREATE TABLE itens_consulta_lote (
     consulta_lote_id UUID NOT NULL REFERENCES consultas_em_lote(id) ON DELETE CASCADE,
     documento VARCHAR(14) NOT NULL,
     tipo VARCHAR(2) NOT NULL CHECK (tipo IN ('PF', 'PJ')),
-    status VARCHAR(16) NOT NULL CHECK (status IN ('pendente', 'concluido', 'falhou')),
+    status VARCHAR(16) NOT NULL CHECK (status IN ('pendente', 'executando', 'concluido', 'falhou', 'bloqueado')),
     resultado_redigido JSONB,
     erro TEXT,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    processado_em TIMESTAMPTZ
+    processado_em TIMESTAMPTZ,
+    tentativas INTEGER NOT NULL DEFAULT 0,
+    proxima_tentativa_em TIMESTAMPTZ,
+    lease_expira_em TIMESTAMPTZ
 );
 CREATE INDEX idx_itens_consulta_lote_lote ON itens_consulta_lote(consulta_lote_id);
 CREATE INDEX idx_itens_consulta_lote_status ON itens_consulta_lote(status, criado_em DESC);
+CREATE INDEX idx_itens_consulta_lote_lease ON itens_consulta_lote(status, lease_expira_em);
 ```
 
 Item individual de uma consulta em lote: o documento (CPF/CNPJ), o tipo, o status de processamento,
-o resultado redigido (JSONB) e a mensagem de erro, se houver.
+o resultado redigido (JSONB), a mensagem de erro, se houver, `tentativas` e backoff/lease do runner.
 
 ### 9.8.5 `notificacoes` (Fase C)
 
@@ -1473,7 +1497,9 @@ CREATE TABLE notificacoes (
         'procuracao_vencendo',
         'certificado_a1_vencendo',
         'das_vencendo',
-        'falha_rotina'
+        'falha_rotina',
+        'limite_consumo_serpro',
+        'lote_concluido'
     )),
     titulo VARCHAR(255) NOT NULL,
     corpo TEXT NOT NULL,
@@ -1521,7 +1547,9 @@ CREATE TABLE templates_notificacao (
         'procuracao_vencendo',
         'certificado_a1_vencendo',
         'das_vencendo',
-        'falha_rotina'
+        'falha_rotina',
+        'limite_consumo_serpro',
+        'lote_concluido'
     )),
     assunto VARCHAR(255) NOT NULL,
     corpo_texto TEXT NOT NULL,

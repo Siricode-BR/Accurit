@@ -25,6 +25,7 @@
 | P5 | Produção do Integra Contador (SAPI) | Parcialmente confirmado | Alto | Validar mTLS/e-CNPJ em homologação |
 | P6 | Ativação do modelo B | Não decidido | Alto | Exige necessidade + revisão jurídica |
 | P7 | Formato da resposta `OBTERPROCURACAO41` | **Não confirmado** | Alto | Persistido como agregado (`codigo_servico NULL`, `payload_redigido` JSONB bruto); revisar quando o documento oficial sair |
+| P8 | Contrato de emissão de guias (DAS/DARF) | **Não confirmado** | Alto | Serviço desabilitado com `SERVICO_NAO_HABILITADO`; ver [ADR-0014](ADR/0014-emissao-guias-integra-contador.md) |
 
 ## Decisões de implementação da Fase 1
 
@@ -184,6 +185,18 @@ linhas agregadas para o esquema estruturado.
 
 **Como confirmar:** documento oficial `docs/Serpro/Integra-Contador/` com exemplo de resposta de
 `OBTERPROCURACAO41`.
+
+## P8 — Contrato de emissão de guias (DAS/DARF)
+
+**Status:** NÃO CONFIRMADO.
+
+A emissão de guias (DAS/DARF) via Integra Contador não tem contrato de produção confirmado em
+`docs/Serpro` (P4/P5). O provedor `ProvedorEmissaoGuiaNaoImplementado` permanece no fio e falha
+fechado com o código estável **`SERVICO_NAO_HABILITADO`** (HTTP 503), sem simular emissão nem
+persistir guia falsa. A tela de emissão existe e exibe o motivo do bloqueio.
+
+**Como confirmar:** contrato oficial do serviço de emissão (id_sistema/id_servico/versão e
+payload) em `docs/Serpro/Integra-Contador/`; só então substituir o provedor e habilitar o fluxo.
 
 ## D7 — Rota de troca do Trial com `escritorio_id` no path
 
