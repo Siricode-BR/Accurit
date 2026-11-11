@@ -7,3 +7,9 @@ nginx/certs/
 .idea/
 /.next/
 **/tsconfig.tsbuildinfo
+
+# Backups operacionais e artefatos de teste E2E
+/backups/
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
