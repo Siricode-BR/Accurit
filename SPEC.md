@@ -2111,6 +2111,21 @@ Observações de produção:
 - O usuário de aplicação `POSTGRES_APP_USER` é não-superuser e recebe apenas os privilégios de DDL em `public` necessários às migrations. O superusuário `POSTGRES_USER` é usado somente por administração e pelos serviços do profile `tools` (`schema-tool`, `backend-test`).
 - `backend/src/infrastructure/persistence/schema.rs` é gerado fora do runtime com `docker compose --profile tools run --rm schema-tool` e formatado por `rustfmt`; o build de runtime não executa `diesel_cli`.
 
+### 11.1 Backup e restauração
+
+- O backup operacional é lógico, em formato custom do PostgreSQL (`pg_dump -Fc`), com
+  `--no-owner --no-privileges`, compressão, sidecar SHA-256 e retenção local padrão de 7 dias.
+- Os scripts `scripts/backup.ps1`/`backup.sh` validam o dump com `pg_restore --list`;
+  `scripts/restore.ps1`/`restore.sh` exigem confirmação, conferem o hash, recusam destino
+  não vazio sem `-Limpar` e restauram em transação única.
+- A restauração de produção é feita em banco novo, com validação de health, login,
+  clientes, consumo, relatórios e LGPD antes da troca de conexão; o banco anterior é mantido
+  até o fim da janela de rollback.
+- Dumps contêm dados pessoais/fiscais e seguem a classificação de sensibilidade da §9.11:
+  criptografia em repouso/trânsito, acesso nominal e retenção offsite definida.
+- RPO próximo de zero exige PITR/arquivamento de WAL no provedor; o dump diário sozinho não
+  atende esse requisito. O runbook está em `docs/BACKUP-RESTORE.md`.
+
 ---
 
 ## 12. Segurança, privacidade e resiliência
@@ -2127,7 +2142,9 @@ Observações de produção:
 - `Declarar` e `Emitir` não são repetidos automaticamente sem chave/estratégia de idempotência.
 - Auditoria de consultas e ações administrativas sem payload fiscal excessivo.
 - Erros externos convertidos em resposta estável e sem vazar detalhes internos.
-- Testes de isolamento multi-tenant, permissões, procuração, alternância Trial/Produção e respostas malformadas.
+- Testes de isolamento multi-tenant e IDOR em todas as rotas relevantes, com matriz automatizada em `backend/tests/idor_matrix.rs`.
+- Testes E2E Playwright dos fluxos de login, clientes, Dívida Ativa, procuração Trial, relatórios, link público e consumo, documentados em `docs/E2E.md`.
+- Testes de permissões, alternância Trial/Produção e respostas malformadas na suíte de integração HTTP.
 - LGPD: minimização, controle de acesso, retenção definida e redação de CPF/CNPJ em logs.
 - Dependências auditadas (`cargo audit`, `npm audit`) e imagens Docker com versões fixadas.
 

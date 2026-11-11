@@ -58,6 +58,15 @@ XMLDSig e serviços adicionais sem versão confirmada (P4) permanecem bloqueados
 - [x] **G.5 Dívida técnica**: pasta duplicada `presentation/integra-contador` removida; paginação de usuários já existente no servidor.
 - [x] **G.2 Verificação de limites**: chamadas SERPRO bloqueadas no backend; limite de clientes e de usuários verificado nos casos de uso de cadastro quando há plano atribuído.
 
+---
+
+## Etapa 3 — Qualidade, E2E e operação
+
+- [x] **E2E Playwright**: suíte em `frontend/e2e` cobrindo login admin/client, painel de consumo e planos, CRUD de cliente, consulta de Dívida Ativa no Trial, validação de procuração, geração de relatório e link público, além de rejeição de token de audiência cruzada. Execução local orquestrada por `scripts/e2e.ps1`; documentação em `docs/E2E.md`.
+- [x] **Matriz de IDOR**: `backend/tests/idor_matrix.rs` cria dois escritórios e verifica clientes, subcoleções da carteira, certificados, trabalhos, guias, relatórios, LGPD, notificações, usuários, consumo e rotas de admin. Subcoleções escopadas devem vir vazias ou negar; recursos por id devem responder `404`/`403`.
+- [x] **Backup/restore**: scripts `scripts/backup.ps1`/`backup.sh` e `scripts/restore.ps1`/`restore.sh` em formato custom com SHA-256, retenção, verificação de dump e restauração transacional; runbook em `docs/BACKUP-RESTORE.md`. Drill local validado (40 tabelas e 32 migrations restauradas com contagens idênticas).
+- [ ] Ensaio de restore em ambiente real, com janela de manutenção, credenciais de produção e validação de PITR/arquivamento de WAL.
+
 ## Fase 0 — Reconciliação documental e configuração
 
 - [x] Corrigir contratos oficiais da Dívida Ativa e do Integra Contador em `README`, `SPEC` e ADRs.
@@ -279,7 +288,7 @@ A **FASE E (Gestão de carteira) foi concluída**: sócios/contatos com represen
 
 A **FASE F (Relatórios e portal do cliente final) foi concluída**: exportação PDF/XLSX de situação fiscal, histórico de consultas e pendências por carteira; link seguro e expirável para compartilhar relatório com o cliente final (somente leitura), com token opaco, hash SHA-256 no banco, expiração, limite de acessos, revogação auditável, rate limit e página pública sem login.
 
-A **FASE H (Produção) está implementada no escopo interno**: medição TRIAL/PRODUCAO, consumo/cotas, planos e assinaturas, LGPD (retenção, exportação, anonimização e consentimento), métricas Prometheus protegidas, health detalhado, CI e documentação de go-live. **Pendentes externos**: confirmação SERPRO de D5/P5/P4/D2, teste live de mTLS/SAPI e runbook de backup/restore validado em ambiente real.
+A **FASE H (Produção) está implementada no escopo interno**: medição TRIAL/PRODUCAO, consumo/cotas, planos e assinaturas, LGPD (retenção, exportação, anonimização e consentimento), métricas Prometheus protegidas, health detalhado, CI e documentação de go-live. **Pendentes externos**: confirmação SERPRO de D5/P5/P4/D2, teste live de mTLS/SAPI e ensaio de backup/restore em ambiente real (o runbook e o drill local estão validados).
 
 ---
 
@@ -298,14 +307,14 @@ A **FASE H (Produção) está implementada no escopo interno**: medição TRIAL/
 ### 1. Banco de Dados
 
 - [ ] Testar migrations `up.sql`/`down.sql` em banco limpo e em upgrade.
-- [ ] Revisar índices, constraints, retenção e estratégia de backup/restore.
+- [~] Revisar índices, constraints, retenção e estratégia de backup/restore. (estratégia e drill local concluídos; PITR/ambiente real pendentes)
 - [ ] Verificar integridade, unicidade e isolamento por escritório.
 - [ ] Validar execução concorrente de migrations com múltiplas réplicas.
 
 ### 2. Backend (Rust / DDD)
 
 - [ ] Testes unitários de domínio e testes de integração Axum/Diesel.
-- [ ] Testes de isolamento multi-tenant e IDOR em todas as rotas relevantes.
+- [x] Testes de isolamento multi-tenant e IDOR em todas as rotas relevantes.
 - [ ] Testes com mocks SERPRO para token OAuth2, SAPI, envelopes, procuração, Trial, Dívida Ativa, `202`/`204`/`304` e assinatura XML.
 - [ ] `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test --locked` e `cargo audit`.
 - [ ] Hardening de mTLS, ICP-Brasil, rotação de certificados, segredos, CORS restrito, rate limits e logs redigidos.
