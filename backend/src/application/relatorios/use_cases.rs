@@ -53,25 +53,36 @@ impl GerarRelatorioUseCase {
             })
             .await?;
 
-        // Busca os clientes do escritório (respeita a carteira do usuário quando informado).
-        let listagem = self
-            .clientes
-            .listar(
-                comando.escritorio_id,
-                FiltroClientes::Todos,
-                Paginacao {
-                    pagina: 1,
-                    tamanho: 10_000,
-                },
-                comando.apenas_ids.as_deref(),
-            )
-            .map_err(|e| ErroRelatorio::Persistencia(e.to_string()))?;
+        // Busca os clientes do escritório em páginas de até 100 (limite do
+        // repositório), respeitando a carteira do usuário quando informado.
+        let mut itens = Vec::new();
+        let mut pagina = 1;
+        loop {
+            let listagem = self
+                .clientes
+                .listar(
+                    comando.escritorio_id,
+                    FiltroClientes::Todos,
+                    Paginacao {
+                        pagina,
+                        tamanho: 100,
+                    },
+                    comando.apenas_ids.as_deref(),
+                )
+                .map_err(|e| ErroRelatorio::Persistencia(e.to_string()))?;
+            let recebidos = listagem.itens.len();
+            itens.extend(listagem.itens);
+            if recebidos == 0 || itens.len() as i64 >= listagem.total {
+                break;
+            }
+            pagina += 1;
+        }
 
         // Gera o conteúdo (PDF ou XLSX).
         let (conteudo, nome_arquivo) = gerar_conteudo(
             &comando.tipo_relatorio,
             &comando.formato,
-            &listagem.itens,
+            &itens,
             comando.escritorio_id,
         )
         .map_err(ErroRelatorio::Interno)?;

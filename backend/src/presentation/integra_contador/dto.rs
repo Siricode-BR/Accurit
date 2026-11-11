@@ -145,7 +145,14 @@ impl From<EstadoProcuracaoCliente> for EstadoProcuracaoClienteResponse {
         Self {
             contribuinte_cpf_cnpj: estado.contribuinte_cpf_cnpj,
             procurador_cpf_cnpj: estado.procurador_cpf_cnpj,
-            status: estado.status,
+            status: estado.status.map(|status| match status.as_str() {
+                "VALIDA" => "AUTORIZADA".to_owned(),
+                "NAO_AUTORIZADA" | "NEGADA" | "CANCELADA" | "VENCIDA" => {
+                    "NAO_AUTORIZADA".to_owned()
+                }
+                "INDETERMINADA" => "INDETERMINADA".to_owned(),
+                _ => "PENDENTE".to_owned(),
+            }),
             verificado_em: estado.verificado_em,
             valido_de: estado.valido_de,
             valido_ate: estado.valido_ate,

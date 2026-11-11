@@ -232,8 +232,12 @@ async fn limite_de_requisicoes_retorna_429_e_health_e_isento() {
     let config = configuracao("");
     let app = app(true, &config, pool);
 
+    // O bucket enche com BURST (60) e reenche a 30/s: em uma máquina rápida,
+    // 61 requisições podem terminar antes do primeiro reenchimento (~33 ms)
+    // e a 61ª ainda passaria. Repetimos até o 429 aparecer (com teto alto),
+    // tornando o teste independente da velocidade do loop.
     let mut status_final = StatusCode::OK;
-    for _ in 0..61 {
+    for _ in 0..300 {
         let mut requisicao = pedido(Method::GET, "/api/v1/nao-existe");
         requisicao
             .headers_mut()
@@ -244,6 +248,9 @@ async fn limite_de_requisicoes_retorna_429_e_health_e_isento() {
             .await
             .expect("router deve responder");
         status_final = resposta.status();
+        if status_final == StatusCode::TOO_MANY_REQUESTS {
+            break;
+        }
     }
 
     assert_eq!(status_final, StatusCode::TOO_MANY_REQUESTS);

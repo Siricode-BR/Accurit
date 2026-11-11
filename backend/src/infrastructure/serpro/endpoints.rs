@@ -51,14 +51,25 @@ impl ResolverEndpointsSerpro for SerproEndpointResolverImpl {
     }
 }
 
-fn resolver_trial_integra(config: &SerproConfig) -> Result<EndpointSerpro, ErroEndpoint> {
-    let token = config
+fn token_trial(config: &SerproConfig) -> Option<secrecy::SecretString> {
+    config
         .trial_bearer_token
         .as_ref()
         .filter(|valor| !valor.expose_secret().trim().is_empty())
-        .ok_or(ErroEndpoint::Indefinido(String::from(
-            "SERPRO_TRIAL_BEARER_TOKEN não presente para Integra Contador trial",
-        )))?;
+        .cloned()
+        .or_else(|| {
+            // Com o simulador ativo, o endpoint Trial não exige token real:
+            // o wrapper mock intercepta antes de qualquer chamada HTTP.
+            config
+                .trial_mock
+                .then(|| secrecy::SecretString::from("mock-trial"))
+        })
+}
+
+fn resolver_trial_integra(config: &SerproConfig) -> Result<EndpointSerpro, ErroEndpoint> {
+    let token = token_trial(config).ok_or(ErroEndpoint::Indefinido(String::from(
+        "SERPRO_TRIAL_BEARER_TOKEN não presente para Integra Contador trial",
+    )))?;
 
     Ok(EndpointSerpro {
         produto: ProdutoSerpro::IntegraContador,
@@ -71,14 +82,10 @@ fn resolver_trial_integra(config: &SerproConfig) -> Result<EndpointSerpro, ErroE
 fn resolver_trial_divida(config: &SerproConfig) -> Result<EndpointSerpro, ErroEndpoint> {
     // SPEC §8 e quick-start SERPRO: o trial de ambos os produtos usa o Bearer
     // público de demo (`SERPRO_TRIAL_BEARER_TOKEN`). A decisão D2 é sobre o
-    // fallback do "Código de Contribuinte" — não dispensa autenticação.
-    let token = config
-        .trial_bearer_token
-        .as_ref()
-        .filter(|valor| !valor.expose_secret().trim().is_empty())
-        .ok_or(ErroEndpoint::Indefinido(String::from(
-            "SERPRO_TRIAL_BEARER_TOKEN ausente para Dívida Ativa trial",
-        )))?;
+    // fallback do "Código de Contribuinte" - não dispensa autenticação.
+    let token = token_trial(config).ok_or(ErroEndpoint::Indefinido(String::from(
+        "SERPRO_TRIAL_BEARER_TOKEN ausente para Dívida Ativa trial",
+    )))?;
 
     Ok(EndpointSerpro {
         produto: ProdutoSerpro::DividaAtiva,
@@ -158,7 +165,8 @@ mod tests {
 
     #[tokio::test]
     async fn integra_trial_exige_bearer_configurado() {
-        let config = Config::from_pairs(pares(&[])).expect("config válida");
+        let config =
+            Config::from_pairs(pares(&[("SERPRO_TRIAL_MOCK", "false")])).expect("config válida");
         let resolver = SerproEndpointResolverImpl::novo(config.serpro);
 
         let erro = resolver
@@ -195,7 +203,8 @@ mod tests {
 
     #[tokio::test]
     async fn divida_trial_exige_bearer_configurado() {
-        let config = Config::from_pairs(pares(&[])).expect("config válida");
+        let config =
+            Config::from_pairs(pares(&[("SERPRO_TRIAL_MOCK", "false")])).expect("config válida");
         let resolver = SerproEndpointResolverImpl::novo(config.serpro);
 
         let erro = resolver

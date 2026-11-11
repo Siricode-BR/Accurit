@@ -471,7 +471,9 @@ async fn validar_persiste_agregado_e_estado_por_servico() {
     assert_eq!(resposta.status(), StatusCode::OK);
     let estado = corpo_json(resposta).await;
     assert_eq!(estado["contribuinteCpfCnpj"], CPF_OPERADOR);
-    assert_eq!(estado["status"], "VALIDA");
+    // O DTO normaliza VALIDA -> AUTORIZADA na resposta da API; o registro
+    // persistido acima mantem VALIDA internamente.
+    assert_eq!(estado["status"], "AUTORIZADA");
     let servicos = estado["servicos"]
         .as_array()
         .expect("serviÃ§os listados")

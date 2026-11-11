@@ -10,8 +10,8 @@ use crate::domain::notificacoes::erros::ErroNotificacao;
 use crate::presentation::auth::RequestContext;
 use crate::presentation::error::ApiError;
 use crate::presentation::notificacoes::dto::{
-    RequisicaoCriarNotificacao, RequisicaoMarcarLida, RequisicaoPreferenciaNotificacao,
-    RespostaContagemNaoLidas, RespostaNotificacao, RespostaPreferenciaNotificacao,
+    RequisicaoCriarNotificacao, RequisicaoPreferenciaNotificacao, RespostaContagemNaoLidas,
+    RespostaNotificacao, RespostaPreferenciaNotificacao,
 };
 use crate::presentation::notificacoes::state::EstadoNotificacoes;
 
@@ -106,7 +106,6 @@ pub async fn marcar_como_lida(
     State(estado): State<EstadoNotificacoes>,
     Extension(contexto): Extension<RequestContext>,
     Path(id): Path<Uuid>,
-    Json(_requisicao): Json<RequisicaoMarcarLida>,
 ) -> Result<StatusCode, ApiError> {
     let usuario_id = contexto.usuario_id;
     estado

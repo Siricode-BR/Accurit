@@ -21,10 +21,12 @@ pub async fn criar_relatorio(
     Extension(contexto): Extension<RequestContext>,
     Json(requisicao): Json<CriarRelatorioRequest>,
 ) -> Result<Json<RelatorioDto>, ApiError> {
-    let _escritorio_id = contexto.escritorio_id.ok_or_else(ApiError::proibido)?;
-    let comando: crate::application::relatorios::use_cases::ComandoGerarRelatorio = requisicao
+    let escritorio_id = contexto.escritorio_id.ok_or_else(ApiError::proibido)?;
+    let mut comando: crate::application::relatorios::use_cases::ComandoGerarRelatorio = requisicao
         .try_into()
         .map_err(|e: String| ApiError::validacao(e))?;
+    comando.escritorio_id = escritorio_id;
+    comando.usuario_id = contexto.usuario_id;
 
     let relatorio = estado.gerar.executar(comando).await.map_err(|e| match e {
         crate::domain::relatorios::erros::ErroRelatorio::TipoInvalido(_)

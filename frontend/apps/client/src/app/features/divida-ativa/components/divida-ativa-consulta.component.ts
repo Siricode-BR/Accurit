@@ -8,6 +8,7 @@ import {
   linkedSignal,
   signal,
 } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import {
   AccButtonComponent,
   AccCardComponent,
@@ -28,7 +29,7 @@ import { ConsultaModo, ModoOpcao } from '../divida-ativa.types';
 @Component({
   selector: 'app-divida-ativa-consulta',
   standalone: true,
-  imports: [AccButtonComponent, AccCardComponent, AccDocumentFieldComponent, AccEmptyStateComponent, TrialMockPanelComponent],
+  imports: [FormsModule, AccButtonComponent, AccCardComponent, AccDocumentFieldComponent, AccEmptyStateComponent, TrialMockPanelComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './divida-ativa-consulta.component.html',
   styleUrl: './divida-ativa-consulta.component.css',

@@ -775,16 +775,13 @@ where
             listar_itens_lote_uc,
         );
 
-        api = api.nest(
-            "/trabalhos",
-            crate::presentation::trabalhos::construir(
-                estado_trabalhos,
-                ExigirAudiencia::novo(
-                    auth_state.tokens.clone(),
-                    crate::domain::auth::Audiencia::Client,
-                ),
+        api = api.merge(crate::presentation::trabalhos::construir(
+            estado_trabalhos,
+            ExigirAudiencia::novo(
+                auth_state.tokens.clone(),
+                crate::domain::auth::Audiencia::Client,
             ),
-        );
+        ));
 
         // ===== Fase C — Notificações =====
         let notificacoes_repo = std::sync::Arc::new(
@@ -856,16 +853,13 @@ where
                 listar_templates_uc,
             );
 
-        api = api.nest(
-            "/notificacoes",
-            crate::presentation::notificacoes::construir(
-                estado_notificacoes,
-                ExigirAudiencia::novo(
-                    auth_state.tokens.clone(),
-                    crate::domain::auth::Audiencia::Client,
-                ),
+        api = api.merge(crate::presentation::notificacoes::construir(
+            estado_notificacoes,
+            ExigirAudiencia::novo(
+                auth_state.tokens.clone(),
+                crate::domain::auth::Audiencia::Client,
             ),
-        );
+        ));
 
         // ===== Fase D — Emissão de guias =====
         let guias_emissao_repo = std::sync::Arc::new(
@@ -896,16 +890,13 @@ where
             baixar_guia_uc,
         );
 
-        api = api.nest(
-            "/guias",
-            crate::presentation::guias::construir(
-                estado_guias,
-                ExigirAudiencia::novo(
-                    auth_state.tokens.clone(),
-                    crate::domain::auth::Audiencia::Client,
-                ),
+        api = api.merge(crate::presentation::guias::construir(
+            estado_guias,
+            ExigirAudiencia::novo(
+                auth_state.tokens.clone(),
+                crate::domain::auth::Audiencia::Client,
             ),
-        );
+        ));
 
         // ===== Fase F — Relatórios =====
         let relatorios_repo = std::sync::Arc::new(RelatoriosDiesel::novo(pool.clone()));

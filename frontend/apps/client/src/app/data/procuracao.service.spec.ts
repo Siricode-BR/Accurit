@@ -71,7 +71,7 @@ describe('ProcuracaoService', () => {
     service.obterPorCliente(clienteId).subscribe((res) => (resultado = res));
 
     expect(mockGet).toHaveBeenCalledWith('/api/v1/serpro/integra-contador/procuracoes', {
-      params: { cliente_id: clienteId },
+      params: { clienteId },
     });
     expect(resultado).toEqual(estadoMock);
     expect(service.statusDe(clienteId)).toBe('AUTORIZADA');
@@ -91,7 +91,7 @@ describe('ProcuracaoService', () => {
       clienteId,
     });
     expect(mockGet).toHaveBeenCalledWith('/api/v1/serpro/integra-contador/procuracoes', {
-      params: { cliente_id: clienteId },
+      params: { clienteId },
     });
     expect(resultado).toEqual(estadoMock);
   });

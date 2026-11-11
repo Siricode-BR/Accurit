@@ -50,7 +50,7 @@ export class ProcuracaoService {
   obterPorCliente(clienteId: string): Observable<EstadoProcuracaoClienteDto> {
     return this.http
       .get<EstadoProcuracaoClienteDto>(this.baseUrl, {
-        params: { cliente_id: clienteId },
+        params: { clienteId: clienteId },
       })
       .pipe(
         tap((estado) => {

@@ -8,6 +8,7 @@ import {
   linkedSignal,
   signal,
 } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { AccButtonComponent, AccCardComponent, AccDocumentFieldComponent, AccSelectComponent, AccSelectOption } from '@accurit/ui';
 import { isValidDocument, sanitizeDocument } from '@accurit/shared';
 import { IntegraContadorService } from '../../../data/integra-contador.service';
@@ -26,7 +27,7 @@ import { VerboIntegraContador } from '../integra-contador.types';
 @Component({
   selector: 'app-integra-contador-consulta',
   standalone: true,
-  imports: [AccButtonComponent, AccCardComponent, AccDocumentFieldComponent, AccSelectComponent, TrialMockPanelComponent],
+  imports: [FormsModule, AccButtonComponent, AccCardComponent, AccDocumentFieldComponent, AccSelectComponent, TrialMockPanelComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './integra-contador-consulta.component.html',
   styleUrl: './integra-contador-consulta.component.css',

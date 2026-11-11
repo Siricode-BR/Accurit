@@ -35,12 +35,6 @@ pub struct RespostaNotificacao {
     pub criado_em: DateTime<Utc>,
 }
 
-/// Requisição para marcar notificação como lida.
-#[derive(Debug, Deserialize)]
-pub struct RequisicaoMarcarLida {
-    pub id: Uuid,
-}
-
 /// Requisição para preferências de notificação.
 #[derive(Debug, Deserialize)]
 pub struct RequisicaoPreferenciaNotificacao {
