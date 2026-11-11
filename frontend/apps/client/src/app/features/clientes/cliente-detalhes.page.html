@@ -20,7 +20,7 @@
         (click)="abrirDividaAtiva()"
         [disabled]="estadoCliente() !== 'pronto'"
       >
-        Consultar DÃ­vida Ativa
+        Consultar Dívida Ativa
       </button>
       <button
         acc-button
@@ -42,14 +42,14 @@
     </div>
   }
 
-  <!-- 404 alheio/inexistente: mesmo texto, sem vazar existÃªncia -->
+  <!-- 404 alheio/inexistente: mesmo texto, sem vazar existência -->
   @if (estadoCliente() === 'naoEncontrado') {
     <acc-empty-state
-      title="Cliente nÃ£o encontrado"
-      descricao="Verifique o endereÃ§o ou volte Ã  lista para escolher um cliente."
+      title="Cliente não encontrado"
+      descricao="Verifique o endereço ou volte à lista para escolher um cliente."
     >
       <button acc-button variant="outline" size="md" (click)="voltarParaLista()">
-        Voltar Ã  lista
+        Voltar à lista
       </button>
     </acc-empty-state>
   }
@@ -68,7 +68,7 @@
       (activeChange)="trocarAba($event)"
     />
 
-    <!-- ===== Aba: VisÃ£o geral ===== -->
+    <!-- ===== Aba: Visão geral ===== -->
     @if (abaSincronizada() === 'visao-geral') {
       <section class="section">
         <div class="dado-card-grid">
@@ -77,7 +77,7 @@
             <dl class="dado-lista">
               <div class="dado-item">
                 <dt>Tipo</dt>
-                <dd>{{ c.tipo === 'PF' ? 'Pessoa fÃ­sica' : 'Pessoa jurÃ­dica' }}</dd>
+                <dd>{{ c.tipo === 'PF' ? 'Pessoa física' : 'Pessoa jurídica' }}</dd>
               </div>
               <div class="dado-item">
                 <dt>{{ c.tipo === 'PF' ? 'CPF' : 'CNPJ' }}</dt>
@@ -87,7 +87,7 @@
                 </dd>
               </div>
               <div class="dado-item">
-                <dt>Nome / RazÃ£o social</dt>
+                <dt>Nome / Razão social</dt>
                 <dd>{{ c.nomeRazaoSocial }}</dd>
               </div>
               @if (c.nomeFantasia) {
@@ -119,7 +119,7 @@
             </dl>
           </acc-card>
           <acc-card class="dado-card">
-            <h2 class="section-title">ProcuraÃ§Ã£o e-CAC</h2>
+            <h2 class="section-title">Procuração e-CAC</h2>
             <app-trial-mock-panel [servicos]="['PROCURACAO']" />
             <div class="lgpd" style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem">
               <button acc-button type="button" variant="outline" (click)="exportarLgpd()">
@@ -131,15 +131,15 @@
             </div>
             <div class="procuracao">
               <div class="procuracao__status">
-                <span class="procuracao__rotulo">Status de validaÃ§Ã£o</span>
+                <span class="procuracao__rotulo">Status de validação</span>
                 <acc-badge [status]="badgeStatusProcuracao(statusProcuracao())">
                   {{ rotuloStatusProcuracao(statusProcuracao()) }}
                 </acc-badge>
               </div>
               <p class="procuracao__texto">
                 {{ statusProcuracao() === 'AUTORIZADA'
-                  ? 'A procuraÃ§Ã£o foi validada nesta sessÃ£o.'
-                  : 'A procuraÃ§Ã£o ainda nÃ£o foi validada nesta sessÃ£o.' }}
+                  ? 'A procuração foi validada nesta sessão.'
+                  : 'A procuração ainda não foi validada nesta sessão.' }}
               </p>
               @if (dadosProcuracao(); as dados) {
                 <div class="procuracao__meta">
@@ -153,19 +153,19 @@
                   </span>
                   @if (dados.validoDe) {
                     <span class="procuracao__item">
-                      <span class="procuracao__rotulo">VÃ¡lido de</span>
+                      <span class="procuracao__rotulo">Válido de</span>
                       {{ formatarData(dados.validoDe) }}
                     </span>
                   }
                   @if (dados.validoAte) {
                     <span class="procuracao__item">
-                      <span class="procuracao__rotulo">VÃ¡lido atÃ©</span>
+                      <span class="procuracao__rotulo">Válido até</span>
                       {{ formatarData(dados.validoAte) }}
                     </span>
                   }
                 </div>
                 <div class="procuracao__servicos">
-                  <span class="procuracao__rotulo">Estado por serviÃ§o</span>
+                  <span class="procuracao__rotulo">Estado por serviço</span>
                   <ul class="procuracao__lista-servicos">
                     @for (servico of dados.servicos; track servico.idServico) {
                       <li class="procuracao__servico-item">
@@ -175,7 +175,7 @@
                         </acc-badge>
                       </li>
                     } @empty {
-                      <p class="procuracao__vazio">Nenhum serviÃ§o listado.</p>
+                      <p class="procuracao__vazio">Nenhum serviço listado.</p>
                     }
                   </ul>
                 </div>
@@ -190,7 +190,7 @@
                 [disabled]="procuracaoValidando()"
                 (click)="validarProcuracao(c.id)"
               >
-                {{ procuracaoValidando() ? 'Validandoâ€¦' : 'Validar procuraÃ§Ã£o e-CAC' }}
+                {{ procuracaoValidando() ? 'Validando…' : 'Validar procuração e-CAC' }}
               </button>
               <button
                 acc-button
@@ -199,7 +199,7 @@
                 [disabled]="procuracaoValidando()"
                 (click)="revalidarProcuracao(c.id)"
               >
-                {{ procuracaoValidando() ? 'Validandoâ€¦' : 'Revalidar' }}
+                {{ procuracaoValidando() ? 'Validando…' : 'Revalidar' }}
               </button>
             </div>
           </acc-card>
@@ -293,7 +293,7 @@
 
       <section class="section">
         <div class="section-header">
-          <h2 class="section-title">SituaÃ§Ã£o fiscal</h2>
+          <h2 class="section-title">Situação fiscal</h2>
         </div>
         @if (consultas.avisoConsultivo(); as aviso) {
           <p class="aviso-consultivo" role="note">{{ aviso }}</p>
@@ -380,7 +380,7 @@
         } @else if (consultas.itens().length === 0) {
           <acc-empty-state
             title="Nenhuma consulta registrada"
-            descricao="As consultas de DÃ­vida Ativa deste cliente aparecerÃ£o aqui."
+            descricao="As consultas de Dívida Ativa deste cliente aparecerão aqui."
           >
             <button acc-button variant="primary" size="md" (click)="abrirDividaAtiva()">
               Consultar agora
@@ -416,7 +416,7 @@
             }
           </ul>
 
-          <div class="paginacao" aria-label="PaginaÃ§Ã£o do histÃ³rico">
+          <div class="paginacao" aria-label="Paginação do histórico">
             <button
               acc-button
               variant="ghost"
@@ -424,10 +424,10 @@
               [disabled]="!temPaginaAnterior()"
               (click)="trocarPagina(-1)"
             >
-              â† Anterior
+              ← Anterior
             </button>
             <span class="paginacao-info">
-              PÃ¡gina {{ consultas.pagina() }} de {{ totalDePaginas() }}
+              Página {{ consultas.pagina() }} de {{ totalDePaginas() }}
             </span>
             <button
               acc-button
@@ -436,7 +436,7 @@
               [disabled]="!temProximaPagina()"
               (click)="trocarPagina(1)"
             >
-              PrÃ³xima â†’
+              Próxima →
             </button>
           </div>
         }
@@ -473,7 +473,7 @@
             } @else {
               <acc-empty-state
                 title="Sem contatos cadastrados"
-                descricao="Use a aba de ediÃ§Ã£o para atualizar o e-mail e o telefone."
+                descricao="Use a aba de edição para atualizar o e-mail e o telefone."
               >
                 @if (podeEditar()) {
                   <button acc-button variant="outline" size="md" (click)="abrirEdicao()">
