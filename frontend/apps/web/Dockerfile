@@ -27,7 +27,8 @@ RUN pnpm install --frozen-lockfile
 FROM deps AS build
 ENV NEXT_OUTPUT=standalone
 COPY . .
-RUN pnpm --filter web... build
+RUN pnpm --filter web... build \
+    && mkdir -p /repo/apps/web/public
 
 # --- runner: minimal server (standalone) ---
 FROM node:${NODE_VERSION}-alpine AS runtime
