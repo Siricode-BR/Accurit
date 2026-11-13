@@ -1,8 +1,8 @@
 import {
   Component,
   ChangeDetectionStrategy,
+  computed,
   inject,
-  signal,
 } from '@angular/core';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
@@ -12,10 +12,14 @@ import {
 } from '@accurit/core';
 import { TrabalhosService } from '../../data/trabalhos.service';
 import {
-  AccButtonComponent,
+  AccAlertComponent,
   AccBadgeComponent,
+  AccButtonComponent,
   AccCardComponent,
+  AccEmptyStateComponent,
+  AccPageHeaderComponent,
   AccSpinnerComponent,
+  AccStatCardComponent,
 } from '@accurit/ui';
 
 @Component({
@@ -23,10 +27,14 @@ import {
   standalone: true,
   imports: [
     CommonModule,
-    AccButtonComponent,
+    AccAlertComponent,
     AccBadgeComponent,
+    AccButtonComponent,
     AccCardComponent,
+    AccEmptyStateComponent,
+    AccPageHeaderComponent,
     AccSpinnerComponent,
+    AccStatCardComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './trabalhos-list.component.html',
@@ -39,6 +47,14 @@ export class TrabalhosListComponent {
   protected readonly trabalhos = this.trabalhosService.trabalhos;
   protected readonly carregando = this.trabalhosService.carregandoTrabalhos;
   protected readonly erro = this.trabalhosService.erroTrabalhos;
+
+  protected readonly total = computed(() => this.trabalhos().length);
+  protected readonly habilitados = computed(
+    () => this.trabalhos().filter((t) => t.habilitado).length,
+  );
+  protected readonly desabilitados = computed(
+    () => this.trabalhos().filter((t) => !t.habilitado).length,
+  );
 
   async ngOnInit(): Promise<void> {
     await this.trabalhosService.listarTrabalhos();
@@ -77,5 +93,9 @@ export class TrabalhosListComponent {
     await this.trabalhosService.alternarTrabalho(trabalho.id, {
       habilitado: !trabalho.habilitado,
     });
+  }
+
+  async recarregar(): Promise<void> {
+    await this.trabalhosService.listarTrabalhos();
   }
 }

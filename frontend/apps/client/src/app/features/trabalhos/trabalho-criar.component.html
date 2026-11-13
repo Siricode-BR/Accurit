@@ -1,47 +1,36 @@
 <div class="page-container">
-  <div class="page-header">
-    <h1 class="page-title">Novo Trabalho Agendado</h1>
-    <p class="page-subtitle">
-      Defina uma tarefa fiscal recorrente para o escritório.
-    </p>
-    <button
-      acc-button
-      variant="outline"
-      size="sm"
-      (click)="voltar()"
-    >
+  <acc-page-header
+    title="Novo trabalho agendado"
+    subtitle="Defina uma tarefa fiscal recorrente para o escritório."
+  >
+    <button acc-button variant="outline" size="sm" type="button" (click)="voltar()">
       Voltar
     </button>
-  </div>
+  </acc-page-header>
 
   @if (erro(); as mensagemErro) {
-    <div class="alert-error" role="alert">{{ mensagemErro }}</div>
+    <acc-alert variante="erro" [descartavel]="false">{{ mensagemErro }}</acc-alert>
   }
 
   <acc-card>
+    <div class="form-intro">
+      <h2 class="secao-titulo">Configuração do agendamento</h2>
+      <p class="secao-desc">Escolha o tipo de tarefa, o ambiente e a periodicidade em formato cron.</p>
+    </div>
+
     <form [formGroup]="form" (ngSubmit)="criar()">
       <div class="form-grid">
         <div class="form-campo">
-          <label class="form-label">Nome</label>
-          <input
-            id="nome"
-            type="text"
-            formControlName="nome"
-            class="input"
-            placeholder="Ex: Consulta semanal Dívida Ativa"
-          />
+          <label class="form-label" for="nome">Nome</label>
+          <input id="nome" type="text" formControlName="nome" class="input" placeholder="Ex.: Consulta semanal Dívida Ativa" />
           @if (form.get('nome')?.invalid && form.get('nome')?.touched) {
-            <small class="campo-erro">O nome é obrigatório.</small>
+            <small class="campo-erro">Informe um nome com pelo menos 3 caracteres.</small>
           }
         </div>
 
         <div class="form-campo">
-          <label class="form-label">Tipo de tarefa</label>
-          <select
-            id="tipo"
-            formControlName="tipo"
-            class="input input--select"
-          >
+          <label class="form-label" for="tipo">Tipo de tarefa</label>
+          <select id="tipo" formControlName="tipo" class="input input--select">
             @for (tipo of tiposTrabalho; track tipo.valor) {
               <option [value]="tipo.valor">{{ rotuloTipo(tipo.valor) }}</option>
             }
@@ -49,22 +38,18 @@
         </div>
 
         <div class="form-campo">
-          <label class="form-label">Produto</label>
+          <label class="form-label" for="produto">Produto</label>
           <select id="produto" formControlName="produto" class="input input--select">
             <option value="INTEGRA_CONTADOR">Integra Contador</option>
             <option value="DIVIDA_ATIVA">Dívida Ativa</option>
           </select>
           <small class="campo-ajuda">
-            {{
-              form.get('tipo')?.value === 'consulta_divida_ativa'
-                ? 'Consultas de devedor e inscrição na Dívida Ativa.'
-                : 'Consultas de serviços do Integra Contador.'
-            }}
+            {{ form.get('tipo')?.value === 'consulta_divida_ativa' ? 'Consultas de devedor e inscrição na Dívida Ativa.' : 'Consultas de serviços do Integra Contador.' }}
           </small>
         </div>
 
         <div class="form-campo">
-          <label class="form-label">Ambiente</label>
+          <label class="form-label" for="ambiente">Ambiente</label>
           <select id="ambiente" formControlName="ambiente" class="input input--select">
             @for (ambiente of ambientes; track ambiente.valor) {
               <option [value]="ambiente.valor">{{ rotuloAmbiente(ambiente.valor) }}</option>
@@ -73,40 +58,18 @@
         </div>
 
         <div class="form-campo form-campo--full">
-          <label class="form-label">Expressão Cron</label>
-          <input
-            id="cronExpression"
-            type="text"
-            formControlName="cronExpression"
-            class="input"
-            placeholder="Ex: 0 2 * * 1 (todas as segundas às 02:00)"
-          />
-          <small class="campo-ajuda">
-            Formato padrão cron: minuto hora dia-do-mês mês dia-da-semana.
-          </small>
+          <label class="form-label" for="cronExpression">Expressão cron</label>
+          <input id="cronExpression" type="text" formControlName="cronExpression" class="input" placeholder="0 2 * * 1 (todas as segundas às 02:00)" />
+          <small class="campo-ajuda">Formato: minuto hora dia-do-mês mês dia-da-semana (5 campos).</small>
           @if (form.get('cronExpression')?.invalid && form.get('cronExpression')?.touched) {
-            <small class="campo-erro">Informe uma expressão cron válida (5 campos).</small>
+            <small class="campo-erro">Informe uma expressão cron válida com 5 campos.</small>
           }
         </div>
       </div>
 
       <div class="form-acoes">
-        <button
-          acc-button
-          variant="outline"
-          size="md"
-          type="button"
-          (click)="voltar()"
-        >
-          Cancelar
-        </button>
-        <button
-          acc-button
-          variant="primary"
-          size="md"
-          type="submit"
-          [disabled]="form.invalid || carregando()"
-        >
+        <button acc-button variant="outline" size="md" type="button" (click)="voltar()">Cancelar</button>
+        <button acc-button variant="primary" size="md" type="submit" [disabled]="form.invalid || carregando()">
           {{ carregando() ? 'Criando...' : 'Criar trabalho' }}
         </button>
       </div>

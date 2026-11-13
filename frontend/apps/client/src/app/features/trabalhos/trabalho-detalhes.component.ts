@@ -3,22 +3,23 @@ import {
   ChangeDetectionStrategy,
   inject,
   signal,
-  computed,
   OnInit,
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import {
   TrabalhoAgendadoDto,
-  ExecucaoTrabalhoDto,
 } from '@accurit/core';
 import { TrabalhosService } from '../../data/trabalhos.service';
 import { mensagemDeErro } from '../../core/http/mensagem-erro';
 import {
-  AccButtonComponent,
+  AccAlertComponent,
   AccBadgeComponent,
+  AccButtonComponent,
   AccCardComponent,
+  AccPageHeaderComponent,
   AccSpinnerComponent,
+  AccStatCardComponent,
 } from '@accurit/ui';
 
 @Component({
@@ -26,10 +27,13 @@ import {
   standalone: true,
   imports: [
     CommonModule,
-    AccButtonComponent,
+    AccAlertComponent,
     AccBadgeComponent,
+    AccButtonComponent,
     AccCardComponent,
+    AccPageHeaderComponent,
     AccSpinnerComponent,
+    AccStatCardComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './trabalho-detalhes.component.html',

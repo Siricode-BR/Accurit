@@ -1,8 +1,8 @@
 import {
   Component,
   ChangeDetectionStrategy,
+  computed,
   inject,
-  signal,
 } from '@angular/core';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
@@ -11,10 +11,14 @@ import {
 } from '@accurit/core';
 import { TrabalhosService } from '../../data/trabalhos.service';
 import {
-  AccButtonComponent,
+  AccAlertComponent,
   AccBadgeComponent,
+  AccButtonComponent,
   AccCardComponent,
+  AccEmptyStateComponent,
+  AccPageHeaderComponent,
   AccSpinnerComponent,
+  AccStatCardComponent,
 } from '@accurit/ui';
 
 @Component({
@@ -22,10 +26,14 @@ import {
   standalone: true,
   imports: [
     CommonModule,
-    AccButtonComponent,
+    AccAlertComponent,
     AccBadgeComponent,
+    AccButtonComponent,
     AccCardComponent,
+    AccEmptyStateComponent,
+    AccPageHeaderComponent,
     AccSpinnerComponent,
+    AccStatCardComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './consultas-lote-list.component.html',
@@ -38,6 +46,17 @@ export class ConsultasLoteListComponent {
   protected readonly lotes = this.trabalhosService.lotes;
   protected readonly carregando = this.trabalhosService.carregandoLotes;
   protected readonly erro = this.trabalhosService.erroLotes;
+
+  protected readonly total = computed(() => this.lotes().length);
+  protected readonly emExecucao = computed(
+    () => this.lotes().filter((l) => l.status === 'executando' || l.status === 'pendente').length,
+  );
+  protected readonly concluidos = computed(
+    () => this.lotes().filter((l) => l.status === 'concluido').length,
+  );
+  protected readonly comProblema = computed(
+    () => this.lotes().filter((l) => ['falhou', 'parcial', 'bloqueado'].includes(l.status)).length,
+  );
 
   async ngOnInit(): Promise<void> {
     await this.trabalhosService.listarLotes();
@@ -84,5 +103,9 @@ export class ConsultasLoteListComponent {
 
   async abrirDetalhes(loteId: string): Promise<void> {
     await this.router.navigate(['/consultas-lote', loteId]);
+  }
+
+  async recarregar(): Promise<void> {
+    await this.trabalhosService.listarLotes();
   }
 }

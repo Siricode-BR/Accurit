@@ -1,22 +1,28 @@
-.page-header {
+.page-container {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 1.5rem 2rem 2rem;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
+  gap: 1.25rem;
+  max-width: 900px;
 }
 
-@media (min-width: 640px) {
-  .page-header {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-  }
+.form-intro {
+  margin-bottom: 1.25rem;
 }
 
-.page-subtitle {
-  color: var(--slate-600, #475569);
-  font-size: 0.9375rem;
+.secao-titulo {
   margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--acc-color-text-main, #0f172a);
+}
+
+.secao-desc {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: var(--acc-color-text-muted, #64748b);
 }
 
 .form-grid {
@@ -37,22 +43,24 @@
   gap: 0.375rem;
 }
 
+.form-campo--full {
+  grid-column: 1 / -1;
+}
+
 .form-label {
   font-weight: 600;
   font-size: 0.875rem;
-  color: var(--slate-700, #334155);
+  color: var(--acc-color-text-main, #334155);
 }
 
 .campo-erro {
-  color: var(--rose-600, #dc2626);
+  color: var(--acc-color-danger, #dc2626);
   font-size: 0.75rem;
-  margin-top: 0.25rem;
 }
 
 .campo-ajuda {
-  color: var(--slate-500, #64748b);
+  color: var(--acc-color-text-muted, #64748b);
   font-size: 0.75rem;
-  margin-top: 0.25rem;
 }
 
 .form-acoes {
@@ -60,4 +68,6 @@
   gap: 0.75rem;
   justify-content: flex-end;
   margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--acc-color-border, #e2e8f0);
 }

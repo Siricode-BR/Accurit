@@ -23,6 +23,7 @@ import {
   AccButtonComponent,
   AccCheckboxComponent,
   AccInputComponent,
+  AccPageHeaderComponent,
   AccSelectComponent,
   AccSpinnerComponent,
   AccCardComponent,
@@ -59,6 +60,7 @@ const VERBOS: { value: string; label: string }[] = [
     AccCardComponent,
     AccCheckboxComponent,
     AccInputComponent,
+    AccPageHeaderComponent,
     AccSelectComponent,
     AccSpinnerComponent,
   ],
@@ -83,7 +85,6 @@ export class ConsultaLoteCriarComponent {
     return this.documentos().includes(cliente.cpfCnpj);
   }
 
-  /** Seleção de clientes do escritório: adiciona/remove o documento na lista. */
   protected alternarCliente(cliente: ClienteDto): void {
     const documento = cliente.cpfCnpj;
     this.documentos.update((atual) => {
@@ -141,7 +142,7 @@ export class ConsultaLoteCriarComponent {
       await this.trabalhosService.criarConsultaLote(requisicao);
       await this.router.navigate(['/consultas-lote']);
     } catch {
-      // Erro já foi definido pelo serviço
+      // Erro já definido pelo serviço
     }
   }
 
@@ -164,17 +165,4 @@ export class ConsultaLoteCriarComponent {
       return copia;
     });
   }
-
-  protected rotuloProduto(valor: string): string {
-    return this.produtos.find((p) => p.value === valor)?.label ?? valor;
-  }
-
-  protected rotuloServico(valor: string): string {
-    return this.servicos.find((s) => s.value === valor)?.label ?? valor;
-  }
-
-  protected tipoDocumento(documento: string): string {
-    return documento.length === 11 ? 'PF' : 'PJ';
-  }
 }
-

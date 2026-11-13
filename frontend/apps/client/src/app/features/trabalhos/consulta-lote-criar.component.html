@@ -1,21 +1,15 @@
 <div class="page-container">
-  <div class="page-header">
-    <h1 class="page-title">Nova Consulta em Lote</h1>
-    <p class="page-subtitle">
-      Defina um grupo de consultas fiscais para executar de uma só vez.
-    </p>
-    <button
-      acc-button
-      variant="outline"
-      size="sm"
-      (click)="voltar()"
-    >
+  <acc-page-header
+    title="Nova consulta em lote"
+    subtitle="Defina um grupo de consultas fiscais para executar de uma só vez."
+  >
+    <button acc-button variant="outline" size="sm" type="button" (click)="voltar()">
       Voltar
     </button>
-  </div>
+  </acc-page-header>
 
   @if (erroServico(); as mensagemErro) {
-    <acc-alert variante="erro">{{ mensagemErro }}</acc-alert>
+    <acc-alert variante="erro" [descartavel]="false">{{ mensagemErro }}</acc-alert>
   }
   @if (erroValidacao(); as mensagemErro) {
     <acc-alert variante="aviso" [descartavel]="true" (fechado)="erroValidacao.set(null)">
@@ -24,27 +18,29 @@
   }
 
   <acc-card>
+    <div class="form-intro">
+      <h2 class="secao-titulo">Configuração do lote</h2>
+      <p class="secao-desc">Selecione o serviço, os clientes e/ou informe documentos manualmente.</p>
+    </div>
+
     <form [formGroup]="form" (ngSubmit)="criar()">
       <div class="form-grid">
         <acc-input
           label="Nome"
           formControlName="nome"
-          placeholder="Ex: Consulta mensal DEVEDOR"
-          [erro]="form.get('nome')?.invalid && form.get('nome')?.touched ? 'O nome é obrigatório.' : null"
+          placeholder="Ex.: Consulta mensal DEVEDOR"
+          [erro]="form.get('nome')?.invalid && form.get('nome')?.touched ? 'Informe um nome com pelo menos 3 caracteres.' : null"
         />
 
         <acc-select label="Produto" formControlName="produto" [options]="produtos" [placeholder]="null" />
-
         <acc-select label="Serviço" formControlName="servico" [options]="servicos" [placeholder]="null" />
-
         <acc-select label="Verbo" formControlName="verbo" [options]="verbos" [placeholder]="null" />
 
-        <div class="form-campo form-campo--full">
-          <span class="form-label">Clientes do escritório</span>
-          <small class="campo-ajuda">
-            Selecione os clientes cujos documentos entram no lote (a execução
-            manual é feita pelo worker interno logo após a criação).
-          </small>
+        <div class="form-campo form-campo--full secao-bloco">
+          <div class="secao-bloco-header">
+            <span class="form-label">Clientes do escritório</span>
+            <small class="campo-ajuda">Selecione clientes para incluir seus documentos no lote.</small>
+          </div>
           @if (carregandoClientes()) {
             <div class="clientes-carregando">
               <acc-spinner size="sm"></acc-spinner>
@@ -56,7 +52,7 @@
             <div class="clientes-grid">
               @for (cliente of clientes(); track cliente.id) {
                 <acc-checkbox
-                  [label]="cliente.nomeRazaoSocial + ' · ' + cliente.cpfCnpj"
+                  [label]="cliente.nomeRazaoSocial + ' — ' + cliente.cpfCnpj"
                   [ngModel]="clienteSelecionado(cliente)"
                   [ngModelOptions]="{ standalone: true }"
                   (ngModelChange)="alternarCliente(cliente)"
@@ -66,61 +62,37 @@
           }
         </div>
 
-        <div class="form-campo form-campo--full">
-          <span class="form-label">Documentos do lote</span>
-          @for (documento of documentos(); track $index) {
-            <div class="documento-linha">
-              <acc-input
-                placeholder="CPF ou CNPJ"
-                [ngModel]="documento"
-                [ngModelOptions]="{ standalone: true }"
-                (ngModelChange)="atualizarValorDocumento($index, $event)"
-              />
-              <button
-                acc-button
-                variant="outline"
-                size="sm"
-                type="button"
-                (click)="removerDocumento($index)"
-              >
-                Remover
-              </button>
-            </div>
-          }
+        <div class="form-campo form-campo--full secao-bloco">
+          <div class="secao-bloco-header">
+            <span class="form-label">Documentos do lote</span>
+            <small class="campo-ajuda">Adicione CPF/CNPJ manualmente quando necessário. O tipo (PF/PJ) é detectado automaticamente.</small>
+          </div>
+          <div class="documentos-lista">
+            @for (documento of documentos(); track $index) {
+              <div class="documento-linha">
+                <acc-input
+                  placeholder="CPF ou CNPJ"
+                  [ngModel]="documento"
+                  [ngModelOptions]="{ standalone: true }"
+                  (ngModelChange)="atualizarValorDocumento($index, $event)"
+                />
+                <button acc-button variant="outline" size="sm" type="button" (click)="removerDocumento($index)">
+                  Remover
+                </button>
+              </div>
+            }
+          </div>
           <div>
-            <button
-              acc-button
-              variant="outline"
-              size="sm"
-              type="button"
-              (click)="adicionarDocumento()"
-            >
+            <button acc-button variant="outline" size="sm" type="button" (click)="adicionarDocumento()">
               Adicionar documento
             </button>
           </div>
-          <small class="campo-ajuda">
-            O tipo (PF/PJ) é detectado automaticamente pelo tamanho do documento.
-          </small>
         </div>
       </div>
 
       <div class="form-acoes">
-        <button
-          acc-button
-          variant="outline"
-          size="md"
-          type="button"
-          (click)="voltar()"
-        >
-          Cancelar
-        </button>
-        <button
-          acc-button
-          variant="primary"
-          size="md"
-          type="submit"
-          [disabled]="form.invalid || carregando()"
-        >
+        <button acc-button variant="outline" size="md" type="button" (click)="voltar()">Cancelar</button>
+        <button acc-button variant="primary" size="md" type="submit" [disabled]="form.invalid || carregando()">
           {{ carregando() ? 'Criando...' : 'Criar lote' }}
         </button>
       </div>

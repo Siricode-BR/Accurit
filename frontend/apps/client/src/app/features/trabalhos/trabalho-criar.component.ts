@@ -2,7 +2,6 @@ import {
   Component,
   ChangeDetectionStrategy,
   inject,
-  signal,
 } from '@angular/core';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
@@ -18,8 +17,10 @@ import {
 } from '@accurit/core';
 import { TrabalhosService } from '../../data/trabalhos.service';
 import {
+  AccAlertComponent,
   AccButtonComponent,
   AccCardComponent,
+  AccPageHeaderComponent,
 } from '@accurit/ui';
 
 const TIPOS_TRABALHO: { valor: TipoTrabalho; label: string }[] = [
@@ -40,8 +41,10 @@ const AMBIENTES: { valor: string; label: string }[] = [
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
+    AccAlertComponent,
     AccButtonComponent,
     AccCardComponent,
+    AccPageHeaderComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './trabalho-criar.component.html',
@@ -57,8 +60,8 @@ export class TrabalhoCriarComponent {
 
   protected readonly form = this.fb.group({
     nome: ['', [Validators.required, Validators.minLength(3)]],
-    tipo: ['consulta_divida_ativa', [Validators.required]],
-    produto: ['INTEGRA_CONTADOR', [Validators.required]],
+    tipo: ['consulta_divida_ativa' as TipoTrabalho, [Validators.required]],
+    produto: ['DIVIDA_ATIVA', [Validators.required]],
     ambiente: ['TRIAL', [Validators.required]],
     cronExpression: [
       '',
@@ -69,12 +72,6 @@ export class TrabalhoCriarComponent {
   protected readonly carregando = this.trabalhosService.carregandoTrabalhos;
   protected readonly erro = this.trabalhosService.erroTrabalhos;
 
-  protected readonly tiposTrabalhoRotulo = {
-    consulta_divida_ativa: 'Consulta Dívida Ativa',
-    validar_procuracao: 'Validar Procuração',
-    consulta_integra_contador: 'Consulta Integra Contador',
-  };
-
   async ngOnInit(): Promise<void> {
     this.form.get('tipo')?.valueChanges.subscribe((tipo) => {
       const produto =
@@ -84,11 +81,11 @@ export class TrabalhoCriarComponent {
   }
 
   protected rotuloTipo(valor: TipoTrabalho): string {
-    return this.tiposTrabalhoRotulo[valor] ?? valor;
+    return TIPOS_TRABALHO.find((t) => t.valor === valor)?.label ?? valor;
   }
 
   protected rotuloAmbiente(valor: string): string {
-    return valor === 'TRIAL' ? 'Ambiente de avaliação' : 'Produção';
+    return valor === 'TRIAL' ? 'Ambiente de avaliação (Trial)' : 'Produção';
   }
 
   async criar(): Promise<void> {
@@ -99,7 +96,7 @@ export class TrabalhoCriarComponent {
 
     const requisicao: CriarTrabalhoRequest = {
       nome: this.form.value.nome!,
-      tipo: this.form.value.tipo! as TipoTrabalho,
+      tipo: this.form.value.tipo!,
       produto: this.form.value.produto!,
       ambiente: this.form.value.ambiente!,
       cronExpression: this.form.value.cronExpression!,
@@ -109,7 +106,7 @@ export class TrabalhoCriarComponent {
       await this.trabalhosService.criarTrabalho(requisicao);
       await this.router.navigate(['/trabalhos']);
     } catch {
-      // Erro já foi definido pelo serviço
+      // Erro já definido pelo serviço
     }
   }
 

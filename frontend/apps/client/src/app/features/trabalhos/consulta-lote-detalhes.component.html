@@ -1,7 +1,9 @@
 <div class="page-container">
-  <div class="page-header">
-    <h1 class="page-title">Detalhes do Lote</h1>
-    <div class="page-acoes">
+  <acc-page-header
+    title="Detalhes do lote"
+    [subtitle]="lote()?.nome || 'Carregando informações da consulta em lote...'"
+  >
+    <div class="header-acoes">
       @if (lote() && podeReexecutar()) {
         <button
           acc-button
@@ -14,91 +16,59 @@
           {{ reexecutando() ? 'Reexecutando...' : 'Reexecutar pendentes' }}
         </button>
       }
-      <button
-        acc-button
-        variant="outline"
-        size="sm"
-        (click)="voltar()"
-      >
+      <button acc-button variant="outline" size="sm" type="button" (click)="voltar()">
         Voltar à lista
       </button>
     </div>
-  </div>
+  </acc-page-header>
 
   @if (erro(); as mensagemErro) {
-    <div class="alert-error" role="alert">{{ mensagemErro }}</div>
+    <acc-alert variante="erro" [descartavel]="false">{{ mensagemErro }}</acc-alert>
   }
 
   @if (carregandoLote() && !lote()) {
-    <div class="loading-state" aria-hidden="true">
-      <acc-spinner size="lg"></acc-spinner>
-      <p>Carregando detalhes do lote...</p>
-    </div>
-  } @else if (lote(); as lote) {
+    <acc-card class="estado-card">
+      <div class="loading-state" aria-hidden="true">
+        <acc-spinner size="lg"></acc-spinner>
+        <p>Carregando detalhes do lote...</p>
+      </div>
+    </acc-card>
+  } @else if (lote(); as l) {
+    <section class="resumo-grid" aria-label="Resumo do lote">
+      <acc-stat-card label="Status" [value]="rotuloStatus(l.status)" [tone]="badgeStatus(l.status) === 'danger' ? 'warning' : badgeStatus(l.status)" />
+      <acc-stat-card label="Progresso" [value]="l.itensConcluidos + '/' + l.totalItens" [hint]="progresso() + '% concluído'" />
+      <acc-stat-card label="Itens com erro" [value]="l.itensComErro" [tone]="l.itensComErro > 0 ? 'warning' : 'success'" />
+    </section>
+
     <div class="detalhes-grid">
-      <acc-card class="detalhes-card">
-        <h2 class="card-titulo">Identificação</h2>
+      <acc-card>
+        <h2 class="card-titulo">Configuração</h2>
         <dl class="detalhes-lista">
-          <div class="detalhe-item">
-            <dt>Nome</dt>
-            <dd>{{ lote.nome }}</dd>
-          </div>
-          <div class="detalhe-item">
-            <dt>Produto</dt>
-            <dd>{{ lote.produto }}</dd>
-          </div>
-          <div class="detalhe-item">
-            <dt>Serviço</dt>
-            <dd>{{ lote.servico }}</dd>
-          </div>
-          <div class="detalhe-item">
-            <dt>Verbo</dt>
-            <dd>{{ lote.verbo ?? '—' }}</dd>
-          </div>
-          <div class="detalhe-item">
-            <dt>Total de itens</dt>
-            <dd>{{ lote.totalItens }}</dd>
-          </div>
-          <div class="detalhe-item">
-            <dt>Concluídos</dt>
-            <dd>{{ lote.itensConcluidos }}</dd>
-          </div>
-          <div class="detalhe-item">
-            <dt>Com erro</dt>
-            <dd>{{ lote.itensComErro }}</dd>
-          </div>
-          <div class="detalhe-item">
-            <dt>Status</dt>
-            <dd>
-              <acc-badge [status]="badgeStatus(lote.status)">
-                {{ rotuloStatus(lote.status) }}
-              </acc-badge>
-            </dd>
-          </div>
-          <div class="detalhe-item">
-            <dt>Criado em</dt>
-            <dd>{{ lote.criadoEm }}</dd>
-          </div>
-          <div class="detalhe-item">
-            <dt>Iniciado em</dt>
-            <dd>{{ lote.iniciadoEm ?? '—' }}</dd>
-          </div>
-          <div class="detalhe-item">
-            <dt>Finalizado em</dt>
-            <dd>{{ lote.finalizadoEm ?? '—' }}</dd>
-          </div>
+          <div class="detalhe-item"><dt>Nome</dt><dd>{{ l.nome }}</dd></div>
+          <div class="detalhe-item"><dt>Produto</dt><dd>{{ l.produto }}</dd></div>
+          <div class="detalhe-item"><dt>Serviço</dt><dd>{{ l.servico }}</dd></div>
+          <div class="detalhe-item"><dt>Verbo</dt><dd>{{ l.verbo || '—' }}</dd></div>
+          <div class="detalhe-item"><dt>Total de itens</dt><dd>{{ l.totalItens }}</dd></div>
+          <div class="detalhe-item"><dt>Concluídos</dt><dd>{{ l.itensConcluidos }}</dd></div>
+          <div class="detalhe-item"><dt>Com erro</dt><dd>{{ l.itensComErro }}</dd></div>
+          <div class="detalhe-item"><dt>Criado em</dt><dd>{{ l.criadoEm }}</dd></div>
+          <div class="detalhe-item"><dt>Iniciado em</dt><dd>{{ l.iniciadoEm || '—' }}</dd></div>
+          <div class="detalhe-item"><dt>Finalizado em</dt><dd>{{ l.finalizadoEm || '—' }}</dd></div>
         </dl>
       </acc-card>
 
       <acc-card class="itens-card">
-        <h2 class="card-titulo">Itens</h2>
+        <h2 class="card-titulo">Itens do lote</h2>
         @if (carregandoItens() && itens().length === 0) {
-          <div class="loading-state" aria-hidden="true">
+          <div class="loading-state loading-state--compact" aria-hidden="true">
             <acc-spinner size="md"></acc-spinner>
             <p>Carregando itens...</p>
           </div>
         } @else if (itens().length === 0) {
-          <p class="vazio">Nenhum item registrado.</p>
+          <div class="vazio-bloco">
+            <p class="vazio-titulo">Nenhum item registrado</p>
+            <p class="vazio-desc">Os itens processados pelo lote aparecerão aqui.</p>
+          </div>
         } @else {
           <acc-table
             [colunas]="colunasItens"

@@ -15,10 +15,12 @@ import {
 import { TrabalhosService } from '../../data/trabalhos.service';
 import { mensagemDeErro } from '../../core/http/mensagem-erro';
 import {
+  AccAlertComponent,
   AccButtonComponent,
-  AccBadgeComponent,
   AccCardComponent,
+  AccPageHeaderComponent,
   AccSpinnerComponent,
+  AccStatCardComponent,
   AccTableComponent,
 } from '@accurit/ui';
 import { AccColunaTabela } from '@accurit/ui';
@@ -36,10 +38,12 @@ const COLUNAS_ITENS: AccColunaTabela<Record<string, unknown>>[] = [
   standalone: true,
   imports: [
     CommonModule,
+    AccAlertComponent,
     AccButtonComponent,
-    AccBadgeComponent,
     AccCardComponent,
+    AccPageHeaderComponent,
     AccSpinnerComponent,
+    AccStatCardComponent,
     AccTableComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -63,6 +67,11 @@ export class ConsultaLoteDetalhesComponent implements OnInit {
       erro: item.erro ?? '—',
     })),
   );
+  protected readonly progresso = computed(() => {
+    const l = this.lote();
+    if (!l || !l.totalItens) return 0;
+    return Math.round((l.itensConcluidos / l.totalItens) * 100);
+  });
   protected readonly carregandoLote = signal(false);
   protected readonly carregandoItens = signal(false);
   protected readonly reexecutando = signal(false);
@@ -105,73 +114,35 @@ export class ConsultaLoteDetalhesComponent implements OnInit {
 
   protected rotuloStatus(status: string): string {
     switch (status) {
-      case 'pendente':
-        return 'Pendente';
-      case 'executando':
-        return 'Executando';
-      case 'concluido':
-        return 'Concluído';
-      case 'falhou':
-        return 'Falhou';
-      case 'parcial':
-        return 'Parcial';
-      case 'bloqueado':
-        return 'Bloqueado';
-      default:
-        return status;
+      case 'pendente': return 'Pendente';
+      case 'executando': return 'Executando';
+      case 'concluido': return 'Concluído';
+      case 'falhou': return 'Falhou';
+      case 'parcial': return 'Parcial';
+      case 'bloqueado': return 'Bloqueado';
+      default: return status;
     }
   }
 
   protected badgeStatus(status: string): 'success' | 'danger' | 'warning' | 'info' {
     switch (status) {
-      case 'concluido':
-        return 'success';
-      case 'falhou':
-        return 'danger';
-      case 'executando':
-        return 'info';
-      case 'bloqueado':
-        return 'warning';
-      case 'parcial':
-        return 'warning';
-      case 'pendente':
-      default:
-        return 'warning';
-    }
-  }
-
-  protected badgeItemStatus(status: string): 'success' | 'danger' | 'warning' | 'info' {
-    switch (status) {
-      case 'concluido':
-        return 'success';
-      case 'falhou':
-        return 'danger';
-      case 'executando':
-        return 'info';
-      case 'bloqueado':
-      case 'pendente':
-      default:
-        return 'warning';
+      case 'concluido': return 'success';
+      case 'falhou': return 'danger';
+      case 'executando': return 'info';
+      default: return 'warning';
     }
   }
 
   protected rotuloItemStatus(status: string): string {
     switch (status) {
-      case 'concluido':
-        return 'Concluído';
-      case 'falhou':
-        return 'Falhou';
-      case 'executando':
-        return 'Executando';
-      case 'bloqueado':
-        return 'Bloqueado';
-      case 'pendente':
-      default:
-        return 'Pendente';
+      case 'concluido': return 'Concluído';
+      case 'falhou': return 'Falhou';
+      case 'executando': return 'Executando';
+      case 'bloqueado': return 'Bloqueado';
+      case 'pendente': default: return 'Pendente';
     }
   }
 
-  /** Lote finalizado com itens falhos/bloqueados pode ser reexecutado. */
   protected podeReexecutar(): boolean {
     const status = this.lote()?.status;
     return status === 'falhou' || status === 'parcial' || status === 'bloqueado';
@@ -179,9 +150,7 @@ export class ConsultaLoteDetalhesComponent implements OnInit {
 
   protected async reexecutar(): Promise<void> {
     const lote = this.lote();
-    if (!lote || this.reexecutando()) {
-      return;
-    }
+    if (!lote || this.reexecutando()) return;
     this.reexecutando.set(true);
     this.erro.set(null);
     try {
@@ -189,9 +158,7 @@ export class ConsultaLoteDetalhesComponent implements OnInit {
       await this.carregarLote(lote.id);
       await this.carregarItens(lote.id);
     } catch (err: any) {
-      this.erro.set(
-        mensagemDeErro(err, 'Falha ao reexecutar a consulta em lote.'),
-      );
+      this.erro.set(mensagemDeErro(err, 'Falha ao reexecutar a consulta em lote.'));
     } finally {
       this.reexecutando.set(false);
     }
